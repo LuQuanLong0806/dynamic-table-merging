@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>动态表格渲染引擎 (Vue + iView)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/view-design@4.7.0/dist/styles/iview.css"
+  onerror="this.onerror=null;this.href='https://unpkg.com/view-design@4.7.0/dist/styles/iview.css'">
+<style>
+*{box-sizing:border-box;font-family:'Microsoft YaHei',sans-serif}
+body{margin:20px;background:#f5f7fa}
+.table-wrapper{overflow-x:auto;background:#fff;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.1);padding:20px}
+h2{text-align:center;color:#333;margin-bottom:16px}
+table{width:100%;border-collapse:collapse;table-layout:fixed;word-break:break-word}
+th,td{border:1px solid #999;padding:6px 8px;text-align:center;vertical-align:middle;font-size:13px;line-height:1.5}
+th{background:#d0d8e8;font-weight:bold}
+td{background:#fff}
+tr:hover td{background:#f0f5ff}
+.cell-group{background:#e8edf5;font-weight:bold}
+.cell-hidden{display:none!important}
+.alt-item{width:100%}
+.formula-val{font-weight:bold;color:#2a5db0;font-size:15px}
+.btn-bar{margin-top:16px;text-align:center}
+td .ivu-form-item{margin-bottom:0}
+td .ivu-form-item-error-tip{position:relative;padding-top:2px;font-size:11px}
+td .ivu-input-number{width:100%}
+td .ivu-select{width:100%}
+td .ivu-radio-wrapper{font-size:13px}
+.radio-in-cell{text-align:left;padding:2px 0}
+.radio-in-cell .ivu-radio-group{display:flex!important;flex-direction:column;align-items:flex-start;gap:10px}
+.radio-in-cell .ivu-radio-wrapper{white-space:normal!important;height:auto!important;line-height:1.5!important;display:block!important;margin-right:0}
+.radio-in-cell .ivu-radio-wrapper>.ivu-radio{vertical-align:top;margin-top:2px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- ====== Vue 模板（避免字符串转义问题）====== -->
+<script type="text/x-template" id="app-tpl">
+<div class="table-wrapper">
+  <h2>{{config.title}}</h2>
+  <i-form ref="mainForm" :model="fm" :rules="formRules">
+    <table>
+      <colgroup>
+        <col v-for="(w,i) in colWidths" :key="i" :style="{width:w}">
+      </colgroup>
+      <tr v-for="(row, ri) in gridRows" :key="ri">
+        <template v-for="(entry, ci) in row">
+          <th v-if="entry.isLabel && !entry.skip"
+              :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
+              v-html="entry.cell.content"></th>
+          <td v-else-if="!entry.skip && entry.cell"
+              :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
+              :class="entry.cls">
+            <div v-for="item in getItems(entry)" :key="item.cell.id"
+                 :data-cell-id="item.cell.id"
+                 v-show="!isHidden(item.cell.id)"
+                 class="alt-item">
+              <!-- 静态文本 -->
+              <span v-if="item.isText" v-html="item.cell.content || ''"></span>
+              <!-- 公式 -->
+              <span v-else-if="item.isFormula" class="formula-val">{{ formulaResults[item.cell.id] }}</span>
+              <!-- 表单控件 -->
+              <form-item v-else-if="item.isControl" :prop="item.cell.id">
+                <!-- text input -->
+                <i-input v-if="item.cell.type==='input'"
+                  :value="fm[item.cell.id]"
+                  @input="val => setVal(item.cell.id, val)"
+                  :placeholder="item.cell.placeholder || item.cell.content || ''"
+                  :disabled="isDisabled(item.cell.id)"
+                  @on-blur="onBlur(item.cell.id)" />
+                <!-- number input -->
+                <input-number v-if="item.cell.type==='number'"
+                  :value="fm[item.cell.id]"
+                  @on-change="val => setVal(item.cell.id, val)"
+                  :placeholder="item.cell.placeholder || ''"
+                  :min="getNum(item.cell, 'min')"
+                  :max="getNum(item.cell, 'max')"
+                  :disabled="isDisabled(item.cell.id)"
+                  style="width:100%" />
+                <!-- select -->
+                <i-select v-if="item.cell.type==='select'"
+                  :value="fm[item.cell.id]"
+                  @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id) }"
+                  :placeholder="item.cell.content || '请选择'"
+                  :disabled="isDisabled(item.cell.id)"
+                  clearable>
+                  <i-option v-for="opt in (item.cell.options||[])" :value="opt.value" :key="opt.value">{{opt.label}}</i-option>
+                </i-select>
+                <!-- radio -->
+                <div v-if="item.cell.type==='radio'" class="radio-in-cell">
+                  <radio-group :value="fm[item.cell.id]" @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id) }" vertical>
+                    <radio v-for="opt in (item.cell.options||[])" :label="opt.value" :key="opt.value" :disabled="isDisabled(item.cell.id)">
+                      <span v-html="opt.label"></span>
+                    </radio>
+                  </radio-group>
+                </div>
+                <!-- checkbox -->
+                <checkbox-group v-if="item.cell.type==='checkbox'"
+                  :value="fm[item.cell.id]"
+                  @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id) }">
+                  <checkbox v-for="opt in (item.cell.options||[])" :label="opt.value" :key="opt.value">{{opt.label}}</checkbox>
+                </checkbox-group>
+                <!-- date -->
+                <date-picker v-if="item.cell.type==='date'"
+                  :value="fm[item.cell.id]"
+                  @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id) }"
+                  type="date" placeholder="选择日期"
+                  :disabled="isDisabled(item.cell.id)" />
+              </form-item>
+            </div>
+          </td>
+          <td v-else-if="!entry.skip" :key="ci"></td>
+        </template>
+      </tr>
+    </table>
+  </i-form>
+  <div class="btn-bar">
+    <i-select :value="currentDataKey" @on-change="switchData" style="width:220px;margin-right:12px;text-align:left">
+      <i-option value="default" key="default">通则指标评分表</i-option>
+      <i-option value="mock" key="mock">能源系统优化评分表</i-option>
+    </i-select>
+    <i-button type="primary" :disabled="submitDisabled" @click="handleSubmit">提交</i-button>
+    <i-button @click="handleReset" style="margin-left:8px">重置</i-button>
+  </div>
+</div>
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"></script>
+<script>if(!window.Vue)document.write('<script src="https://unpkg.com/vue@2.7.16/dist/vue.min.js"><\/script>')</script>
+<script src="https://cdn.jsdelivr.net/npm/view-design@4.7.0/dist/iview.min.js"></script>
+<script>if(!window.iview)document.write('<script src="https://unpkg.com/view-design@4.7.0/dist/iview.min.js"><\/script>')</script>
+<script src="mock.js"></script>
+<script>
+// ======================== 源数据（直接在此编辑）========================
+var TABLE_DATA = {
+  title: "通则指标评分表",
+  cells: [
+    // ── Row 1: 表头 ──
+    {id:"h1",  x:"1",  y:"1",  type:"label", content:"一级指标"},
+    {id:"h2",  x:"2",  y:"1",  type:"label", content:"序号"},
+    {id:"h3",  x:"3",  y:"1",  type:"label", content:"二级指标"},
+    {id:"h4",  x:"4",  y:"1",  type:"label", content:"三级指标"},
+    {id:"h5",  x:"5",  y:"1",  type:"label", content:"指标类型"},
+    {id:"h6",  x:"6",  y:"1",  type:"label", content:"分值"},
+    {id:"h7",  x:"7",  y:"1",  type:"label", content:"单位"},
+    {id:"h8",  x:"8",  y:"1",  type:"label", content:"标杆值"},
+    {id:"h9",  x:"9",  y:"1",  type:"label", content:"基准值"},
+    {id:"h10", x:"10", y:"1",  type:"label", content:"加权参数"},
+    {id:"h11", x:"11", y:"1",  type:"label", content:"2025年指标值"},
+    {id:"h12", x:"12", y:"1",  type:"label", content:"证明材料要求"},
+    {id:"h13", x:"13", y:"1",  type:"label", content:"评分规则"},
+
+    // ══ 基本要求 (Row 2-3) ══
+    {id:"a1",  x:"1",  y:"2,3", type:"text", content:"<b>基本要求</b>"},
+    {id:"a2",  x:"2",  y:"2",  type:"text", content:"1"},
+    {id:"b2",  x:"2",  y:"3",  type:"text", content:"2"},
+    // ★ 二级指标 → 合并2行的 radio
+    {id:"sec_ind", x:"3", y:"2,3", type:"radio",
+      value: "",
+      options:[
+        {label:"工厂应依法设立，近三年无安全、质量、环境污染等事故以及偷漏税等违法违规行为", value:"opt1"},
+        {label:"企业不应使用国家明令禁止的淘汰类工艺技术和装备", value:"opt2"}
+      ],
+      validation:{rules:[{required:true, message:"请选择二级指标"}]},
+      linkage:[
+        {trigger:"opt1", actions:[
+          {type:"rowEnable",  rowTargets:[{row:2, cols:["r2_benchmark","r2_baseline","r2_weight","r2_indvalue"]}]},
+          {type:"rowDisable", rowTargets:[{row:3, cols:["r3_benchmark","r3_baseline","r3_weight","r3_indvalue"]}]},
+          {type:"rowClear",   rowTargets:[{row:3, cols:["r3_benchmark","r3_baseline","r3_weight","r3_indvalue"]}]}
+        ]},
+        {trigger:"opt2", actions:[
+          {type:"rowEnable",  rowTargets:[{row:3, cols:["r3_benchmark","r3_baseline","r3_weight","r3_indvalue"]}]},
+          {type:"rowDisable", rowTargets:[{row:2, cols:["r2_benchmark","r2_baseline","r2_weight","r2_indvalue"]}]},
+          {type:"rowClear",   rowTargets:[{row:2, cols:["r2_benchmark","r2_baseline","r2_weight","r2_indvalue"]}]}
+        ]}
+      ]
+    },
+
+    // ── Row 2 (选项1 对应行) ──
+    {id:"a4",  x:"4",  y:"2",  type:"text", content:"/"},
+    {id:"a5",  x:"5",  y:"2",  type:"text", content:"/"},
+    {id:"a6",  x:"6",  y:"2",  type:"text", content:"/"},
+    {id:"a7",  x:"7",  y:"2",  type:"text", content:"/"},
+    {id:"r2_benchmark", x:"8",  y:"2", type:"number", value:null, disabled:true, placeholder:"标杆值",
+      validation:{rules:[{required:true,message:"请输入标杆值"},{type:"number",min:0,message:"不能为负"}]}},
+    {id:"r2_baseline",  x:"9",  y:"2", type:"number", value:null, disabled:true, placeholder:"基准值",
+      validation:{rules:[{required:true,message:"请输入基准值"},{type:"number",min:0,message:"不能为负"}]}},
+    {id:"r2_weight",    x:"10", y:"2", type:"number", value:null, disabled:true, placeholder:"加权参数",
+      validation:{rules:[{type:"number",min:0,message:"不能为负"}]}},
+    {id:"r2_indvalue",  x:"11", y:"2", type:"number", value:null, disabled:true, placeholder:"指标值",
+      validation:{rules:[{required:true,message:"请输入指标值"},{type:"number",min:0,message:"不能为负"}]}},
+    {id:"a12", x:"12", y:"2",  type:"text", content:"1.企业营业执照\n2.信用中国截图"},
+    {id:"a13", x:"13", y:"2",  type:"text", content:"必须符合"},
+
+    // ── Row 3 (选项2 对应行) ──
+    {id:"b3",  x:"4",  y:"3",  type:"text", content:"/"},
+    {id:"b4",  x:"5",  y:"3",  type:"text", content:"/"},
+    {id:"b5",  x:"6",  y:"3",  type:"text", content:"/"},
+    {id:"b6",  x:"7",  y:"3",  type:"text", content:"/"},
+    {id:"r3_benchmark", x:"8",  y:"3", type:"number", value:null, disabled:true, placeholder:"标杆值",
+      validation:{rules:[{required:true,message:"请输入标杆值"},{type:"number",min:0,message:"不能为负"}]}},
+    {id:"r3_baseline",  x:"9",  y:"3", type:"number", value:null, disabled:true, placeholder:"基准值",
+      validation:{rules:[{required:true,message:"请输入基准值"},{type:"number",min:0,message:"不能为负"}]}},
+    {id:"r3_weight",    x:"10", y:"3", type:"number", value:null, disabled:true, placeholder:"加权参数",
+      validation:{rules:[{type:"number",min:0,message:"不能为负"}]}},
+    {id:"r3_indvalue",  x:"11", y:"3", type:"number", value:null, disabled:true, placeholder:"指标值",
+      validation:{rules:[{required:true,message:"请输入指标值"},{type:"number",min:0,message:"不能为负"}]}},
+    {id:"b11", x:"12", y:"3",  type:"text", content:"相关证明材料"},
+    {id:"b12", x:"13", y:"3",  type:"text", content:"必须符合"},
+
+    // ══ 能源低碳化 (Row 4-7) ══
+    {id:"c1",  x:"1",  y:"4,7",  type:"text", content:"<b>能源低碳化</b>"},
+    {id:"c2",  x:"2",  y:"4,5",  type:"text", content:"1"},
+    {id:"c3",  x:"3",  y:"4,5",  type:"text", content:"能源消耗强度"},
+    {id:"c4",  x:"4",  y:"4",  type:"select", value:"",
+      content:"是否有适用国家强制性标准",
+      options:[{label:"有适用标准",value:"has"},{label:"无适用标准",value:"no"}],
+      validation:{rules:[{required:true,message:"请选择"}]},
+      linkage:[
+        {trigger:"has", actions:[
+          {target:"c8",type:"enable"},{target:"c9",type:"enable"},
+          {target:"c10",type:"enable"},{target:"c11",type:"enable"},
+          {target:"d_energy",type:"show"},{target:"d_none",type:"hide"}
+        ]},
+        {trigger:"no", actions:[
+          {target:"c8",type:"disable"},{target:"c8",type:"clear"},
+          {target:"c9",type:"disable"},{target:"c9",type:"clear"},
+          {target:"c10",type:"disable"},{target:"c10",type:"clear"},
+          {target:"c11",type:"disable"},{target:"c11",type:"clear"},
+          {target:"d_energy",type:"hide"},{target:"d_energy",type:"clear"},
+          {target:"d_none",type:"show"}
+        ]}
+      ]},
+    {id:"c5",  x:"5",  y:"4",  type:"text", content:"逆向定量"},
+    {id:"c6",  x:"6",  y:"4",  type:"text", content:"11"},
+    {id:"c7",  x:"7",  y:"4",  type:"text", content:"tce/产品单位"},
+    {id:"c8",  x:"8",  y:"4",  type:"number", value:null, placeholder:"输入标杆值",
+      validation:{rules:[{required:true,message:"请输入标杆值"},{type:"number",min:0,message:"标杆值不能为负"}]}},
+    {id:"c9",  x:"9",  y:"4",  type:"number", value:null, placeholder:"输入基准值",
+      validation:{rules:[{required:true,message:"请输入基准值"},{type:"number",min:0,message:"基准值不能为负"}]}},
+    {id:"c10", x:"10", y:"4",  type:"number", value:null, placeholder:"输入加权参数",
+      validation:{rules:[{type:"number",min:0,message:"加权参数不能为负"}]}},
+    {id:"c11", x:"11", y:"4",  type:"number", value:null, placeholder:"输入指标值",
+      validation:{rules:[{required:true,message:"请输入指标值"},{type:"number",min:0,message:"指标值不能为负"}]}},
+    {id:"c12", x:"12", y:"4",  type:"text", content:"1.指标计算过程表及其附件\n2.报统计部门相关报表"},
+    {id:"c13", x:"13", y:"4",  type:"text", content:"按各类产品产量占比分配权重分值"},
+
+    {id:"d_energy", x:"4", y:"5", type:"number", value:null, placeholder:"单位产品综合能耗(tce)",
+      validation:{rules:[{type:"number",min:0,message:"请输入有效的综合能耗"}]}},
+    {id:"d_none",   x:"4", y:"5", type:"text", content:"/", _hidden:true},
+    {id:"d2",  x:"5",  y:"5",  type:"text", content:"/"},
+    {id:"d3",  x:"6",  y:"5",  type:"text", content:"/"},
+    {id:"d4",  x:"7",  y:"5",  type:"text", content:"/"},
+    {id:"d5",  x:"8",  y:"5",  type:"text", content:"先进水平"},
+    {id:"d6",  x:"9",  y:"5",  type:"text", content:"准入水平"},
+    {id:"d7",  x:"10", y:"5",  type:"text", content:"/"},
+    {id:"d8",  x:"11", y:"5",  type:"text", content:"/"},
+    {id:"d9",  x:"12", y:"5",  type:"text", content:"3.《能源加工转换与回收利用》等相关报表"},
+    {id:"d10", x:"13", y:"5",  type:"text", content:"=min(标杆值得分, 基准值得分)"},
+
+    {id:"e1",  x:"2",  y:"6",  type:"text", content:"2"},
+    {id:"e2",  x:"3",  y:"6",  type:"text", content:"可再生能源利用率"},
+    {id:"e3",  x:"4",  y:"6",  type:"text", content:"可再生能源利用率"},
+    {id:"e4",  x:"5",  y:"6",  type:"text", content:"正向定量"},
+    {id:"e5",  x:"6",  y:"6",  type:"text", content:"5"},
+    {id:"e6",  x:"7",  y:"6",  type:"text", content:"%"},
+    {id:"e7",  x:"8",  y:"6",  type:"number", value:null, placeholder:"标杆值(%)",
+      validation:{rules:[{required:true,message:"请输入标杆值"},{type:"number",min:0,max:100,message:"请输入0-100之间的值"}]}},
+    {id:"e8",  x:"9",  y:"6",  type:"number", value:null, placeholder:"基准值(%)",
+      validation:{rules:[{required:true,message:"请输入基准值"},{type:"number",min:0,max:100,message:"请输入0-100之间的值"}]}},
+    {id:"e9",  x:"10", y:"6",  type:"number", value:null, placeholder:"加权参数",
+      validation:{rules:[{type:"number",min:0,message:"加权参数不能为负"}]}},
+    {id:"e10", x:"11", y:"6",  type:"number", value:null, placeholder:"指标值(%)",
+      validation:{rules:[{required:true,message:"请输入指标值"},{type:"number",min:0,max:100,message:"请输入0-100之间的值"}]}},
+    {id:"e11", x:"12", y:"6",  type:"text", content:"可再生能源利用证明材料"},
+    {id:"e12", x:"13", y:"6",  type:"text", content:"按比例计算得分"},
+
+    {id:"f1",  x:"2",  y:"7",  type:"text", content:"3"},
+    {id:"f2",  x:"3",  y:"7",  type:"text", content:"碳排放强度"},
+    {id:"f3",  x:"4",  y:"7",  type:"text", content:"单位工业总产值碳排放量"},
+    {id:"f4",  x:"5",  y:"7",  type:"text", content:"逆向定量"},
+    {id:"f5",  x:"6",  y:"7",  type:"text", content:"4"},
+    {id:"f6",  x:"7",  y:"7",  type:"text", content:"tCO₂/万元"},
+    {id:"f7",  x:"8",  y:"7",  type:"number", value:null, placeholder:"标杆值",
+      validation:{rules:[{required:true,message:"请输入标杆值"},{type:"number",min:0,message:"标杆值不能为负"}]}},
+    {id:"f8",  x:"9",  y:"7",  type:"number", value:null, placeholder:"基准值",
+      validation:{rules:[{required:true,message:"请输入基准值"},{type:"number",min:0,message:"基准值不能为负"}]}},
+    {id:"f9",  x:"10", y:"7",  type:"number", value:null, placeholder:"加权参数",
+      validation:{rules:[{type:"number",min:0,message:"不能为负"}]}},
+    {id:"f10", x:"11", y:"7",  type:"number", value:null, placeholder:"指标值",
+      validation:{rules:[{required:true,message:"请输入指标值"},{type:"number",min:0,message:"指标值不能为负"}]}},
+    {id:"f11", x:"12", y:"7",  type:"text", content:"碳排放核查报告"},
+    {id:"f12", x:"13", y:"7",  type:"text", content:"逆向指标，越低越好"},
+
+    // ── Row 8: 小计 ──
+    {id:"g1",  x:"2",  y:"8",  type:"text", content:""},
+    {id:"g2",  x:"3,5",y:"8",  type:"text", content:"<b>小计</b>"},
+    {id:"g3",  x:"6",  y:"8",  type:"formula", calculationFormula:"SUM(c6,e5,f5)"},
+    {id:"g4",  x:"7",  y:"8",  type:"text", content:""},
+    {id:"g5",  x:"8",  y:"8",  type:"text", content:""},
+    {id:"g6",  x:"9",  y:"8",  type:"text", content:""},
+    {id:"g7",  x:"10", y:"8",  type:"text", content:""},
+    {id:"g8",  x:"11", y:"8",  type:"formula", calculationFormula:"CALC_SCORE"},
+    {id:"g9",  x:"12", y:"8",  type:"text", content:""},
+    {id:"g10", x:"13", y:"8",  type:"text", content:""}
+  ]
+};
+
+// ======================== 工具函数 ========================
+function parseRange(v){
+  var p=String(v).split(',').map(Number);
+  return {start:Math.min.apply(null,p), end:Math.max.apply(null,p), span:Math.max.apply(null,p)-Math.min.apply(null,p)+1};
+}
+
+// 从 cells 数组构建 formModel：{ id: value }
+// number → null, checkbox → [], 其他 → ''
+function buildFormModel(cells){
+  var m = {};
+  cells.forEach(function(c){
+    if(c.type==='number') m[c.id] = (c.value!=null && c.value!=='') ? Number(c.value) : null;
+    else if(c.type==='checkbox') m[c.id] = Array.isArray(c.value) ? c.value : [];
+    else if(['input','select','radio','date'].indexOf(c.type)>=0) m[c.id] = c.value!=null ? c.value : '';
+  });
+  return m;
+}
+
+// 构建表格网格
+function buildGrid(cells){
+  var cellMap = {};
+  cells.forEach(function(c){ cellMap[c.id] = c; });
+
+  var maxC=0, maxR=0;
+  cells.forEach(function(c){
+    var xr=parseRange(c.x), yr=parseRange(c.y);
+    if(xr.end>maxC) maxC=xr.end;
+    if(yr.end>maxR) maxR=yr.end;
+  });
+
+  var G=[], O=[];
+  for(var r=0;r<maxR;r++){ G[r]=[]; O[r]=[]; for(var c=0;c<maxC;c++){ G[r][c]=null; O[r][c]=false; } }
+
+  var sorted = cells.slice().sort(function(a,b){
+    return parseRange(b.y).span*parseRange(b.x).span - parseRange(a.y).span*parseRange(a.x).span;
+  });
+
+  sorted.forEach(function(cell){
+    var xr=parseRange(cell.x), yr=parseRange(cell.y);
+    var r0=yr.start-1, c0=xr.start-1;
+    var entry = {cell:cell, rowspan:yr.span, colspan:xr.span, alts:null};
+    if(G[r0][c0]){
+      if(!G[r0][c0].alts) G[r0][c0].alts = [];
+      G[r0][c0].alts.push(entry);
+      return;
+    }
+    G[r0][c0] = entry;
+    for(var r=r0;r<r0+yr.span&&r<maxR;r++)
+      for(var c=c0;c<c0+xr.span&&c<maxC;c++)
+        if(!(r===r0&&c===c0)) O[r][c]=true;
+  });
+
+  var rows = [];
+  for(var r=0;r<maxR;r++){
+    var cols=[];
+    for(var c=0;c<maxC;c++){
+      if(O[r][c]){ cols.push({skip:true}); continue; }
+      var e=G[r][c];
+      if(!e){ cols.push({skip:false,cell:null}); continue; }
+      var isCtrl = ['input','number','select','radio','checkbox','date'].indexOf(e.cell.type)>=0;
+      var cls=[];
+      if(e.cell.type==='text'&&(c===0||c===2)&&/<b>/.test(e.cell.content||'')) cls.push('cell-group');
+      cols.push({
+        skip:false, cell:e.cell, rowspan:e.rowspan, colspan:e.colspan, alts:e.alts||[],
+        isLabel:e.cell.type==='label', isText:e.cell.type==='text',
+        isControl:isCtrl, isFormula:e.cell.type==='formula', cls:cls.join(' ')
+      });
+    }
+    rows.push(cols);
+  }
+  return {rows:rows, cellMap:cellMap};
+}
+
+// ======================== 数据集注册 ========================
+var DATA_SETS = {
+  default: TABLE_DATA,
+  mock: typeof MOCK_DATA !== 'undefined' ? MOCK_DATA : null
+};
+
+// ======================== Vue 应用 ========================
+var app = new Vue({
+  el: '#app',
+  template: '#app-tpl',
+
+  data: function(){
+    var initData = TABLE_DATA;
+    var state = this._buildState(initData);
+    state.currentDataKey = 'default';
+    state.colWidths = ['6%','3%','12%','12%','6%','4%','7%','7%','7%','6%','7%','12%','12%'];
+    return state;
+  },
+
+  computed: {
+    formRules: function(){
+      var R = {}, self = this;
+      this.config.cells.forEach(function(c){
+        if(c.validation && !self.isHidden(c.id) && !self.isDisabled(c.id))
+          R[c.id] = self.buildRules(c);
+      });
+      return R;
+    }
+  },
+
+  created: function(){
+    this.recalc();
+  },
+
+  methods: {
+    // ────── 数据集切换 ──────
+    _buildState: function(data){
+      var grid = buildGrid(data.cells);
+      var fm = buildFormModel(data.cells);
+      var ds = {}, hs = {};
+      data.cells.forEach(function(c){ if(c.disabled) ds[c.id]=true; });
+      data.cells.forEach(function(c){ if(c._hidden) hs[c.id]=true; });
+      return {
+        config: data,
+        gridRows: grid.rows,
+        cellMap: grid.cellMap,
+        fm: fm,
+        disabledState: ds,
+        hiddenState: hs,
+        submitDisabled: false,
+        formulaResults: {}
+      };
+    },
+
+    switchData: function(key){
+      var data = DATA_SETS[key];
+      if(!data) return;
+      var state = this._buildState(data);
+      this.config = state.config;
+      this.gridRows = state.gridRows;
+      this.cellMap = state.cellMap;
+      this.fm = state.fm;
+      this.disabledState = state.disabledState;
+      this.hiddenState = state.hiddenState;
+      this.submitDisabled = false;
+      this.formulaResults = {};
+      this.currentDataKey = key;
+      var self = this;
+      this.$nextTick(function(){
+        self.recalc();
+        self.$refs.mainForm.resetFields();
+      });
+      this.$Message.info('已切换到：' + data.title);
+    },
+
+    // ────── 取值/赋值（统一入口，保证 Vue 响应式）──────
+    setVal: function(id, val){
+      var cell = this.cellMap[id];
+      if(cell && cell.type==='number'){
+        val = (val === '' || val === undefined || val === null) ? null : Number(val);
+      }
+      this.$set(this.fm, id, val);
+      // 手动清除该字段的校验错误（值变化后立即清除红框）
+      var self = this;
+      this.$nextTick(function(){
+        var fi = self.$refs.mainForm.fields.find(function(f){ return f.prop === id; });
+        if(fi) fi.validateState = '';
+      });
+    },
+
+    getItems: function(e){
+      var list = [{cell:e.cell, isText:e.isText, isControl:e.isControl, isFormula:e.isFormula}];
+      (e.alts||[]).forEach(function(a){
+        list.push({
+          cell:a.cell,
+          isText:a.cell.type==='text',
+          isControl:['input','number','select','radio','checkbox','date'].indexOf(a.cell.type)>=0,
+          isFormula:a.cell.type==='formula'
+        });
+      });
+      return list;
+    },
+
+    isHidden: function(id){ return !!this.hiddenState[id]; },
+    isDisabled: function(id){ return !!this.disabledState[id]; },
+    getNum: function(c, k){
+      var v=c.validation; if(!v) return undefined;
+      var r;
+      if(v.rules) v.rules.forEach(function(x){ if(x[k]!=null) r=x[k]; });
+      if(r==null && v[k]!=null) r=v[k];
+      return r;
+    },
+
+    // ────── 校验规则（完全数据驱动）──────
+    buildRules: function(cell){
+      var v=cell.validation; if(!v) return [];
+      var isNum = cell.type==='number';
+      var trigger = (isNum||cell.type==='select'||cell.type==='radio') ? 'change' : 'blur';
+      // 格式1: rules 数组
+      if(v.rules && v.rules.length){
+        return v.rules.map(function(r){
+          var rule = {};
+          for(var k in r) rule[k]=r[k];
+          if(!rule.trigger) rule.trigger = trigger;
+          // number 类型：required 时确保 null/undefined 被视为空
+          if(isNum && rule.required && !rule.validator){
+            rule.type = rule.type || 'number';
+          }
+          return rule;
+        });
+      }
+      // 格式2: 简写
+      var rules=[];
+      if(v.required) rules.push({required:true, message:v.message||'此项为必填', trigger:trigger, type: isNum?'number':'string'});
+      if(v.pattern) rules.push({pattern:new RegExp(v.pattern), message:v.message||'格式不正确', trigger:trigger});
+      return rules;
+    },
+
+    // ────── 事件 ──────
+    setRadio: function(id, val){
+      if(this.fm[id] === val) return;
+      this.setVal(id, val);
+      this.onChange(id);
+    },
+    onChange: function(id){ this.handleLinkage(id); this.recalc(); this.validateField(id); },
+    onBlur: function(id){ this.validateField(id); },
+
+    validateField: function(id){
+      var self = this;
+      this.$nextTick(function(){
+        if(self.$refs.mainForm){
+          self.$refs.mainForm.validateField(id);
+        }
+      });
+    },
+
+    // ────── 联动引擎 ──────
+    handleLinkage: function(id){
+      var cell = this.cellMap[id];
+      if(!cell || !cell.linkage) return;
+      var val = String(this.fm[id]);
+      var self = this;
+      cell.linkage.forEach(function(rule){
+        if(String(rule.trigger) === val)
+          rule.actions.forEach(function(a){ self.applyAction(a); });
+      });
+    },
+
+    applyAction: function(a){
+      var self = this, t = a.target;
+      // ── 单目标 ──
+      if(t){
+        if(a.type==='show')      this.$set(this.hiddenState, t, false);
+        else if(a.type==='hide') this.$set(this.hiddenState, t, true);
+        else if(a.type==='enable') this.$set(this.disabledState, t, false);
+        else if(a.type==='disable') this.$set(this.disabledState, t, true);
+        else if(a.type==='clear')  this.doClear(t);
+        else if(a.type==='setValue') this.$set(this.fm, t, a.value||'');
+        return;
+      }
+      // ── 多目标行绑定 ──
+      var targets = a.rowTargets;
+      if(!targets) return;
+      targets.forEach(function(rt){
+        rt.cols.forEach(function(cid){
+          if(a.type==='rowEnable')  self.$set(self.disabledState, cid, false);
+          else if(a.type==='rowDisable') self.$set(self.disabledState, cid, true);
+          else if(a.type==='rowClear') self.doClear(cid);
+        });
+      });
+    },
+
+    doClear: function(id){
+      if(!this.fm.hasOwnProperty(id)) return;
+      var tc = this.cellMap[id];
+      var empty = tc && tc.type==='checkbox' ? [] : tc && tc.type==='number' ? null : '';
+      this.$set(this.fm, id, empty);
+    },
+
+    // ────── 公式 ──────
+    recalc: function(){
+      var self = this;
+      this.config.cells.forEach(function(c){
+        if(c.type!=='formula' || !c.calculationFormula) return;
+        self.$set(self.formulaResults, c.id, self.evalF(c.calculationFormula));
+      });
+    },
+
+    evalF: function(f){
+      var self=this, m;
+      // SUM(id1,id2,...)
+      m=f.match(/^SUM\((.+)\)$/i);
+      if(m){var s=0; m[1].split(',').map(function(x){return x.trim()}).forEach(function(id){var c=self.cellMap[id]; if(c){var v=c.type==='text'?parseFloat(c.content):parseFloat(self.fm[id]); if(!isNaN(v))s+=v;}}); return s;}
+      // AVG(id1,id2,...)
+      m=f.match(/^AVG\((.+)\)$/i);
+      if(m){var s2=0,n=0; m[1].split(',').map(function(x){return x.trim()}).forEach(function(id){var v=parseFloat(self.fm[id]); if(!isNaN(v)){s2+=v;n++;}}); return n? +(s2/n).toFixed(2):0;}
+      // MIN(id1,id2,...)
+      m=f.match(/^MIN\((.+)\)$/i);
+      if(m){var vals=[]; m[1].split(',').map(function(x){return x.trim()}).forEach(function(id){var v=parseFloat(self.fm[id]); if(!isNaN(v))vals.push(v);}); return vals.length? Math.min.apply(null,vals):0;}
+      // CALC_SCORE — 所有 number 控件求和
+      if(f==='CALC_SCORE'){var t=0; self.config.cells.forEach(function(c){if(c.type==='number'&&self.fm[c.id]!=null){var v=parseFloat(self.fm[c.id]); if(!isNaN(v))t+=v;}}); return t?t.toFixed(2):'';}
+      // ── CALC(表达式) — 自定义函数计算，支持 Math 和三元表达式 ──
+      // 示例: CALC((c8 - c9) / c10 * 100)
+      //       CALC(Math.max(0, (c8 - c9) / c10 * 100))
+      //       CALC(c8 > c9 ? c8 : c9)
+      //       CALC(Math.round(c8 * 100) / 100)
+      m=f.match(/^CALC\((.+)\)$/i);
+      if(m){
+        var expr=m[1];
+        Object.keys(self.cellMap).forEach(function(id){
+          var v=parseFloat(self.fm[id]);
+          if(!isNaN(v)) expr=expr.replace(new RegExp('\\b'+id+'\\b','g'),v);
+        });
+        try{return new Function('Math','"use strict"; return ('+expr+')')(Math);}catch(x){return 'ERR';}
+      }
+      // 简单四则运算（向后兼容）
+      try{var e=f; Object.keys(self.cellMap).forEach(function(id){var v=parseFloat(self.fm[id]); if(!isNaN(v)) e=e.replace(new RegExp('\\b'+id+'\\b','g'),v);}); if(/^[\d\s+\-*/().]+$/.test(e)) return new Function('"use strict"; return ('+e+')')();}catch(x){}
+      return f;
+    },
+
+    // ────── 提交（返回结构与原始 cells 一致）──────
+    handleSubmit: function(){
+      var self = this;
+      this.$refs.mainForm.validate(function(valid){
+        if(valid){
+          var result = { title: self.config.title, cells: [] };
+          self.config.cells.forEach(function(c){
+            if(['label','text','formula'].indexOf(c.type)>=0) return;
+            if(self.isHidden(c.id) || self.isDisabled(c.id)) return;
+            result.cells.push({ id: c.id, type: c.type, value: self.fm[c.id] });
+          });
+          console.log('提交数据:', JSON.stringify(result, null, 2));
+          self.$Message.success('提交成功！数据已输出到控制台');
+        } else {
+          self.$Message.error('表单校验未通过，请检查标红项');
+        }
+      });
+    },
+
+    /**
+     * 接口回显：传入 {cells: [{id, value}, ...]} 还原表单值
+     * 用法: app.loadData(apiResponse)  或  loadData(JSON.parse(xhr.responseText))
+     */
+    loadData: function(data){
+      var self = this;
+      if(!data || !data.cells) return;
+      data.cells.forEach(function(item){
+        if(item.id == null) return;
+        var cell = self.cellMap[item.id];
+        if(!cell) return;
+        // 按 cell 类型转型后写入 fm
+        if(cell.type === 'number'){
+          self.$set(self.fm, item.id, (item.value != null && item.value !== '') ? Number(item.value) : null);
+        } else if(cell.type === 'checkbox'){
+          self.$set(self.fm, item.id, Array.isArray(item.value) ? item.value : []);
+        } else {
+          self.$set(self.fm, item.id, item.value != null ? item.value : '');
+        }
+      });
+      this.recalc();
+    },
+
+    // ────── 重置 ──────
+    handleReset: function(){
+      var self = this;
+      // 恢复所有控件值
+      this.config.cells.forEach(function(c){
+        if(c.type==='number') self.$set(self.fm, c.id, (c.value!=null&&c.value!=='') ? Number(c.value) : null);
+        else if(c.type==='checkbox') self.$set(self.fm, c.id, []);
+        else if(['input','select','radio','date'].indexOf(c.type)>=0) self.$set(self.fm, c.id, c.value!=null ? c.value : '');
+      });
+      // 恢复初始 disabled / hidden
+      this.disabledState = {};
+      this.hiddenState = {};
+      this.config.cells.forEach(function(c){
+        if(c.disabled) self.$set(self.disabledState, c.id, true);
+        if(c._hidden) self.$set(self.hiddenState, c.id, true);
+      });
+      this.submitDisabled = false;
+      this.$refs.mainForm.resetFields();
+      this.recalc();
+      this.$Message.warning('已重置');
+    }
+  }
+});
+</script>
+</body>
+</html>
