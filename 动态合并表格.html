@@ -1130,6 +1130,38 @@
         }
       }
 
+      // ======================== custom 自定义校验表达式 ========================
+      // 表达式中 value 代表当前字段值，其他 cell id 替换为 fm 中的值
+      // 返回 true 表示校验通过，false 表示校验失败
+      function evalCustom(expr, value, fm, cellMap) {
+        var e = expr.replace(/\bvalue\b/g, function () {
+          if (value === null || value === undefined) return 'null';
+          if (typeof value === 'number') return String(value);
+          if (typeof value === 'string') return "'" + value.replace(/'/g, "\\'") + "'";
+          return 'null';
+        });
+        var ids = Object.keys(cellMap).sort(function (a, b) {
+          return b.length - a.length;
+        });
+        ids.forEach(function (id) {
+          var v = fm[id];
+          var r;
+          if (v === null || v === undefined) r = 'null';
+          else if (typeof v === 'number') r = String(v);
+          else if (typeof v === 'string') r = "'" + v.replace(/'/g, "\\'") + "'";
+          else r = 'null';
+          e = e.replace(
+            new RegExp('\\b' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'),
+            r
+          );
+        });
+        try {
+          return new Function('"use strict"; return (' + e + ')')();
+        } catch (ex) {
+          return false;
+        }
+      }
+
       // ======================== 数据集注册 ========================
       var DATA_SETS = {
         default: TABLE_DATA,
@@ -1340,16 +1372,17 @@
                 for (var k in r) rule[k] = r[k];
                 if (!rule.trigger) rule.trigger = trigger;
                 // number 类型：required 时确保 null/undefined 被视为空
-                if (isNum && rule.required && !rule.validator && !rule.depends) {
+                if (isNum && rule.required && !rule.validator && !rule.depends && !rule.custom) {
                   rule.type = rule.type || 'number';
                 }
                 // checkbox 类型：required 时确保空数组被视为空
                 if (isCheckbox && rule.required && !rule.type) {
                   rule.type = 'array';
                 }
-                // ── depends 条件校验：表达式求值为 false 时跳过此规则 ──
-                if (rule.depends) {
-                  var depExpr = rule.depends;
+                // ── depends / custom 条件校验 ──
+                if (rule.depends || rule.custom) {
+                  var depExpr = rule.depends || null;
+                  var customExpr = rule.custom || null;
                   var orig = {
                     required: rule.required,
                     type: rule.type,
@@ -1359,13 +1392,21 @@
                     len: rule.len,
                     message: rule.message || '校验未通过'
                   };
-                  rule.validator = (function (dep, o, isNumType) {
+                  rule.validator = (function (dep, custom, o, isNumType) {
                     return function (r, value, callback) {
-                      if (!evalDepends(dep, self.fm, self.cellMap)) {
+                      // depends 条件：不满足则跳过整个规则
+                      if (dep && !evalDepends(dep, self.fm, self.cellMap)) {
                         callback();
                         return;
                       }
-                      // 条件满足 → 按原始规则校验
+                      // custom 自定义校验表达式
+                      if (custom) {
+                        if (!evalCustom(custom, value, self.fm, self.cellMap)) {
+                          callback(new Error(o.message));
+                          return;
+                        }
+                      }
+                      // 原始规则校验（required / min / max / pattern / len）
                       if (o.required) {
                         var empty = value == null || value === '' ||
                           (Array.isArray(value) && value.length === 0);
@@ -1386,7 +1427,7 @@
                       }
                       callback();
                     };
-                  })(depExpr, orig, isNum);
+                  })(depExpr, customExpr, orig, isNum);
                   delete rule.required;
                   delete rule.type;
                   delete rule.min;
@@ -1395,6 +1436,7 @@
                   delete rule.len;
                   delete rule.message;
                   delete rule.depends;
+                  delete rule.custom;
                 }
                 return rule;
               });
@@ -1640,6 +1682,26 @@
           onUploadFile: function (id, e) {
             var file = e.target.files && e.target.files[0];
             if (!file) return;
+            var cell = this.cellMap[id];
+            // 格式校验
+            if (cell && cell.accept) {
+              var ext = '.' + file.name.split('.').pop().toLowerCase();
+              var allowed = cell.accept.toLowerCase().split(',').map(function (s) { return s.trim(); });
+              if (allowed.indexOf(ext) < 0) {
+                this.$Message.error('不支持的文件格式，仅允许: ' + cell.accept);
+                e.target.value = '';
+                return;
+              }
+            }
+            // 大小校验
+            if (cell && cell.maxSize) {
+              var maxBytes = cell.maxSize * 1024 * 1024;
+              if (file.size > maxBytes) {
+                this.$Message.error('文件大小超过限制，最大 ' + cell.maxSize + 'MB');
+                e.target.value = '';
+                return;
+              }
+            }
             var fileInfo = JSON.stringify({ name: file.name, size: file.size, type: file.type, lastModified: file.lastModified });
             this.$set(this.fm, id, fileInfo);
             this.onChange(id);

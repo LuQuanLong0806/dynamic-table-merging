@@ -42,6 +42,35 @@ function evalDepends(expr, fm, cellMap) {
   }
 }
 
+function evalCustom(expr, value, fm, cellMap) {
+  var e = expr.replace(/\bvalue\b/g, function () {
+    if (value === null || value === undefined) return 'null';
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'string') return "'" + value.replace(/'/g, "\\'") + "'";
+    return 'null';
+  });
+  var ids = Object.keys(cellMap).sort(function (a, b) {
+    return b.length - a.length;
+  });
+  ids.forEach(function (id) {
+    var v = fm[id];
+    var r;
+    if (v === null || v === undefined) r = 'null';
+    else if (typeof v === 'number') r = String(v);
+    else if (typeof v === 'string') r = "'" + v.replace(/'/g, "\\'") + "'";
+    else r = 'null';
+    e = e.replace(
+      new RegExp('\\b' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'),
+      r
+    );
+  });
+  try {
+    return new Function('"use strict"; return (' + e + ')')();
+  } catch (ex) {
+    return false;
+  }
+}
+
 // ── 模拟 mock1.js 第42行的数据 ──
 
 var row42Cells = [
@@ -66,8 +95,14 @@ row42Cells.forEach(function (c) { cellMap[c.id] = c; });
 
 function validateWithDepends(rule, fm, cellMap, value) {
   var depExpr = rule.depends;
-  if (!evalDepends(depExpr, fm, cellMap)) {
+  if (depExpr && !evalDepends(depExpr, fm, cellMap)) {
     return { pass: true, skipped: true };
+  }
+  // custom 自定义校验
+  if (rule.custom) {
+    if (!evalCustom(rule.custom, value, fm, cellMap)) {
+      return { pass: false, skipped: false, error: rule.message };
+    }
   }
   if (rule.required) {
     var empty = value == null || value === '' ||
@@ -291,6 +326,140 @@ console.log('\n── 测试6: depends 与非 required 规则组合 ──');
   var fm3 = { bm_r42: null, indval_r42: -5 };
   var r3 = validateWithDepends(rule, fm3, cellMap, fm3.indval_r42);
   assertEqual(r3.pass, true, 'bm_r42=null, 条件不满足 → 跳过');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试7: evalCustom 自定义校验表达式
+// ══════════════════════════════════════════════════
+console.log('\n── 测试7: evalCustom 自定义校验表达式 ──');
+
+(function () {
+  var fm = { bm_r42: 2, bl_r42: 51.1, indval_r42: 30 };
+
+  // value 在标杆值和基准值之间
+  assertEqual(evalCustom('value >= bm_r42 && value <= bl_r42', 30, fm, cellMap), true,
+    'value=30, bm=2, bl=51.1 → 在范围内 → true');
+  assertEqual(evalCustom('value >= bm_r42 && value <= bl_r42', 1, fm, cellMap), false,
+    'value=1, bm=2 → 小于标杆值 → false');
+  assertEqual(evalCustom('value >= bm_r42 && value <= bl_r42', 60, fm, cellMap), false,
+    'value=60, bl=51.1 → 大于基准值 → false');
+  assertEqual(evalCustom('value >= bm_r42 && value <= bl_r42', 2, fm, cellMap), true,
+    'value=2 = bm → 边界值 → true');
+  assertEqual(evalCustom('value >= bm_r42 && value <= bl_r42', 51.1, fm, cellMap), true,
+    'value=51.1 = bl → 边界值 → true');
+
+  // value 为 null
+  assertEqual(evalCustom('value >= bm_r42', null, fm, cellMap), false,
+    'value=null → 比较 → false');
+
+  // value 引用自身 fm 值
+  assertEqual(evalCustom('value === indval_r42', 30, fm, cellMap), true,
+    'value=30, indval_r42=30 → 相等 → true');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试8: custom + depends 组合
+// ══════════════════════════════════════════════════
+console.log('\n── 测试8: custom + depends 组合 ──');
+
+(function () {
+  var rule = {
+    message: '指标值必须在标杆值和基准值之间',
+    depends: 'bm_r42 != null && bl_r42 != null',
+    custom: 'value >= bm_r42 && value <= bl_r42'
+  };
+
+  // 两个都有值, value 在范围内 → 通过
+  var fm1 = { bm_r42: 2, bl_r42: 51.1 };
+  var r1 = validateWithDepends(rule, fm1, cellMap, 30);
+  assertEqual(r1.pass, true, 'bm=2, bl=51.1, value=30 → 通过');
+
+  // 两个都有值, value 超出范围 → 失败
+  var r2 = validateWithDepends(rule, fm1, cellMap, 60);
+  assertEqual(r2.pass, false, 'bm=2, bl=51.1, value=60 → 失败');
+  assertEqual(r2.error, '指标值必须在标杆值和基准值之间', '错误消息正确');
+
+  // 只有标杆值(基准值null) → depends不满足 → 跳过
+  var fm2 = { bm_r42: 2, bl_r42: null };
+  var r3 = validateWithDepends(rule, fm2, cellMap, 60);
+  assertEqual(r3.pass, true, 'bl=null, depends不满足 → 跳过');
+  assertEqual(r3.skipped, true, '确认是跳过');
+
+  // 两个都 null → 跳过
+  var fm3 = { bm_r42: null, bl_r42: null };
+  var r4 = validateWithDepends(rule, fm3, cellMap, 60);
+  assertEqual(r4.pass, true, '两个都null → 跳过');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试9: custom 独用（无 depends）
+// ══════════════════════════════════════════════════
+console.log('\n── 测试9: custom 独用（无 depends）──');
+
+(function () {
+  // 无 depends，始终校验：值必须大于标杆值
+  var rule = {
+    message: '指标值必须大于标杆值',
+    custom: 'value > bm_r42'
+  };
+
+  var fm = { bm_r42: 10 };
+  assertEqual(validateWithDepends(rule, fm, cellMap, 20).pass, true,
+    'value=20 > bm=10 → 通过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 5).pass, false,
+    'value=5 < bm=10 → 失败');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试10: upload accept / maxSize 校验
+// ══════════════════════════════════════════════════
+console.log('\n── 测试10: upload accept / maxSize 校验 ──');
+
+(function () {
+  // 模拟 onUploadFile 中的校验逻辑
+  function validateUpload(file, cell) {
+    if (cell.accept) {
+      var ext = '.' + file.name.split('.').pop().toLowerCase();
+      var allowed = cell.accept.toLowerCase().split(',').map(function (s) { return s.trim(); });
+      if (allowed.indexOf(ext) < 0) {
+        return { pass: false, error: '不支持的文件格式，仅允许: ' + cell.accept };
+      }
+    }
+    if (cell.maxSize) {
+      var maxBytes = cell.maxSize * 1024 * 1024;
+      if (file.size > maxBytes) {
+        return { pass: false, error: '文件大小超过限制，最大 ' + cell.maxSize + 'MB' };
+      }
+    }
+    return { pass: true };
+  }
+
+  var cell = { accept: '.pdf,.doc,.docx,.png,.jpg,.jpeg', maxSize: 10 };
+
+  // 合法格式
+  assertEqual(validateUpload({ name: 'test.pdf', size: 1024 }, cell).pass, true,
+    '.pdf 文件 → 通过');
+  assertEqual(validateUpload({ name: 'photo.PNG', size: 1024 }, cell).pass, true,
+    '.PNG 大写扩展名 → 通过');
+
+  // 不合法格式
+  assertEqual(validateUpload({ name: 'malware.exe', size: 1024 }, cell).pass, false,
+    '.exe 文件 → 拒绝');
+  assertEqual(validateUpload({ name: 'script.js', size: 1024 }, cell).pass, false,
+    '.js 文件 → 拒绝');
+
+  // 大小合法
+  assertEqual(validateUpload({ name: 'doc.pdf', size: 5 * 1024 * 1024 }, cell).pass, true,
+    '5MB 文件 → 通过');
+
+  // 大小超限
+  assertEqual(validateUpload({ name: 'big.pdf', size: 15 * 1024 * 1024 }, cell).pass, false,
+    '15MB 文件 → 拒绝');
+
+  // 无 accept/maxSize 配置 → 都通过
+  var cellNoRestrict = {};
+  assertEqual(validateUpload({ name: 'anything.xyz', size: 999999999 }, cellNoRestrict).pass, true,
+    '无限制配置 → 都通过');
 })();
 
 // ── 结果 ──

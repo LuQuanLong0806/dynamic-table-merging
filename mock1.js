@@ -2685,7 +2685,12 @@ var MOCK_DATA_1 = {
       validation: {
         rules: [
           { required: true, message: '请输入指标值' },
-          { type: 'number', min: 0, message: '指标值不能为负' }
+          { type: 'number', min: 0, message: '指标值不能为负' },
+          {
+            message: '指标值必须在标杆值和基准值之间',
+            depends: 'bm_r42 != null && bl_r42 != null',
+            custom: 'value >= bm_r42 && value <= bl_r42'
+          }
         ]
       }
     },
@@ -6154,6 +6159,8 @@ var MOCK_DATA_1 = {
       y: '42',
       type: 'upload',
       content: '',
+      accept: '.pdf,.doc,.docx,.png,.jpg,.jpeg',
+      maxSize: 10,
       validation: {
         rules: [
           {
