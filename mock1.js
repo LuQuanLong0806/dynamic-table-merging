@@ -2688,8 +2688,7 @@ var MOCK_DATA_1 = {
           { type: 'number', min: 0, message: '指标值不能为负' },
           {
             message: '指标值必须在标杆值和基准值之间',
-            depends: 'bm_r42 != null && bl_r42 != null',
-            custom: 'value >= bm_r42 && value <= bl_r42'
+            validator: 'return value != null && value >= fm.bm_r42 && value <= fm.bl_r42;'
           }
         ]
       }

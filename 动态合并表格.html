@@ -1106,16 +1106,17 @@
         return { rows: rows, cellMap: cellMap };
       }
 
-      // ======================== depends 条件求值（独立函数，方便单元测试）========================
-      function evalDepends(expr, fm, cellMap) {
-        var ids = Object.keys(cellMap).sort(function (a, b) {
+      // ======================== 表达式求值辅助：将对象中的值替换进表达式 ========================
+      function _replaceIds(expr, data) {
+        var ids = Object.keys(data).sort(function (a, b) {
           return b.length - a.length;
         });
         ids.forEach(function (id) {
-          var v = fm[id];
+          var v = data[id];
           var r;
           if (v === null || v === undefined) r = 'null';
           else if (typeof v === 'number') r = String(v);
+          else if (typeof v === 'boolean') r = String(v);
           else if (typeof v === 'string') r = "'" + v.replace(/'/g, "\\'") + "'";
           else r = 'null';
           expr = expr.replace(
@@ -1123,6 +1124,13 @@
             r
           );
         });
+        return expr;
+      }
+
+      // ======================== depends 条件求值 ========================
+      function evalDepends(expr, fm, cellMap, extra) {
+        expr = _replaceIds(expr, fm);
+        if (extra) expr = _replaceIds(expr, extra);
         try {
           return new Function('"use strict"; return (' + expr + ')')();
         } catch (e) {
@@ -1131,30 +1139,17 @@
       }
 
       // ======================== custom 自定义校验表达式 ========================
-      // 表达式中 value 代表当前字段值，其他 cell id 替换为 fm 中的值
-      // 返回 true 表示校验通过，false 表示校验失败
-      function evalCustom(expr, value, fm, cellMap) {
+      // 表达式中 value 代表当前字段值，cell id 从 fm 取值，extraContext 取第三方值
+      function evalCustom(expr, value, fm, cellMap, extra) {
         var e = expr.replace(/\bvalue\b/g, function () {
           if (value === null || value === undefined) return 'null';
           if (typeof value === 'number') return String(value);
+          if (typeof value === 'boolean') return String(value);
           if (typeof value === 'string') return "'" + value.replace(/'/g, "\\'") + "'";
           return 'null';
         });
-        var ids = Object.keys(cellMap).sort(function (a, b) {
-          return b.length - a.length;
-        });
-        ids.forEach(function (id) {
-          var v = fm[id];
-          var r;
-          if (v === null || v === undefined) r = 'null';
-          else if (typeof v === 'number') r = String(v);
-          else if (typeof v === 'string') r = "'" + v.replace(/'/g, "\\'") + "'";
-          else r = 'null';
-          e = e.replace(
-            new RegExp('\\b' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'),
-            r
-          );
-        });
+        e = _replaceIds(e, fm);
+        if (extra) e = _replaceIds(e, extra);
         try {
           return new Function('"use strict"; return (' + e + ')')();
         } catch (ex) {
@@ -1252,6 +1247,7 @@
               computedColWidths: cw,
               hiddenCols: colHidden,
               submitDisabled: false,
+              extraContext: {},
               formulaResults: {}
             };
           },
@@ -1384,10 +1380,11 @@
                   rule.depends = rule.required;
                   rule.required = true;
                 }
-                // ── depends / custom 条件校验 ──
-                if (rule.depends || rule.custom) {
+                // ── depends / custom / validator 条件校验 ──
+                if (rule.depends || rule.custom || rule.validator) {
                   var depExpr = rule.depends || null;
                   var customExpr = rule.custom || null;
+                  var validatorFn = rule.validator || null;
                   var orig = {
                     required: rule.required,
                     type: rule.type,
@@ -1397,16 +1394,35 @@
                     len: rule.len,
                     message: rule.message || '校验未通过'
                   };
-                  rule.validator = (function (dep, custom, o, isNumType) {
+                  rule.validator = (function (dep, custom, vfn, o, isNumType) {
+                    // 预编译 validator 函数体
+                    var compiledFn = null;
+                    if (vfn) {
+                      try {
+                        compiledFn = new Function('value', 'fm', 'extra', vfn);
+                      } catch (ex) {
+                        compiledFn = null;
+                      }
+                    }
                     return function (r, value, callback) {
                       // depends 条件：不满足则跳过整个规则
-                      if (dep && !evalDepends(dep, self.fm, self.cellMap)) {
+                      if (dep && !evalDepends(dep, self.fm, self.cellMap, self.extraContext)) {
                         callback();
                         return;
                       }
-                      // custom 自定义校验表达式
+                      // validator 函数体（优先级最高，形参: value, fm, extra）
+                      if (compiledFn) {
+                        try {
+                          var result = compiledFn(value, self.fm, self.extraContext);
+                          if (!result) { callback(new Error(o.message)); return; }
+                        } catch (ex) {
+                          callback(new Error(o.message));
+                          return;
+                        }
+                      }
+                      // custom 自定义校验表达式（自动替换 cell id）
                       if (custom) {
-                        if (!evalCustom(custom, value, self.fm, self.cellMap)) {
+                        if (!evalCustom(custom, value, self.fm, self.cellMap, self.extraContext)) {
                           callback(new Error(o.message));
                           return;
                         }
@@ -1432,7 +1448,7 @@
                       }
                       callback();
                     };
-                  })(depExpr, customExpr, orig, isNum);
+                  })(depExpr, customExpr, validatorFn, orig, isNum);
                   delete rule.required;
                   delete rule.type;
                   delete rule.min;
@@ -1442,6 +1458,7 @@
                   delete rule.message;
                   delete rule.depends;
                   delete rule.custom;
+                  delete rule.validator;
                 }
                 return rule;
               });

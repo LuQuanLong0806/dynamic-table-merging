@@ -93,7 +93,7 @@ row42Cells.forEach(function (c) { cellMap[c.id] = c; });
 
 // ── 模拟 validator 行为（与 buildRules 中 depends 分支一致） ──
 
-function validateWithDepends(rule, fm, cellMap, value) {
+function validateWithDepends(rule, fm, cellMap, value, extra) {
   // required 为字符串时 → 转为 depends 条件
   var r = {};
   for (var k in rule) r[k] = rule[k];
@@ -102,12 +102,22 @@ function validateWithDepends(rule, fm, cellMap, value) {
     r.required = true;
   }
   var depExpr = r.depends;
-  if (depExpr && !evalDepends(depExpr, fm, cellMap)) {
+  if (depExpr && !evalDepends(depExpr, fm, cellMap, extra)) {
     return { pass: true, skipped: true };
+  }
+  // validator 函数体（优先级最高）
+  if (r.validator) {
+    try {
+      var fn = new Function('value', 'fm', 'extra', r.validator);
+      var result = fn(value, fm, extra || {});
+      if (!result) return { pass: false, skipped: false, error: r.message };
+    } catch (ex) {
+      return { pass: false, skipped: false, error: r.message };
+    }
   }
   // custom 自定义校验
   if (r.custom) {
-    if (!evalCustom(r.custom, value, fm, cellMap)) {
+    if (!evalCustom(r.custom, value, fm, cellMap, extra)) {
       return { pass: false, skipped: false, error: r.message };
     }
   }
@@ -458,6 +468,108 @@ console.log('\n── 测试11: required 为字符串（简化写法）──');
   var fm5 = { bm_r42: null, bl_r42: null };
   var r6 = validateWithDepends(ruleMulti, fm5, cellMap, '');
   assertEqual(r6.pass, true, 'required=多条件OR, 都null → 跳过');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试12: validator 函数体（形参: value, fm, extra）
+// ══════════════════════════════════════════════════
+console.log('\n── 测试12: validator 函数体 ──');
+
+(function () {
+  // 和 mock1.js 中 indval_r42 完全一致的 validator
+  var rule = {
+    message: '指标值必须在标杆值和基准值之间',
+    validator: 'return value != null && value >= fm.bm_r42 && value <= fm.bl_r42;'
+  };
+
+  var fm = { bm_r42: 2, bl_r42: 51.1 };
+
+  assertEqual(validateWithDepends(rule, fm, cellMap, 30).pass, true,
+    'validator: value=30, fm.bm=2, fm.bl=51.1 → 通过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 1).pass, false,
+    'validator: value=1 < bm=2 → 失败');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 60).pass, false,
+    'validator: value=60 > bl=51.1 → 失败');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 2).pass, true,
+    'validator: value=2 = bm → 边界通过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, null).pass, false,
+    'validator: value=null → 失败');
+
+  // fm 值变化
+  var fm2 = { bm_r42: 10, bl_r42: 20 };
+  assertEqual(validateWithDepends(rule, fm2, cellMap, 15).pass, true,
+    'validator: fm 值变化后 value=15 在 10-20 → 通过');
+  assertEqual(validateWithDepends(rule, fm2, cellMap, 5).pass, false,
+    'validator: fm 值变化后 value=5 < 10 → 失败');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试13: validator + extra 第三方值
+// ══════════════════════════════════════════════════
+console.log('\n── 测试13: validator + extra 第三方值 ──');
+
+(function () {
+  // 用 extra 传入外部阈值
+  var rule = {
+    message: '低于外部配置的最低阈值',
+    validator: 'return value != null && value >= extra.minThreshold;'
+  };
+
+  var fm = { indval_r42: 30 };
+  var extra1 = { minThreshold: 20 };
+
+  assertEqual(validateWithDepends(rule, fm, cellMap, 30, extra1).pass, true,
+    'validator+extra: value=30 >= extra.min=20 → 通过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 10, extra1).pass, false,
+    'validator+extra: value=10 < extra.min=20 → 失败');
+
+  // 改变 extra 值
+  var extra2 = { minThreshold: 50 };
+  assertEqual(validateWithDepends(rule, fm, cellMap, 30, extra2).pass, false,
+    'validator+extra: extra.min=50, value=30 → 失败');
+
+  // extra 为空对象 → extra.minThreshold 为 undefined → 比较失败 → false
+  assertEqual(validateWithDepends(rule, fm, cellMap, 30, {}).pass, false,
+    'validator+extra: extra 为空 → value >= undefined → false');
+
+  // 同时使用 fm 和 extra
+  var rule2 = {
+    message: '必须大于标杆值且大于外部阈值',
+    validator: 'return value > fm.bm_r42 && value > extra.minThreshold;'
+  };
+  var fm2 = { bm_r42: 5 };
+  var extra3 = { minThreshold: 10 };
+  assertEqual(validateWithDepends(rule2, fm2, cellMap, 15, extra3).pass, true,
+    'validator: value=15 > fm.bm=5 && value > extra.min=10 → 通过');
+  assertEqual(validateWithDepends(rule2, fm2, cellMap, 8, extra3).pass, false,
+    'validator: value=8 > fm.bm=5 但 < extra.min=10 → 失败');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试14: validator + depends 组合
+// ══════════════════════════════════════════════════
+console.log('\n── 测试14: validator + depends 组合 ──');
+
+(function () {
+  var rule = {
+    depends: 'bm_r42 != null',
+    message: '标杆值存在时，指标值必须大于标杆值',
+    validator: 'return value > fm.bm_r42;'
+  };
+
+  // depends 满足, validator 通过
+  var fm1 = { bm_r42: 10 };
+  assertEqual(validateWithDepends(rule, fm1, cellMap, 20).pass, true,
+    'validator+depends: bm=10, value=20 → 通过');
+
+  // depends 满足, validator 失败
+  assertEqual(validateWithDepends(rule, fm1, cellMap, 5).pass, false,
+    'validator+depends: bm=10, value=5 → 失败');
+
+  // depends 不满足 → 跳过
+  var fm2 = { bm_r42: null };
+  assertEqual(validateWithDepends(rule, fm2, cellMap, 5).pass, true,
+    'validator+depends: bm=null → 跳过');
 })();
 
 // ══════════════════════════════════════════════════
