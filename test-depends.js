@@ -11,7 +11,10 @@
 
 function evalDepends(expr, fm, cellMap, extra) {
   try {
-    return new Function('fm', 'extra', '"use strict"; return (' + expr + ')')(fm, extra || {});
+    var locals = Object.keys(fm).map(function (k) {
+      return 'var ' + k + '=fm[' + JSON.stringify(k) + '];';
+    }).join('');
+    return new Function('fm', 'extra', locals + 'return(' + expr + ')')(fm, extra || {});
   } catch (e) {
     return false;
   }
@@ -19,7 +22,10 @@ function evalDepends(expr, fm, cellMap, extra) {
 
 function evalCustom(expr, value, fm, cellMap, extra) {
   try {
-    return new Function('value', 'fm', 'extra', '"use strict"; return (' + expr + ')')(value, fm, extra || {});
+    var locals = Object.keys(fm).map(function (k) {
+      return 'var ' + k + '=fm[' + JSON.stringify(k) + '];';
+    }).join('');
+    return new Function('value', 'fm', 'extra', locals + 'return(' + expr + ')')(value, fm, extra || {});
   } catch (ex) {
     return false;
   }
@@ -556,6 +562,42 @@ console.log('\n── 测试15: 语法统一验证 — depends/required/validato
   };
   assertEqual(validateWithDepends(rule3, fm, cellMap, 120).pass, true,
     'depends+required+validator 组合 → 通过');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试16: 裸 cell id 兼容（与 mock1.js 后端原始数据一致）
+// ══════════════════════════════════════════════════
+console.log('\n── 测试16: 裸 cell id 兼容（后端原始数据）──');
+
+(function () {
+  var fm = { bm_r42: 2, bl_r42: 51.1, indval_r42: null };
+
+  // depends 裸 id（mock1.js 后端数据就是这样写的）
+  assertEqual(evalDepends('bm_r42 != null', fm, cellMap), true,
+    '裸 id: bm_r42 != null → true');
+  assertEqual(evalDepends('indval_r42 != null', fm, cellMap), false,
+    '裸 id: indval_r42 != null → false');
+  assertEqual(evalDepends('bm_r42 != null && bl_r42 != null', fm, cellMap), true,
+    '裸 id: AND → true');
+
+  // required 裸 id（mock1.js 的 evidence_upload_42 就是这样）
+  var rule1 = { required: 'bm_r42 != null', message: '必填' };
+  assertEqual(validateWithDepends(rule1, fm, cellMap, []).pass, false,
+    '裸 id required: bm=2 → 失败');
+
+  var fm2 = { bm_r42: null };
+  assertEqual(validateWithDepends(rule1, fm2, cellMap, []).pass, true,
+    '裸 id required: bm=null → 跳过');
+
+  // validator 只用 fm.xxx（有明确参数签名，不支持裸 id）
+  var rule2 = {
+    validator: 'return value >= fm.bm_r42 && value <= fm.bl_r42;',
+    message: '范围'
+  };
+  assertEqual(validateWithDepends(rule2, fm, cellMap, 30).pass, true,
+    'validator: value >= fm.bm_r42 && value <= fm.bl_r42 → 通过');
+  assertEqual(validateWithDepends(rule2, fm, cellMap, 60).pass, false,
+    'validator: value=60 > bl → 失败');
 })();
 
 // ── 结果 ──

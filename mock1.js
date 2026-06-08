@@ -1898,6 +1898,12 @@ var MOCK_DATA_1 = {
           {
             required: true,
             message: '请输入标杆值'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7195,6 +7201,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r3_8 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7210,6 +7222,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r4 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7225,6 +7243,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r5 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7240,6 +7264,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r6 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7255,6 +7285,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r7 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7270,6 +7306,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r8 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7285,6 +7327,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r9 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7300,6 +7348,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r10 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7315,6 +7369,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r9 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7330,6 +7390,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r12 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7345,6 +7411,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r13 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7360,6 +7432,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r14 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7375,6 +7453,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r15 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7390,6 +7474,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r16_18 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7405,6 +7495,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r17 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7420,6 +7516,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r18 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7435,6 +7537,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r19_20 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7450,6 +7558,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r20 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7465,6 +7579,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r21 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7480,6 +7600,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r22 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7495,6 +7621,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r23 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7510,6 +7642,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r24_35 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7525,6 +7663,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r25 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7540,6 +7684,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r26 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7555,6 +7705,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r27 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7570,6 +7726,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r28 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7585,6 +7747,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r29 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7600,6 +7768,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r30 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7615,6 +7789,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r31 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7630,6 +7810,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r32 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7645,6 +7831,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r33 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7660,6 +7852,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r34 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7675,6 +7873,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r35 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7690,6 +7894,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r36_37 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7705,6 +7915,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r37 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7720,6 +7936,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r38_39 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7735,6 +7957,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r39 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7750,6 +7978,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r40_41 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7765,6 +7999,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r41 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7775,13 +8015,17 @@ var MOCK_DATA_1 = {
       y: '42',
       type: 'upload',
       content: '',
-      accept: '.pdf,.doc,.docx,.png,.jpg,.jpeg',
-      maxSize: 10,
       validation: {
         rules: [
           {
             required: 'fm.indval_r42 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7797,6 +8041,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r43 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7812,6 +8062,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r44 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7827,6 +8083,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r45 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7842,6 +8104,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r46_49 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7857,6 +8125,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r47 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7872,6 +8146,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r48 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7887,6 +8167,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r49 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7902,6 +8188,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r50_53 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7917,6 +8209,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r51 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7932,6 +8230,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r52 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7947,6 +8251,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r53 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7962,6 +8272,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r54_55 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7977,6 +8293,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r55 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -7992,6 +8314,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r56_58 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8007,6 +8335,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r57 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8022,6 +8356,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r58 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8037,6 +8377,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r59_62 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8052,6 +8398,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r60 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8067,6 +8419,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r61 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8082,6 +8440,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r62 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8097,6 +8461,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r63_67 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8112,6 +8482,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r64 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8127,6 +8503,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r65 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8142,6 +8524,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r66 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8157,6 +8545,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r67 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8172,6 +8566,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r68_70 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8187,6 +8587,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r69 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8202,6 +8608,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r70 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8217,6 +8629,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r71_72 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8232,6 +8650,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r72 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8247,6 +8671,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r73_74 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8262,6 +8692,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r74 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8277,6 +8713,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r75_77 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8292,6 +8734,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r76 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8307,6 +8755,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r77 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8322,6 +8776,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r78_79 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8337,6 +8797,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r79 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8352,6 +8818,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r80_82 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8367,6 +8839,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r81 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8382,6 +8860,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r82 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8397,6 +8881,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r83_84 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8412,6 +8902,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r84 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8427,6 +8923,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r85 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8442,6 +8944,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r86_88 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8457,6 +8965,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r87 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8472,6 +8986,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r88 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8487,6 +9007,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r89_91 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8502,6 +9028,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r90 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
@@ -8517,6 +9049,12 @@ var MOCK_DATA_1 = {
           {
             required: 'fm.indval_r91 != null',
             message: '指标值已填写，请上传证明材料'
+          },
+          {
+            type: 'array',
+            min: 1,
+            message: '至少添加1条数据',
+            trigger: 'change'
           }
         ]
       }
