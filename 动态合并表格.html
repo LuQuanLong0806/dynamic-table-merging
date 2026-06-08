@@ -1379,6 +1379,11 @@
                 if (isCheckbox && rule.required && !rule.type) {
                   rule.type = 'array';
                 }
+                // ── required 为字符串时 → 转为 required:true + depends ──
+                if (typeof rule.required === 'string') {
+                  rule.depends = rule.required;
+                  rule.required = true;
+                }
                 // ── depends / custom 条件校验 ──
                 if (rule.depends || rule.custom) {
                   var depExpr = rule.depends || null;

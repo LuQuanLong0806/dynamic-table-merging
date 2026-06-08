@@ -94,26 +94,33 @@ row42Cells.forEach(function (c) { cellMap[c.id] = c; });
 // ── 模拟 validator 行为（与 buildRules 中 depends 分支一致） ──
 
 function validateWithDepends(rule, fm, cellMap, value) {
-  var depExpr = rule.depends;
+  // required 为字符串时 → 转为 depends 条件
+  var r = {};
+  for (var k in rule) r[k] = rule[k];
+  if (typeof r.required === 'string') {
+    r.depends = r.required;
+    r.required = true;
+  }
+  var depExpr = r.depends;
   if (depExpr && !evalDepends(depExpr, fm, cellMap)) {
     return { pass: true, skipped: true };
   }
   // custom 自定义校验
-  if (rule.custom) {
-    if (!evalCustom(rule.custom, value, fm, cellMap)) {
-      return { pass: false, skipped: false, error: rule.message };
+  if (r.custom) {
+    if (!evalCustom(r.custom, value, fm, cellMap)) {
+      return { pass: false, skipped: false, error: r.message };
     }
   }
-  if (rule.required) {
+  if (r.required) {
     var empty = value == null || value === '' ||
       (Array.isArray(value) && value.length === 0);
     if (empty) return { pass: false, skipped: false, error: rule.message };
   }
-  if (rule.type === 'number' && value != null && value !== '') {
+  if (r.type === 'number' && value != null && value !== '') {
     var n = Number(value);
-    if (isNaN(n)) return { pass: false, skipped: false, error: rule.message };
-    if (rule.min != null && n < rule.min) return { pass: false, skipped: false, error: rule.message };
-    if (rule.max != null && n > rule.max) return { pass: false, skipped: false, error: rule.message };
+    if (isNaN(n)) return { pass: false, skipped: false, error: r.message };
+    if (r.min != null && n < r.min) return { pass: false, skipped: false, error: r.message };
+    if (r.max != null && n > r.max) return { pass: false, skipped: false, error: r.message };
   }
   return { pass: true, skipped: false };
 }
@@ -408,6 +415,49 @@ console.log('\n── 测试9: custom 独用（无 depends）──');
     'value=20 > bm=10 → 通过');
   assertEqual(validateWithDepends(rule, fm, cellMap, 5).pass, false,
     'value=5 < bm=10 → 失败');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试11: required 为字符串（简化写法）
+// ══════════════════════════════════════════════════
+console.log('\n── 测试11: required 为字符串（简化写法）──');
+
+(function () {
+  // required: "bm_r42 != null" 等价于 required: true + depends: "bm_r42 != null"
+  var rule = {
+    required: 'bm_r42 != null',
+    message: '标杆值已填写，请上传证明材料'
+  };
+
+  // bm_r42 有值, 上传为空 → 失败
+  var fm1 = { bm_r42: 2, evidence_upload_42: '' };
+  var r1 = validateWithDepends(rule, fm1, cellMap, fm1.evidence_upload_42);
+  assertEqual(r1.pass, false, 'required=表达式, bm=2, 上传空 → 失败');
+
+  // bm_r42 有值, 上传有文件 → 通过
+  var fm2 = { bm_r42: 2, evidence_upload_42: '{"name":"a.pdf"}' };
+  var r2 = validateWithDepends(rule, fm2, cellMap, fm2.evidence_upload_42);
+  assertEqual(r2.pass, true, 'required=表达式, bm=2, 已上传 → 通过');
+
+  // bm_r42 为 null, 上传为空 → 跳过
+  var fm3 = { bm_r42: null, evidence_upload_42: '' };
+  var r3 = validateWithDepends(rule, fm3, cellMap, fm3.evidence_upload_42);
+  assertEqual(r3.pass, true, 'required=表达式, bm=null → 跳过');
+  assertEqual(r3.skipped, true, 'required=表达式, 条件不满足 → skipped');
+
+  // required: true (布尔值) 仍然正常工作
+  var ruleBool = { required: true, message: '必填' };
+  var r4 = validateWithDepends(ruleBool, { bm_r42: null }, cellMap, '');
+  assertEqual(r4.pass, false, 'required=true 布尔值仍正常 → 失败');
+
+  // required: "bm_r42 != null || bl_r42 != null" 多条件
+  var ruleMulti = { required: 'bm_r42 != null || bl_r42 != null', message: '必填' };
+  var fm4 = { bm_r42: null, bl_r42: 51.1 };
+  var r5 = validateWithDepends(ruleMulti, fm4, cellMap, '');
+  assertEqual(r5.pass, false, 'required=多条件OR, bl有值 → 条件满足 → 失败');
+  var fm5 = { bm_r42: null, bl_r42: null };
+  var r6 = validateWithDepends(ruleMulti, fm5, cellMap, '');
+  assertEqual(r6.pass, true, 'required=多条件OR, 都null → 跳过');
 })();
 
 // ══════════════════════════════════════════════════

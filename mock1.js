@@ -6164,9 +6164,8 @@ var MOCK_DATA_1 = {
       validation: {
         rules: [
           {
-            required: true,
-            message: '标杆值已填写，请上传证明材料',
-            depends: 'bm_r42 != null'
+            required: 'bm_r42 != null',
+            message: '标杆值已填写，请上传证明材料'
           }
         ]
       }
