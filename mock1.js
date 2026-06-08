@@ -6148,7 +6148,22 @@ var MOCK_DATA_1 = {
       content: ''
     },
     { id: 'evidence_upload_41', x: '12', y: '41', type: 'upload', content: '' },
-    { id: 'evidence_upload_42', x: '12', y: '42', type: 'upload', content: '' },
+    {
+      id: 'evidence_upload_42',
+      x: '12',
+      y: '42',
+      type: 'upload',
+      content: '',
+      validation: {
+        rules: [
+          {
+            required: true,
+            message: '标杆值已填写，请上传证明材料',
+            depends: 'bm_r42 != null'
+          }
+        ]
+      }
+    },
     { id: 'evidence_upload_43', x: '12', y: '43', type: 'upload', content: '' },
     { id: 'evidence_upload_44', x: '12', y: '44', type: 'upload', content: '' },
     { id: 'evidence_upload_45', x: '12', y: '45', type: 'upload', content: '' },

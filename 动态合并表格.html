@@ -1106,6 +1106,30 @@
         return { rows: rows, cellMap: cellMap };
       }
 
+      // ======================== depends 条件求值（独立函数，方便单元测试）========================
+      function evalDepends(expr, fm, cellMap) {
+        var ids = Object.keys(cellMap).sort(function (a, b) {
+          return b.length - a.length;
+        });
+        ids.forEach(function (id) {
+          var v = fm[id];
+          var r;
+          if (v === null || v === undefined) r = 'null';
+          else if (typeof v === 'number') r = String(v);
+          else if (typeof v === 'string') r = "'" + v.replace(/'/g, "\\'") + "'";
+          else r = 'null';
+          expr = expr.replace(
+            new RegExp('\\b' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'),
+            r
+          );
+        });
+        try {
+          return new Function('"use strict"; return (' + expr + ')')();
+        } catch (e) {
+          return false;
+        }
+      }
+
       // ======================== 数据集注册 ========================
       var DATA_SETS = {
         default: TABLE_DATA,
@@ -1316,12 +1340,61 @@
                 for (var k in r) rule[k] = r[k];
                 if (!rule.trigger) rule.trigger = trigger;
                 // number 类型：required 时确保 null/undefined 被视为空
-                if (isNum && rule.required && !rule.validator) {
+                if (isNum && rule.required && !rule.validator && !rule.depends) {
                   rule.type = rule.type || 'number';
                 }
                 // checkbox 类型：required 时确保空数组被视为空
                 if (isCheckbox && rule.required && !rule.type) {
                   rule.type = 'array';
+                }
+                // ── depends 条件校验：表达式求值为 false 时跳过此规则 ──
+                if (rule.depends) {
+                  var depExpr = rule.depends;
+                  var orig = {
+                    required: rule.required,
+                    type: rule.type,
+                    min: rule.min,
+                    max: rule.max,
+                    pattern: rule.pattern,
+                    len: rule.len,
+                    message: rule.message || '校验未通过'
+                  };
+                  rule.validator = (function (dep, o, isNumType) {
+                    return function (r, value, callback) {
+                      if (!evalDepends(dep, self.fm, self.cellMap)) {
+                        callback();
+                        return;
+                      }
+                      // 条件满足 → 按原始规则校验
+                      if (o.required) {
+                        var empty = value == null || value === '' ||
+                          (Array.isArray(value) && value.length === 0);
+                        if (empty) { callback(new Error(o.message)); return; }
+                      }
+                      if (o.type === 'number' && value != null && value !== '') {
+                        var n = Number(value);
+                        if (isNaN(n)) { callback(new Error(o.message)); return; }
+                        if (o.min != null && n < o.min) { callback(new Error(o.message)); return; }
+                        if (o.max != null && n > o.max) { callback(new Error(o.message)); return; }
+                      }
+                      if (o.pattern) {
+                        var re = typeof o.pattern === 'string' ? new RegExp(o.pattern) : o.pattern;
+                        if (!re.test(String(value))) { callback(new Error(o.message)); return; }
+                      }
+                      if (o.len != null && String(value).length !== o.len) {
+                        callback(new Error(o.message)); return;
+                      }
+                      callback();
+                    };
+                  })(depExpr, orig, isNum);
+                  delete rule.required;
+                  delete rule.type;
+                  delete rule.min;
+                  delete rule.max;
+                  delete rule.pattern;
+                  delete rule.len;
+                  delete rule.message;
+                  delete rule.depends;
                 }
                 return rule;
               });
