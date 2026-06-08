@@ -1,71 +1,25 @@
 /**
- * test-depends.js — evalDepends 条件校验单元测试
+ * test-depends.js — 校验系统单元测试（统一 fm.xxx 语法）
  *
  * 运行方式: node test-depends.js
  *
- * 测试场景：使用 mock1.js 第42行数据（bm_r42 标杆值 + evidence_upload_42 上传）
- *   - 当 bm_r42 有值时，上传为必填
- *   - 当 bm_r42 为 null 时，上传非必填
+ * 所有表达式统一使用 fm.xxx 引用表单值，extra.xxx 引用第三方值
+ * 不再使用裸 cell id 自动替换
  */
 
-// ── 从 HTML 文件中提取的独立函数（与动态合并表格.html 中完全一致） ──
+// ── 与动态合并表格.html 中完全一致的函数 ──
 
-function parseRange(v) {
-  var p = String(v).split(',').map(Number);
-  return {
-    start: Math.min.apply(null, p),
-    end: Math.max.apply(null, p),
-    span: Math.max.apply(null, p) - Math.min.apply(null, p) + 1
-  };
-}
-
-function evalDepends(expr, fm, cellMap) {
-  var ids = Object.keys(cellMap).sort(function (a, b) {
-    return b.length - a.length;
-  });
-  ids.forEach(function (id) {
-    var v = fm[id];
-    var r;
-    if (v === null || v === undefined) r = 'null';
-    else if (typeof v === 'number') r = String(v);
-    else if (typeof v === 'string') r = "'" + v.replace(/'/g, "\\'") + "'";
-    else r = 'null';
-    expr = expr.replace(
-      new RegExp('\\b' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'),
-      r
-    );
-  });
+function evalDepends(expr, fm, cellMap, extra) {
   try {
-    return new Function('"use strict"; return (' + expr + ')')();
+    return new Function('fm', 'extra', '"use strict"; return (' + expr + ')')(fm, extra || {});
   } catch (e) {
     return false;
   }
 }
 
-function evalCustom(expr, value, fm, cellMap) {
-  var e = expr.replace(/\bvalue\b/g, function () {
-    if (value === null || value === undefined) return 'null';
-    if (typeof value === 'number') return String(value);
-    if (typeof value === 'string') return "'" + value.replace(/'/g, "\\'") + "'";
-    return 'null';
-  });
-  var ids = Object.keys(cellMap).sort(function (a, b) {
-    return b.length - a.length;
-  });
-  ids.forEach(function (id) {
-    var v = fm[id];
-    var r;
-    if (v === null || v === undefined) r = 'null';
-    else if (typeof v === 'number') r = String(v);
-    else if (typeof v === 'string') r = "'" + v.replace(/'/g, "\\'") + "'";
-    else r = 'null';
-    e = e.replace(
-      new RegExp('\\b' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'),
-      r
-    );
-  });
+function evalCustom(expr, value, fm, cellMap, extra) {
   try {
-    return new Function('"use strict"; return (' + e + ')')();
+    return new Function('value', 'fm', 'extra', '"use strict"; return (' + expr + ')')(value, fm, extra || {});
   } catch (ex) {
     return false;
   }
@@ -87,20 +41,20 @@ var row42Cells = [
   { id: 'rule_r42', x: '15', y: '42', type: 'text', content: '', portalHide: true }
 ];
 
-// 构建 cellMap
 var cellMap = {};
 row42Cells.forEach(function (c) { cellMap[c.id] = c; });
 
-// ── 模拟 validator 行为（与 buildRules 中 depends 分支一致） ──
+// ── 模拟 buildRules 中的 validator 闭包逻辑 ──
 
 function validateWithDepends(rule, fm, cellMap, value, extra) {
-  // required 为字符串时 → 转为 depends 条件
   var r = {};
   for (var k in rule) r[k] = rule[k];
+  // required 为字符串时 → 转为 depends 条件
   if (typeof r.required === 'string') {
     r.depends = r.required;
     r.required = true;
   }
+  // depends 条件检查
   var depExpr = r.depends;
   if (depExpr && !evalDepends(depExpr, fm, cellMap, extra)) {
     return { pass: true, skipped: true };
@@ -115,17 +69,19 @@ function validateWithDepends(rule, fm, cellMap, value, extra) {
       return { pass: false, skipped: false, error: r.message };
     }
   }
-  // custom 自定义校验
+  // custom 表达式
   if (r.custom) {
     if (!evalCustom(r.custom, value, fm, cellMap, extra)) {
       return { pass: false, skipped: false, error: r.message };
     }
   }
+  // required 校验
   if (r.required) {
     var empty = value == null || value === '' ||
       (Array.isArray(value) && value.length === 0);
     if (empty) return { pass: false, skipped: false, error: rule.message };
   }
+  // 数值范围校验
   if (r.type === 'number' && value != null && value !== '') {
     var n = Number(value);
     if (isNaN(n)) return { pass: false, skipped: false, error: r.message };
@@ -153,101 +109,90 @@ function assertEqual(actual, expected, msg) {
 }
 
 // ══════════════════════════════════════════════════
-// 测试1: evalDepends 基础功能
+// 测试1: evalDepends 基础功能（统一 fm.xxx 语法）
 // ══════════════════════════════════════════════════
-console.log('\n── 测试1: evalDepends 基础功能 ──');
+console.log('\n── 测试1: evalDepends 基础功能（fm.xxx 语法）──');
 
 (function () {
   var fm = { bm_r42: 2, bl_r42: 51.1, indval_r42: null };
-  // 有值 → true
-  assertEqual(evalDepends('bm_r42 != null', fm, cellMap), true,
-    'bm_r42=2 时 bm_r42 != null → true');
-  // null → false
-  assertEqual(evalDepends('indval_r42 != null', fm, cellMap), false,
-    'indval_r42=null 时 indval_r42 != null → false');
-  // 字符串比较（补充 c4 到 cellMap）
-  var cm2 = Object.assign({}, cellMap, { c4: { id: 'c4', type: 'select' } });
+  assertEqual(evalDepends('fm.bm_r42 != null', fm, cellMap), true,
+    'fm.bm_r42=2 时 fm.bm_r42 != null → true');
+  assertEqual(evalDepends('fm.indval_r42 != null', fm, cellMap), false,
+    'fm.indval_r42=null 时 fm.indval_r42 != null → false');
+
   var fm2 = { bm_r42: 2, c4: 'has' };
-  assertEqual(evalDepends("c4 === 'has'", fm2, cm2), true,
-    "c4='has' 时 c4 === 'has' → true");
-  // 多条件 AND
-  assertEqual(evalDepends('bm_r42 != null && bl_r42 != null', fm, cellMap), true,
-    'bm_r42=2, bl_r42=51.1 时 bm_r42 != null && bl_r42 != null → true');
-  // 多条件 OR
+  assertEqual(evalDepends("fm.c4 === 'has'", fm2, cellMap), true,
+    "fm.c4='has' 时 fm.c4 === 'has' → true");
+
+  assertEqual(evalDepends('fm.bm_r42 != null && fm.bl_r42 != null', fm, cellMap), true,
+    'fm.bm_r42=2, fm.bl_r42=51.1 时 AND → true');
+
   var fm3 = { bm_r42: null, indval_r42: 100 };
-  assertEqual(evalDepends('bm_r42 != null || indval_r42 != null', fm3, cellMap), true,
-    'bm_r42=null, indval_r42=100 时 bm_r42 != null || indval_r42 != null → true');
-  // 数字比较
+  assertEqual(evalDepends('fm.bm_r42 != null || fm.indval_r42 != null', fm3, cellMap), true,
+    'fm.bm_r42=null, fm.indval_r42=100 时 OR → true');
+
   var fm4 = { bm_r42: 2, bl_r42: 51.1 };
-  assertEqual(evalDepends('bm_r42 > 0 && bl_r42 > 50', fm4, cellMap), true,
-    'bm_r42=2, bl_r42=51.1 时 bm_r42 > 0 && bl_r42 > 50 → true');
-  // 空字符串
+  assertEqual(evalDepends('fm.bm_r42 > 0 && fm.bl_r42 > 50', fm4, cellMap), true,
+    'fm.bm_r42=2, fm.bl_r42=51.1 数字比较 → true');
+
   var fm5 = { bm_r42: null, upload_field: '' };
-  assertEqual(evalDepends("bm_r42 != null && upload_field !== ''", fm5, cellMap), false,
-    "bm_r42=null 时整个 AND 表达式 → false");
+  assertEqual(evalDepends("fm.bm_r42 != null && fm.upload_field !== ''", fm5, cellMap), false,
+    "fm.bm_r42=null 时 AND → false");
 })();
 
 // ══════════════════════════════════════════════════
 // 测试2: depends 条件校验 — 核心场景
 // ══════════════════════════════════════════════════
-console.log('\n── 测试2: depends 条件校验 — 核心场景 ──');
+console.log('\n── 测试2: depends 条件校验 — 核心场景──');
 
 (function () {
   var rule = {
     required: true,
     message: '标杆值已填写，请上传证明材料',
-    depends: 'bm_r42 != null'
+    depends: 'fm.bm_r42 != null'
   };
 
-  // 场景A: bm_r42 有值(2), 上传为空 → 校验失败
   var fm1 = { bm_r42: 2, evidence_upload_42: '' };
   var r1 = validateWithDepends(rule, fm1, cellMap, fm1.evidence_upload_42);
-  assertEqual(r1.pass, false, '场景A: bm_r42=2, 上传为空 → 校验失败');
-  assertEqual(r1.skipped, false, '场景A: 规则未跳过(条件满足)');
-  assertEqual(r1.error, '标杆值已填写，请上传证明材料', '场景A: 错误消息正确');
+  assertEqual(r1.pass, false, 'bm=2, 上传空 → 失败');
+  assertEqual(r1.skipped, false, '规则未跳过');
+  assertEqual(r1.error, '标杆值已填写，请上传证明材料', '错误消息正确');
 
-  // 场景B: bm_r42 有值(2), 上传有文件 → 校验通过
   var fm2 = { bm_r42: 2, evidence_upload_42: '{"name":"test.pdf","size":1024}' };
   var r2 = validateWithDepends(rule, fm2, cellMap, fm2.evidence_upload_42);
-  assertEqual(r2.pass, true, '场景B: bm_r42=2, 已上传 → 校验通过');
+  assertEqual(r2.pass, true, 'bm=2, 已上传 → 通过');
 
-  // 场景C: bm_r42 为 null, 上传为空 → 跳过(通过)
   var fm3 = { bm_r42: null, evidence_upload_42: '' };
   var r3 = validateWithDepends(rule, fm3, cellMap, fm3.evidence_upload_42);
-  assertEqual(r3.pass, true, '场景C: bm_r42=null, 上传为空 → 跳过(通过)');
-  assertEqual(r3.skipped, true, '场景C: 规则已跳过(条件不满足)');
+  assertEqual(r3.pass, true, 'bm=null, 上传空 → 跳过');
+  assertEqual(r3.skipped, true, '规则已跳过');
 
-  // 场景D: bm_r42 为 null, 上传有文件 → 跳过(通过)
   var fm4 = { bm_r42: null, evidence_upload_42: '{"name":"a.pdf"}' };
   var r4 = validateWithDepends(rule, fm4, cellMap, fm4.evidence_upload_42);
-  assertEqual(r4.pass, true, '场景D: bm_r42=null, 已上传 → 跳过(通过)');
+  assertEqual(r4.pass, true, 'bm=null, 已上传 → 跳过');
 })();
 
 // ══════════════════════════════════════════════════
 // 测试3: depends + 多条件组合
 // ══════════════════════════════════════════════════
-console.log('\n── 测试3: depends + 多条件组合 ──');
+console.log('\n── 测试3: depends + 多条件组合──');
 
 (function () {
-  // 规则: 标杆值和基准值都填写时，上传必填
   var rule = {
     required: true,
     message: '标杆值和基准值已填写，请上传证明材料',
-    depends: 'bm_r42 != null && bl_r42 != null'
+    depends: 'fm.bm_r42 != null && fm.bl_r42 != null'
   };
 
-  // 两个都有值, 上传为空 → 失败
   var fm1 = { bm_r42: 2, bl_r42: 51.1, evidence_upload_42: '' };
   var r1 = validateWithDepends(rule, fm1, cellMap, fm1.evidence_upload_42);
-  assertEqual(r1.pass, false, '双值都填, 上传空 → 校验失败');
+  assertEqual(r1.pass, false, '双值都填, 上传空 → 失败');
 
-  // 只有一个有值, 上传为空 → 跳过
   var fm2 = { bm_r42: 2, bl_r42: null, evidence_upload_42: '' };
   var r2 = validateWithDepends(rule, fm2, cellMap, fm2.evidence_upload_42);
-  assertEqual(r2.pass, true, '只填标杆值, 上传空 → 跳过');
-  assertEqual(r2.skipped, true, '只填标杆值 → 条件不满足');
+  assertEqual(r2.pass, true, '只填标杆值 → 跳过');
+  assertEqual(r2.skipped, true, '条件不满足');
 
-  // 两个都 null → 跳过
   var fm3 = { bm_r42: null, bl_r42: null, evidence_upload_42: '' };
   var r3 = validateWithDepends(rule, fm3, cellMap, fm3.evidence_upload_42);
   assertEqual(r3.pass, true, '两个都 null → 跳过');
@@ -256,168 +201,146 @@ console.log('\n── 测试3: depends + 多条件组合 ──');
 // ══════════════════════════════════════════════════
 // 测试4: depends + 数值范围校验
 // ══════════════════════════════════════════════════
-console.log('\n── 测试4: depends + 数值范围校验 ──');
+console.log('\n── 测试4: depends + 数值范围校验──');
 
 (function () {
-  // 规则: 当标杆值大于10时，指标值必须在0-100之间
   var rule = {
     required: true,
     type: 'number',
     min: 0,
     max: 100,
     message: '标杆值>10时，指标值须在0-100之间',
-    depends: 'bm_r42 > 10'
+    depends: 'fm.bm_r42 > 10'
   };
 
-  // bm_r42=2(不>10), 指标值=-5 → 跳过
   var fm1 = { bm_r42: 2, indval_r42: -5 };
-  var r1 = validateWithDepends(rule, fm1, cellMap, fm1.indval_r42);
-  assertEqual(r1.pass, true, 'bm_r42=2 不>10, 指标值=-5 → 跳过');
+  assertEqual(validateWithDepends(rule, fm1, cellMap, fm1.indval_r42).pass, true,
+    'bm=2 不>10 → 跳过');
 
-  // bm_r42=50(>10), 指标值=80 → 通过
   var fm2 = { bm_r42: 50, indval_r42: 80 };
-  var r2 = validateWithDepends(rule, fm2, cellMap, fm2.indval_r42);
-  assertEqual(r2.pass, true, 'bm_r42=50, 指标值=80 → 通过');
+  assertEqual(validateWithDepends(rule, fm2, cellMap, fm2.indval_r42).pass, true,
+    'bm=50, 指标=80 → 通过');
 
-  // bm_r42=50(>10), 指标值=-1 → 失败
   var fm3 = { bm_r42: 50, indval_r42: -1 };
-  var r3 = validateWithDepends(rule, fm3, cellMap, fm3.indval_r42);
-  assertEqual(r3.pass, false, 'bm_r42=50, 指标值=-1 → 失败');
+  assertEqual(validateWithDepends(rule, fm3, cellMap, fm3.indval_r42).pass, false,
+    'bm=50, 指标=-1 → 失败');
 
-  // bm_r42=50(>10), 指标值=150 → 失败
   var fm4 = { bm_r42: 50, indval_r42: 150 };
-  var r4 = validateWithDepends(rule, fm4, cellMap, fm4.indval_r42);
-  assertEqual(r4.pass, false, 'bm_r42=50, 指标值=150 → 失败');
+  assertEqual(validateWithDepends(rule, fm4, cellMap, fm4.indval_r42).pass, false,
+    'bm=50, 指标=150 → 失败');
 })();
 
 // ══════════════════════════════════════════════════
-// 测试5: depends 表达式中引用不存在的 cell id
+// 测试5: 边界情况
 // ══════════════════════════════════════════════════
-console.log('\n── 测试5: 边界情况 ──');
+console.log('\n── 测试5: 边界情况──');
 
 (function () {
   var fm = { bm_r42: 2 };
 
-  // 不存在的 cell id → 表达式中保持原样 → eval 失败 → false(跳过规则)
-  assertEqual(evalDepends('nonexistent_id != null', fm, cellMap), false,
-    '引用不存在的 cell id → false(安全跳过)');
+  assertEqual(evalDepends('fm.nonexistent_id != null', fm, cellMap), false,
+    'fm 上不存在的属性 → undefined != null → false');
 
-  // 空表达式 → eval('') 失败 → false
   assertEqual(evalDepends('', fm, cellMap), false,
     '空表达式 → false');
 
-  // 语法错误 → false
-  assertEqual(evalDepends('bm_r42 >', fm, cellMap), false,
-    '语法错误表达式 → false');
+  assertEqual(evalDepends('fm.bm_r42 >', fm, cellMap), false,
+    '语法错误 → false');
 
-  // 三元表达式
-  assertEqual(evalDepends('bm_r42 > 0 ? true : false', fm, cellMap), true,
-    '三元表达式 bm_r42 > 0 ? true : false → true');
+  assertEqual(evalDepends('fm.bm_r42 > 0 ? true : false', fm, cellMap), true,
+    '三元表达式 → true');
 })();
 
 // ══════════════════════════════════════════════════
 // 测试6: depends 与非 required 规则组合
 // ══════════════════════════════════════════════════
-console.log('\n── 测试6: depends 与非 required 规则组合 ──');
+console.log('\n── 测试6: depends 与非 required 规则组合──');
 
 (function () {
-  // 规则: 当标杆值>0时，指标值如果填了必须>=0（非必填，但有范围限制）
   var rule = {
     type: 'number',
     min: 0,
     message: '指标值不能为负',
-    depends: 'bm_r42 > 0'
+    depends: 'fm.bm_r42 > 0'
   };
 
-  // bm_r42=2, 指标值=null → 通过(required 未设置)
   var fm1 = { bm_r42: 2, indval_r42: null };
-  var r1 = validateWithDepends(rule, fm1, cellMap, fm1.indval_r42);
-  assertEqual(r1.pass, true, '非 required, 指标值=null → 通过');
+  assertEqual(validateWithDepends(rule, fm1, cellMap, fm1.indval_r42).pass, true,
+    '非 required, 指标=null → 通过');
 
-  // bm_r42=2, 指标值=-5 → 失败
   var fm2 = { bm_r42: 2, indval_r42: -5 };
-  var r2 = validateWithDepends(rule, fm2, cellMap, fm2.indval_r42);
-  assertEqual(r2.pass, false, '非 required, 指标值=-5 → 失败');
+  assertEqual(validateWithDepends(rule, fm2, cellMap, fm2.indval_r42).pass, false,
+    '非 required, 指标=-5 → 失败');
 
-  // bm_r42=null, 指标值=-5 → 跳过(条件不满足)
   var fm3 = { bm_r42: null, indval_r42: -5 };
-  var r3 = validateWithDepends(rule, fm3, cellMap, fm3.indval_r42);
-  assertEqual(r3.pass, true, 'bm_r42=null, 条件不满足 → 跳过');
+  assertEqual(validateWithDepends(rule, fm3, cellMap, fm3.indval_r42).pass, true,
+    'bm=null → 跳过');
 })();
 
 // ══════════════════════════════════════════════════
-// 测试7: evalCustom 自定义校验表达式
+// 测试7: validator 范围校验（fm.xxx 统一语法）
 // ══════════════════════════════════════════════════
-console.log('\n── 测试7: evalCustom 自定义校验表达式 ──');
-
-(function () {
-  var fm = { bm_r42: 2, bl_r42: 51.1, indval_r42: 30 };
-
-  // value 在标杆值和基准值之间
-  assertEqual(evalCustom('value >= bm_r42 && value <= bl_r42', 30, fm, cellMap), true,
-    'value=30, bm=2, bl=51.1 → 在范围内 → true');
-  assertEqual(evalCustom('value >= bm_r42 && value <= bl_r42', 1, fm, cellMap), false,
-    'value=1, bm=2 → 小于标杆值 → false');
-  assertEqual(evalCustom('value >= bm_r42 && value <= bl_r42', 60, fm, cellMap), false,
-    'value=60, bl=51.1 → 大于基准值 → false');
-  assertEqual(evalCustom('value >= bm_r42 && value <= bl_r42', 2, fm, cellMap), true,
-    'value=2 = bm → 边界值 → true');
-  assertEqual(evalCustom('value >= bm_r42 && value <= bl_r42', 51.1, fm, cellMap), true,
-    'value=51.1 = bl → 边界值 → true');
-
-  // value 为 null
-  assertEqual(evalCustom('value >= bm_r42', null, fm, cellMap), false,
-    'value=null → 比较 → false');
-
-  // value 引用自身 fm 值
-  assertEqual(evalCustom('value === indval_r42', 30, fm, cellMap), true,
-    'value=30, indval_r42=30 → 相等 → true');
-})();
-
-// ══════════════════════════════════════════════════
-// 测试8: custom + depends 组合
-// ══════════════════════════════════════════════════
-console.log('\n── 测试8: custom + depends 组合 ──');
+console.log('\n── 测试7: validator 范围校验──');
 
 (function () {
   var rule = {
     message: '指标值必须在标杆值和基准值之间',
-    depends: 'bm_r42 != null && bl_r42 != null',
-    custom: 'value >= bm_r42 && value <= bl_r42'
+    validator: 'return value != null && value >= fm.bm_r42 && value <= fm.bl_r42;'
   };
 
-  // 两个都有值, value 在范围内 → 通过
-  var fm1 = { bm_r42: 2, bl_r42: 51.1 };
-  var r1 = validateWithDepends(rule, fm1, cellMap, 30);
-  assertEqual(r1.pass, true, 'bm=2, bl=51.1, value=30 → 通过');
+  var fm = { bm_r42: 2, bl_r42: 51.1 };
 
-  // 两个都有值, value 超出范围 → 失败
-  var r2 = validateWithDepends(rule, fm1, cellMap, 60);
-  assertEqual(r2.pass, false, 'bm=2, bl=51.1, value=60 → 失败');
-  assertEqual(r2.error, '指标值必须在标杆值和基准值之间', '错误消息正确');
-
-  // 只有标杆值(基准值null) → depends不满足 → 跳过
-  var fm2 = { bm_r42: 2, bl_r42: null };
-  var r3 = validateWithDepends(rule, fm2, cellMap, 60);
-  assertEqual(r3.pass, true, 'bl=null, depends不满足 → 跳过');
-  assertEqual(r3.skipped, true, '确认是跳过');
-
-  // 两个都 null → 跳过
-  var fm3 = { bm_r42: null, bl_r42: null };
-  var r4 = validateWithDepends(rule, fm3, cellMap, 60);
-  assertEqual(r4.pass, true, '两个都null → 跳过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 30).pass, true,
+    'value=30, bm=2, bl=51.1 → 通过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 1).pass, false,
+    'value=1 < bm=2 → 失败');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 60).pass, false,
+    'value=60 > bl=51.1 → 失败');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 2).pass, true,
+    'value=2 = bm → 边界通过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 51.1).pass, true,
+    'value=51.1 = bl → 边界通过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, null).pass, false,
+    'value=null → 失败');
 })();
 
 // ══════════════════════════════════════════════════
-// 测试9: custom 独用（无 depends）
+// 测试8: validator + depends 组合
 // ══════════════════════════════════════════════════
-console.log('\n── 测试9: custom 独用（无 depends）──');
+console.log('\n── 测试8: validator + depends 组合──');
 
 (function () {
-  // 无 depends，始终校验：值必须大于标杆值
+  var rule = {
+    depends: 'fm.bm_r42 != null && fm.bl_r42 != null',
+    message: '指标值必须在标杆值和基准值之间',
+    validator: 'return value >= fm.bm_r42 && value <= fm.bl_r42;'
+  };
+
+  var fm1 = { bm_r42: 2, bl_r42: 51.1 };
+  assertEqual(validateWithDepends(rule, fm1, cellMap, 30).pass, true,
+    'bm=2, bl=51.1, value=30 → 通过');
+
+  assertEqual(validateWithDepends(rule, fm1, cellMap, 60).pass, false,
+    'bm=2, bl=51.1, value=60 → 失败');
+
+  var fm2 = { bm_r42: 2, bl_r42: null };
+  assertEqual(validateWithDepends(rule, fm2, cellMap, 60).pass, true,
+    'bl=null → depends 不满足 → 跳过');
+
+  var fm3 = { bm_r42: null, bl_r42: null };
+  assertEqual(validateWithDepends(rule, fm3, cellMap, 60).pass, true,
+    '两个都 null → 跳过');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试9: validator 独用（无 depends）
+// ══════════════════════════════════════════════════
+console.log('\n── 测试9: validator 独用（无 depends）──');
+
+(function () {
   var rule = {
     message: '指标值必须大于标杆值',
-    custom: 'value > bm_r42'
+    validator: 'return value > fm.bm_r42;'
   };
 
   var fm = { bm_r42: 10 };
@@ -428,157 +351,11 @@ console.log('\n── 测试9: custom 独用（无 depends）──');
 })();
 
 // ══════════════════════════════════════════════════
-// 测试11: required 为字符串（简化写法）
-// ══════════════════════════════════════════════════
-console.log('\n── 测试11: required 为字符串（简化写法）──');
-
-(function () {
-  // required: "bm_r42 != null" 等价于 required: true + depends: "bm_r42 != null"
-  var rule = {
-    required: 'bm_r42 != null',
-    message: '标杆值已填写，请上传证明材料'
-  };
-
-  // bm_r42 有值, 上传为空 → 失败
-  var fm1 = { bm_r42: 2, evidence_upload_42: '' };
-  var r1 = validateWithDepends(rule, fm1, cellMap, fm1.evidence_upload_42);
-  assertEqual(r1.pass, false, 'required=表达式, bm=2, 上传空 → 失败');
-
-  // bm_r42 有值, 上传有文件 → 通过
-  var fm2 = { bm_r42: 2, evidence_upload_42: '{"name":"a.pdf"}' };
-  var r2 = validateWithDepends(rule, fm2, cellMap, fm2.evidence_upload_42);
-  assertEqual(r2.pass, true, 'required=表达式, bm=2, 已上传 → 通过');
-
-  // bm_r42 为 null, 上传为空 → 跳过
-  var fm3 = { bm_r42: null, evidence_upload_42: '' };
-  var r3 = validateWithDepends(rule, fm3, cellMap, fm3.evidence_upload_42);
-  assertEqual(r3.pass, true, 'required=表达式, bm=null → 跳过');
-  assertEqual(r3.skipped, true, 'required=表达式, 条件不满足 → skipped');
-
-  // required: true (布尔值) 仍然正常工作
-  var ruleBool = { required: true, message: '必填' };
-  var r4 = validateWithDepends(ruleBool, { bm_r42: null }, cellMap, '');
-  assertEqual(r4.pass, false, 'required=true 布尔值仍正常 → 失败');
-
-  // required: "bm_r42 != null || bl_r42 != null" 多条件
-  var ruleMulti = { required: 'bm_r42 != null || bl_r42 != null', message: '必填' };
-  var fm4 = { bm_r42: null, bl_r42: 51.1 };
-  var r5 = validateWithDepends(ruleMulti, fm4, cellMap, '');
-  assertEqual(r5.pass, false, 'required=多条件OR, bl有值 → 条件满足 → 失败');
-  var fm5 = { bm_r42: null, bl_r42: null };
-  var r6 = validateWithDepends(ruleMulti, fm5, cellMap, '');
-  assertEqual(r6.pass, true, 'required=多条件OR, 都null → 跳过');
-})();
-
-// ══════════════════════════════════════════════════
-// 测试12: validator 函数体（形参: value, fm, extra）
-// ══════════════════════════════════════════════════
-console.log('\n── 测试12: validator 函数体 ──');
-
-(function () {
-  // 和 mock1.js 中 indval_r42 完全一致的 validator
-  var rule = {
-    message: '指标值必须在标杆值和基准值之间',
-    validator: 'return value != null && value >= fm.bm_r42 && value <= fm.bl_r42;'
-  };
-
-  var fm = { bm_r42: 2, bl_r42: 51.1 };
-
-  assertEqual(validateWithDepends(rule, fm, cellMap, 30).pass, true,
-    'validator: value=30, fm.bm=2, fm.bl=51.1 → 通过');
-  assertEqual(validateWithDepends(rule, fm, cellMap, 1).pass, false,
-    'validator: value=1 < bm=2 → 失败');
-  assertEqual(validateWithDepends(rule, fm, cellMap, 60).pass, false,
-    'validator: value=60 > bl=51.1 → 失败');
-  assertEqual(validateWithDepends(rule, fm, cellMap, 2).pass, true,
-    'validator: value=2 = bm → 边界通过');
-  assertEqual(validateWithDepends(rule, fm, cellMap, null).pass, false,
-    'validator: value=null → 失败');
-
-  // fm 值变化
-  var fm2 = { bm_r42: 10, bl_r42: 20 };
-  assertEqual(validateWithDepends(rule, fm2, cellMap, 15).pass, true,
-    'validator: fm 值变化后 value=15 在 10-20 → 通过');
-  assertEqual(validateWithDepends(rule, fm2, cellMap, 5).pass, false,
-    'validator: fm 值变化后 value=5 < 10 → 失败');
-})();
-
-// ══════════════════════════════════════════════════
-// 测试13: validator + extra 第三方值
-// ══════════════════════════════════════════════════
-console.log('\n── 测试13: validator + extra 第三方值 ──');
-
-(function () {
-  // 用 extra 传入外部阈值
-  var rule = {
-    message: '低于外部配置的最低阈值',
-    validator: 'return value != null && value >= extra.minThreshold;'
-  };
-
-  var fm = { indval_r42: 30 };
-  var extra1 = { minThreshold: 20 };
-
-  assertEqual(validateWithDepends(rule, fm, cellMap, 30, extra1).pass, true,
-    'validator+extra: value=30 >= extra.min=20 → 通过');
-  assertEqual(validateWithDepends(rule, fm, cellMap, 10, extra1).pass, false,
-    'validator+extra: value=10 < extra.min=20 → 失败');
-
-  // 改变 extra 值
-  var extra2 = { minThreshold: 50 };
-  assertEqual(validateWithDepends(rule, fm, cellMap, 30, extra2).pass, false,
-    'validator+extra: extra.min=50, value=30 → 失败');
-
-  // extra 为空对象 → extra.minThreshold 为 undefined → 比较失败 → false
-  assertEqual(validateWithDepends(rule, fm, cellMap, 30, {}).pass, false,
-    'validator+extra: extra 为空 → value >= undefined → false');
-
-  // 同时使用 fm 和 extra
-  var rule2 = {
-    message: '必须大于标杆值且大于外部阈值',
-    validator: 'return value > fm.bm_r42 && value > extra.minThreshold;'
-  };
-  var fm2 = { bm_r42: 5 };
-  var extra3 = { minThreshold: 10 };
-  assertEqual(validateWithDepends(rule2, fm2, cellMap, 15, extra3).pass, true,
-    'validator: value=15 > fm.bm=5 && value > extra.min=10 → 通过');
-  assertEqual(validateWithDepends(rule2, fm2, cellMap, 8, extra3).pass, false,
-    'validator: value=8 > fm.bm=5 但 < extra.min=10 → 失败');
-})();
-
-// ══════════════════════════════════════════════════
-// 测试14: validator + depends 组合
-// ══════════════════════════════════════════════════
-console.log('\n── 测试14: validator + depends 组合 ──');
-
-(function () {
-  var rule = {
-    depends: 'bm_r42 != null',
-    message: '标杆值存在时，指标值必须大于标杆值',
-    validator: 'return value > fm.bm_r42;'
-  };
-
-  // depends 满足, validator 通过
-  var fm1 = { bm_r42: 10 };
-  assertEqual(validateWithDepends(rule, fm1, cellMap, 20).pass, true,
-    'validator+depends: bm=10, value=20 → 通过');
-
-  // depends 满足, validator 失败
-  assertEqual(validateWithDepends(rule, fm1, cellMap, 5).pass, false,
-    'validator+depends: bm=10, value=5 → 失败');
-
-  // depends 不满足 → 跳过
-  var fm2 = { bm_r42: null };
-  assertEqual(validateWithDepends(rule, fm2, cellMap, 5).pass, true,
-    'validator+depends: bm=null → 跳过');
-})();
-
-// ══════════════════════════════════════════════════
 // 测试10: upload accept / maxSize 校验
 // ══════════════════════════════════════════════════
-console.log('\n── 测试10: upload accept / maxSize 校验 ──');
+console.log('\n── 测试10: upload accept / maxSize 校验──');
 
 (function () {
-  // 模拟 onUploadFile 中的校验逻辑
   function validateUpload(file, cell) {
     if (cell.accept) {
       var ext = '.' + file.name.split('.').pop().toLowerCase();
@@ -598,34 +375,191 @@ console.log('\n── 测试10: upload accept / maxSize 校验 ──');
 
   var cell = { accept: '.pdf,.doc,.docx,.png,.jpg,.jpeg', maxSize: 10 };
 
-  // 合法格式
   assertEqual(validateUpload({ name: 'test.pdf', size: 1024 }, cell).pass, true,
-    '.pdf 文件 → 通过');
+    '.pdf → 通过');
   assertEqual(validateUpload({ name: 'photo.PNG', size: 1024 }, cell).pass, true,
-    '.PNG 大写扩展名 → 通过');
-
-  // 不合法格式
+    '.PNG 大写 → 通过');
   assertEqual(validateUpload({ name: 'malware.exe', size: 1024 }, cell).pass, false,
-    '.exe 文件 → 拒绝');
+    '.exe → 拒绝');
   assertEqual(validateUpload({ name: 'script.js', size: 1024 }, cell).pass, false,
-    '.js 文件 → 拒绝');
-
-  // 大小合法
+    '.js → 拒绝');
   assertEqual(validateUpload({ name: 'doc.pdf', size: 5 * 1024 * 1024 }, cell).pass, true,
-    '5MB 文件 → 通过');
-
-  // 大小超限
+    '5MB → 通过');
   assertEqual(validateUpload({ name: 'big.pdf', size: 15 * 1024 * 1024 }, cell).pass, false,
-    '15MB 文件 → 拒绝');
+    '15MB → 拒绝');
 
-  // 无 accept/maxSize 配置 → 都通过
   var cellNoRestrict = {};
   assertEqual(validateUpload({ name: 'anything.xyz', size: 999999999 }, cellNoRestrict).pass, true,
-    '无限制配置 → 都通过');
+    '无限制 → 都通过');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试11: required 为字符串（统一 fm.xxx 语法）
+// ══════════════════════════════════════════════════
+console.log('\n── 测试11: required 为字符串（fm.xxx 语法）──');
+
+(function () {
+  var rule = {
+    required: 'fm.bm_r42 != null',
+    message: '标杆值已填写，请上传证明材料'
+  };
+
+  var fm1 = { bm_r42: 2, evidence_upload_42: '' };
+  assertEqual(validateWithDepends(rule, fm1, cellMap, fm1.evidence_upload_42).pass, false,
+    'required=表达式, bm=2, 上传空 → 失败');
+
+  var fm2 = { bm_r42: 2, evidence_upload_42: '{"name":"a.pdf"}' };
+  assertEqual(validateWithDepends(rule, fm2, cellMap, fm2.evidence_upload_42).pass, true,
+    'required=表达式, bm=2, 已上传 → 通过');
+
+  var fm3 = { bm_r42: null, evidence_upload_42: '' };
+  var r3 = validateWithDepends(rule, fm3, cellMap, fm3.evidence_upload_42);
+  assertEqual(r3.pass, true, 'required=表达式, bm=null → 跳过');
+  assertEqual(r3.skipped, true, '条件不满足 → skipped');
+
+  var ruleBool = { required: true, message: '必填' };
+  assertEqual(validateWithDepends(ruleBool, { bm_r42: null }, cellMap, '').pass, false,
+    'required=true 布尔值仍正常 → 失败');
+
+  var ruleMulti = { required: 'fm.bm_r42 != null || fm.bl_r42 != null', message: '必填' };
+  var fm4 = { bm_r42: null, bl_r42: 51.1 };
+  assertEqual(validateWithDepends(ruleMulti, fm4, cellMap, '').pass, false,
+    'required=多条件OR, bl有值 → 失败');
+
+  var fm5 = { bm_r42: null, bl_r42: null };
+  assertEqual(validateWithDepends(ruleMulti, fm5, cellMap, '').pass, true,
+    'required=多条件OR, 都null → 跳过');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试12: validator 函数体（与 mock1.js 一致）
+// ══════════════════════════════════════════════════
+console.log('\n── 测试12: validator 函数体──');
+
+(function () {
+  var rule = {
+    message: '指标值必须在标杆值和基准值之间',
+    validator: 'return value != null && value >= fm.bm_r42 && value <= fm.bl_r42;'
+  };
+
+  var fm = { bm_r42: 2, bl_r42: 51.1 };
+  assertEqual(validateWithDepends(rule, fm, cellMap, 30).pass, true,
+    'validator: value=30, fm.bm=2, fm.bl=51.1 → 通过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 1).pass, false,
+    'validator: value=1 < bm=2 → 失败');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 60).pass, false,
+    'validator: value=60 > bl=51.1 → 失败');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 2).pass, true,
+    'validator: value=2 = bm → 边界通过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, null).pass, false,
+    'validator: value=null → 失败');
+
+  var fm2 = { bm_r42: 10, bl_r42: 20 };
+  assertEqual(validateWithDepends(rule, fm2, cellMap, 15).pass, true,
+    'validator: fm值变化后 value=15 在 10-20 → 通过');
+  assertEqual(validateWithDepends(rule, fm2, cellMap, 5).pass, false,
+    'validator: fm值变化后 value=5 < 10 → 失败');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试13: validator + extra 第三方值
+// ══════════════════════════════════════════════════
+console.log('\n── 测试13: validator + extra 第三方值──');
+
+(function () {
+  var rule = {
+    message: '低于外部配置的最低阈值',
+    validator: 'return value != null && value >= extra.minThreshold;'
+  };
+
+  var fm = { indval_r42: 30 };
+  var extra1 = { minThreshold: 20 };
+
+  assertEqual(validateWithDepends(rule, fm, cellMap, 30, extra1).pass, true,
+    'validator+extra: value=30 >= extra.min=20 → 通过');
+  assertEqual(validateWithDepends(rule, fm, cellMap, 10, extra1).pass, false,
+    'validator+extra: value=10 < extra.min=20 → 失败');
+
+  var extra2 = { minThreshold: 50 };
+  assertEqual(validateWithDepends(rule, fm, cellMap, 30, extra2).pass, false,
+    'validator+extra: extra.min=50, value=30 → 失败');
+
+  assertEqual(validateWithDepends(rule, fm, cellMap, 30, {}).pass, false,
+    'validator+extra: extra为空 → false');
+
+  var rule2 = {
+    message: '必须大于标杆值且大于外部阈值',
+    validator: 'return value > fm.bm_r42 && value > extra.minThreshold;'
+  };
+  var fm2 = { bm_r42: 5 };
+  var extra3 = { minThreshold: 10 };
+  assertEqual(validateWithDepends(rule2, fm2, cellMap, 15, extra3).pass, true,
+    'validator: value=15 > fm.bm=5 && value > extra.min=10 → 通过');
+  assertEqual(validateWithDepends(rule2, fm2, cellMap, 8, extra3).pass, false,
+    'validator: value=8 > fm.bm=5 但 < extra.min=10 → 失败');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试14: validator + depends 组合（fm.xxx 统一）
+// ══════════════════════════════════════════════════
+console.log('\n── 测试14: validator + depends 组合──');
+
+(function () {
+  var rule = {
+    depends: 'fm.bm_r42 != null',
+    message: '标杆值存在时，指标值必须大于标杆值',
+    validator: 'return value > fm.bm_r42;'
+  };
+
+  var fm1 = { bm_r42: 10 };
+  assertEqual(validateWithDepends(rule, fm1, cellMap, 20).pass, true,
+    'validator+depends: bm=10, value=20 → 通过');
+  assertEqual(validateWithDepends(rule, fm1, cellMap, 5).pass, false,
+    'validator+depends: bm=10, value=5 → 失败');
+
+  var fm2 = { bm_r42: null };
+  assertEqual(validateWithDepends(rule, fm2, cellMap, 5).pass, true,
+    'validator+depends: bm=null → 跳过');
+})();
+
+// ══════════════════════════════════════════════════
+// 测试15: 语法统一验证 — 所有字段都用 fm.xxx
+// ══════════════════════════════════════════════════
+console.log('\n── 测试15: 语法统一验证 — depends/required/validator 全部 fm.xxx──');
+
+(function () {
+  var fm = { bm_r42: 100, bl_r42: 200, indval_r42: 150 };
+
+  // depends 用 fm.xxx
+  assertEqual(evalDepends('fm.bm_r42 > 50', fm, cellMap), true,
+    'depends: fm.bm_r42 > 50 → true');
+
+  // required 字符串用 fm.xxx
+  var rule1 = { required: 'fm.bm_r42 != null', message: '必填' };
+  assertEqual(validateWithDepends(rule1, fm, cellMap, '').pass, false,
+    'required=fm.xxx → 失败');
+
+  // validator 用 fm.xxx
+  var rule2 = {
+    validator: 'return value >= fm.bm_r42 && value <= fm.bl_r42;',
+    message: '范围'
+  };
+  assertEqual(validateWithDepends(rule2, fm, cellMap, 150).pass, true,
+    'validator: fm.xxx → 通过');
+
+  // 三者组合
+  var rule3 = {
+    depends: 'fm.bm_r42 != null',
+    required: true,
+    validator: 'return value > fm.bm_r42;',
+    message: '组合'
+  };
+  assertEqual(validateWithDepends(rule3, fm, cellMap, 120).pass, true,
+    'depends+required+validator 组合 → 通过');
 })();
 
 // ── 结果 ──
-console.log('\n═══════════════════════════════════════');
+console.log('\n════════════════════════════════════════');
 console.log('总计: ' + passed + ' 通过, ' + failed + ' 失败');
-console.log('═══════════════════════════════════════');
+console.log('════════════════════════════════════════');
 process.exit(failed > 0 ? 1 : 0);

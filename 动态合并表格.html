@@ -1106,52 +1106,21 @@
         return { rows: rows, cellMap: cellMap };
       }
 
-      // ======================== 表达式求值辅助：将对象中的值替换进表达式 ========================
-      function _replaceIds(expr, data) {
-        var ids = Object.keys(data).sort(function (a, b) {
-          return b.length - a.length;
-        });
-        ids.forEach(function (id) {
-          var v = data[id];
-          var r;
-          if (v === null || v === undefined) r = 'null';
-          else if (typeof v === 'number') r = String(v);
-          else if (typeof v === 'boolean') r = String(v);
-          else if (typeof v === 'string') r = "'" + v.replace(/'/g, "\\'") + "'";
-          else r = 'null';
-          expr = expr.replace(
-            new RegExp('\\b' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g'),
-            r
-          );
-        });
-        return expr;
-      }
-
       // ======================== depends 条件求值 ========================
+      // 统一使用 fm.xxx 引用表单值，extra.xxx 引用第三方值
       function evalDepends(expr, fm, cellMap, extra) {
-        expr = _replaceIds(expr, fm);
-        if (extra) expr = _replaceIds(expr, extra);
         try {
-          return new Function('"use strict"; return (' + expr + ')')();
+          return new Function('fm', 'extra', '"use strict"; return (' + expr + ')')(fm, extra || {});
         } catch (e) {
           return false;
         }
       }
 
       // ======================== custom 自定义校验表达式 ========================
-      // 表达式中 value 代表当前字段值，cell id 从 fm 取值，extraContext 取第三方值
+      // 统一使用 value=当前值, fm.xxx=表单值, extra.xxx=第三方值
       function evalCustom(expr, value, fm, cellMap, extra) {
-        var e = expr.replace(/\bvalue\b/g, function () {
-          if (value === null || value === undefined) return 'null';
-          if (typeof value === 'number') return String(value);
-          if (typeof value === 'boolean') return String(value);
-          if (typeof value === 'string') return "'" + value.replace(/'/g, "\\'") + "'";
-          return 'null';
-        });
-        e = _replaceIds(e, fm);
-        if (extra) e = _replaceIds(e, extra);
         try {
-          return new Function('"use strict"; return (' + e + ')')();
+          return new Function('value', 'fm', 'extra', '"use strict"; return (' + expr + ')')(value, fm, extra || {});
         } catch (ex) {
           return false;
         }

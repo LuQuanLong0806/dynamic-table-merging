@@ -6163,7 +6163,7 @@ var MOCK_DATA_1 = {
       validation: {
         rules: [
           {
-            required: 'bm_r42 != null',
+            required: 'fm.bm_r42 != null',
             message: '标杆值已填写，请上传证明材料'
           }
         ]
