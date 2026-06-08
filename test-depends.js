@@ -152,22 +152,22 @@ console.log('\n── 测试2: depends 条件校验 — 核心场景──');
     depends: 'fm.bm_r42 != null'
   };
 
-  var fm1 = { bm_r42: 2, evidence_upload_42: '' };
+  var fm1 = { bm_r42: 2, evidence_upload_42: [] };
   var r1 = validateWithDepends(rule, fm1, cellMap, fm1.evidence_upload_42);
   assertEqual(r1.pass, false, 'bm=2, 上传空 → 失败');
   assertEqual(r1.skipped, false, '规则未跳过');
   assertEqual(r1.error, '标杆值已填写，请上传证明材料', '错误消息正确');
 
-  var fm2 = { bm_r42: 2, evidence_upload_42: '{"name":"test.pdf","size":1024}' };
+  var fm2 = { bm_r42: 2, evidence_upload_42: [{ name: 'test.pdf', size: 1024 }] };
   var r2 = validateWithDepends(rule, fm2, cellMap, fm2.evidence_upload_42);
   assertEqual(r2.pass, true, 'bm=2, 已上传 → 通过');
 
-  var fm3 = { bm_r42: null, evidence_upload_42: '' };
+  var fm3 = { bm_r42: null, evidence_upload_42: [] };
   var r3 = validateWithDepends(rule, fm3, cellMap, fm3.evidence_upload_42);
   assertEqual(r3.pass, true, 'bm=null, 上传空 → 跳过');
   assertEqual(r3.skipped, true, '规则已跳过');
 
-  var fm4 = { bm_r42: null, evidence_upload_42: '{"name":"a.pdf"}' };
+  var fm4 = { bm_r42: null, evidence_upload_42: [{ name: 'a.pdf', size: 512 }] };
   var r4 = validateWithDepends(rule, fm4, cellMap, fm4.evidence_upload_42);
   assertEqual(r4.pass, true, 'bm=null, 已上传 → 跳过');
 })();
@@ -184,16 +184,16 @@ console.log('\n── 测试3: depends + 多条件组合──');
     depends: 'fm.bm_r42 != null && fm.bl_r42 != null'
   };
 
-  var fm1 = { bm_r42: 2, bl_r42: 51.1, evidence_upload_42: '' };
+  var fm1 = { bm_r42: 2, bl_r42: 51.1, evidence_upload_42: [] };
   var r1 = validateWithDepends(rule, fm1, cellMap, fm1.evidence_upload_42);
   assertEqual(r1.pass, false, '双值都填, 上传空 → 失败');
 
-  var fm2 = { bm_r42: 2, bl_r42: null, evidence_upload_42: '' };
+  var fm2 = { bm_r42: 2, bl_r42: null, evidence_upload_42: [] };
   var r2 = validateWithDepends(rule, fm2, cellMap, fm2.evidence_upload_42);
   assertEqual(r2.pass, true, '只填标杆值 → 跳过');
   assertEqual(r2.skipped, true, '条件不满足');
 
-  var fm3 = { bm_r42: null, bl_r42: null, evidence_upload_42: '' };
+  var fm3 = { bm_r42: null, bl_r42: null, evidence_upload_42: [] };
   var r3 = validateWithDepends(rule, fm3, cellMap, fm3.evidence_upload_42);
   assertEqual(r3.pass, true, '两个都 null → 跳过');
 })();
@@ -404,15 +404,15 @@ console.log('\n── 测试11: required 为字符串（fm.xxx 语法）──')
     message: '标杆值已填写，请上传证明材料'
   };
 
-  var fm1 = { bm_r42: 2, evidence_upload_42: '' };
+  var fm1 = { bm_r42: 2, evidence_upload_42: [] };
   assertEqual(validateWithDepends(rule, fm1, cellMap, fm1.evidence_upload_42).pass, false,
     'required=表达式, bm=2, 上传空 → 失败');
 
-  var fm2 = { bm_r42: 2, evidence_upload_42: '{"name":"a.pdf"}' };
+  var fm2 = { bm_r42: 2, evidence_upload_42: [{ name: 'a.pdf', size: 512 }] };
   assertEqual(validateWithDepends(rule, fm2, cellMap, fm2.evidence_upload_42).pass, true,
     'required=表达式, bm=2, 已上传 → 通过');
 
-  var fm3 = { bm_r42: null, evidence_upload_42: '' };
+  var fm3 = { bm_r42: null, evidence_upload_42: [] };
   var r3 = validateWithDepends(rule, fm3, cellMap, fm3.evidence_upload_42);
   assertEqual(r3.pass, true, 'required=表达式, bm=null → 跳过');
   assertEqual(r3.skipped, true, '条件不满足 → skipped');

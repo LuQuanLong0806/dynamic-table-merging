@@ -264,9 +264,9 @@
                           <input type="file" :accept="item.cell.accept || ''" style="display:none"
                             @change="function(e){ onUploadFile(item.cell.id, e) }" />
                         </label>
-                        <div v-if="getUploadFileInfo(item.cell.id)" class="uploaded-file">
-                          <a class="file-link" @click="previewUpload(item.cell.id)">{{ getUploadFileInfo(item.cell.id).name }}</a>
-                          <span v-if="!isDisabled(item.cell.id)" class="remove-file-icon" @click="removeUpload(item.cell.id)">&times;</span>
+                        <div v-for="(f, fi) in getUploadFileList(item.cell.id)" :key="fi" class="uploaded-file">
+                          <span class="file-name">{{ f.name }}</span>
+                          <span v-if="!isDisabled(item.cell.id)" class="remove-file-icon" @click="removeUpload(item.cell.id, fi)">&times;</span>
                         </div>
                       </div>
                     </form-item>
@@ -996,7 +996,9 @@
               c.value != null && c.value !== '' ? Number(c.value) : null;
           else if (c.type === 'checkbox')
             m[c.id] = Array.isArray(c.value) ? c.value : [];
-          else if (['input', 'select', 'radio', 'date', 'upload'].indexOf(c.type) >= 0)
+          else if (c.type === 'upload')
+            m[c.id] = Array.isArray(c.value) ? c.value : [];
+          else if (['input', 'select', 'radio', 'date'].indexOf(c.type) >= 0)
             m[c.id] = c.value != null ? c.value : '';
         });
         return m;
@@ -1694,26 +1696,20 @@
                 return;
               }
             }
-            var fileInfo = JSON.stringify({ name: file.name, size: file.size, type: file.type, lastModified: file.lastModified });
-            this.$set(this.fm, id, fileInfo);
+            var list = this.fm[id] || [];
+            list.push({ name: file.name, size: file.size, type: file.type, lastModified: file.lastModified });
+            this.$set(this.fm, id, list);
+            e.target.value = '';
             this.onChange(id);
           },
-          getUploadFileInfo: function (id) {
+          getUploadFileList: function (id) {
             var v = this.fm[id];
-            if (!v) return null;
-            try {
-              return JSON.parse(v);
-            } catch (e) {
-              return v ? { name: '已上传附件', path: v } : null;
-            }
+            return Array.isArray(v) ? v : [];
           },
-          previewUpload: function (id) {
-            var info = this.getUploadFileInfo(id);
-            if (!info) return;
-            alert('预览文件: ' + info.name + '\n(实际项目中会打开文件预览)');
-          },
-          removeUpload: function (id) {
-            this.$set(this.fm, id, '');
+          removeUpload: function (id, index) {
+            var list = this.fm[id] || [];
+            list.splice(index, 1);
+            this.$set(this.fm, id, list);
             this.onChange(id);
           },
 
@@ -1841,8 +1837,9 @@
                   c.value != null && c.value !== '' ? Number(c.value) : null
                 );
               else if (c.type === 'checkbox') self.$set(self.fm, c.id, []);
+              else if (c.type === 'upload') self.$set(self.fm, c.id, []);
               else if (
-                ['input', 'select', 'radio', 'date', 'upload'].indexOf(c.type) >= 0
+                ['input', 'select', 'radio', 'date'].indexOf(c.type) >= 0
               )
                 self.$set(self.fm, c.id, c.value != null ? c.value : '');
             });
