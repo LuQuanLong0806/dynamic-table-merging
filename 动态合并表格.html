@@ -190,22 +190,21 @@
         <i-form ref="mainForm" :model="fm" :rules="formRules">
           <table>
             <colgroup>
-              <col v-for="(w,i) in colWidths" :key="i" :style="{width:w}">
+              <col v-for="(w,i) in colWidths" :key="i" :style="colStyle(i, w)">
             </colgroup>
             <tr v-for="(row, ri) in gridRows" :key="ri">
               <template v-for="(entry, ci) in row">
-                <th v-if="entry.isLabel && !entry.skip"
+                <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
                     :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci">
                   <span class="cell-id-badge label-badge" @click.stop="copyId(entry.cell.id, $event)">{{entry.cell.id}}</span>
                   <span v-html="entry.cell.content"></span>
                 </th>
-                <td v-else-if="!entry.skip && entry.cell"
+                <td v-else-if="!entry.skip && entry.cell && !isHidden(entry.cell.id)"
                     :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
                     :class="entry.cls">
                   <span class="cell-id-badge" @click.stop="copyId(entry.cell.id, $event)">{{entry.cell.id}}</span>
                   <div v-for="item in getItems(entry)" :key="item.cell.id"
                        :data-cell-id="item.cell.id"
-                       v-show="!isHidden(item.cell.id)"
                        class="alt-item">
                     <!-- 静态文本 -->
                     <span v-if="item.isText" v-html="item.cell.content || ''"></span>
@@ -279,9 +278,10 @@
           </table>
         </i-form>
         <div class="btn-bar">
-          <i-select :value="currentDataKey" @on-change="switchData" style="width:220px;margin-right:12px;text-align:left">
+          <i-select :value="currentDataKey" @on-change="switchData" style="width:260px;margin-right:12px;text-align:left">
             <i-option value="default" key="default">通则指标评分表</i-option>
             <i-option value="mock" key="mock">能源系统优化评分表</i-option>
+            <i-option value="mock1" key="mock1">通则指标评分表2</i-option>
           </i-select>
           <i-button type="primary" :disabled="submitDisabled" @click="handleSubmit">提交</i-button>
           <i-button @click="handleReset" style="margin-left:8px">重置</i-button>
@@ -305,6 +305,7 @@
     </script>
     //
     <script src="mock.js"></script>
+    <script src="mock1.js"></script>
     <script>
       // ======================== 源数据（直接在此编辑）========================
       var TABLE_DATA = {
@@ -1108,7 +1109,8 @@
       // ======================== 数据集注册 ========================
       var DATA_SETS = {
         default: TABLE_DATA,
-        mock: typeof MOCK_DATA !== 'undefined' ? MOCK_DATA : null
+        mock: typeof MOCK_DATA !== 'undefined' ? MOCK_DATA : null,
+        mock1: typeof MOCK_DATA_1 !== 'undefined' ? MOCK_DATA_1 : null
       };
 
       // ======================== Vue 应用 ========================
@@ -1117,24 +1119,11 @@
         template: '#app-tpl',
 
         data: function () {
-          var initData = typeof MOCK_DATA !== 'undefined' ? MOCK_DATA : TABLE_DATA;
+          var initData = typeof MOCK_DATA_1 !== 'undefined' ? MOCK_DATA_1 : (typeof MOCK_DATA !== 'undefined' ? MOCK_DATA : TABLE_DATA);
           var state = this._buildState(initData);
-          state.currentDataKey = typeof MOCK_DATA !== 'undefined' ? 'mock' : 'default';
-          state.colWidths = [
-            '6%',
-            '3%',
-            '12%',
-            '12%',
-            '6%',
-            '4%',
-            '7%',
-            '7%',
-            '7%',
-            '6%',
-            '7%',
-            '12%',
-            '12%'
-          ];
+          state.currentDataKey = typeof MOCK_DATA_1 !== 'undefined' ? 'mock1' : (typeof MOCK_DATA !== 'undefined' ? 'mock' : 'default');
+          state.colWidths = state.computedColWidths;
+          state.hiddenCols = state.hiddenCols;
           state.scoreFormulas = [];
           state.scoreFormulaIds = {};
           return state;
@@ -1172,7 +1161,31 @@
             });
             data.cells.forEach(function (c) {
               if (c._hidden) hs[c.id] = true;
+              if (c.portalHide) hs[c.id] = true;
             });
+            // 计算每列宽度：隐藏列设为 0
+            var maxC = 0;
+            data.cells.forEach(function (c) {
+              var xr = parseRange(c.x);
+              if (xr.end > maxC) maxC = xr.end;
+            });
+            var defaultWidths = {
+              1: '6%', 2: '3%', 3: '12%', 4: '12%', 5: '6%',
+              6: '4%', 7: '7%', 8: '7%', 9: '7%', 10: '6%',
+              11: '7%', 12: '12%', 13: '12%', 14: '10%', 15: '10%'
+            };
+            var colHidden = {};
+            for (var ci = 1; ci <= maxC; ci++) colHidden[ci] = true;
+            data.cells.forEach(function (c) {
+              if (!hs[c.id]) {
+                var xr = parseRange(c.x);
+                for (var i = xr.start; i <= xr.end; i++) colHidden[i] = false;
+              }
+            });
+            var cw = [];
+            for (var ci = 1; ci <= maxC; ci++) {
+              cw.push(defaultWidths[ci] || '8%');
+            }
             return {
               config: data,
               gridRows: grid.rows,
@@ -1180,6 +1193,8 @@
               fm: fm,
               disabledState: ds,
               hiddenState: hs,
+              computedColWidths: cw,
+              hiddenCols: colHidden,
               submitDisabled: false,
               formulaResults: {}
             };
@@ -1195,6 +1210,8 @@
             this.fm = state.fm;
             this.disabledState = state.disabledState;
             this.hiddenState = state.hiddenState;
+            this.colWidths = state.computedColWidths;
+            this.hiddenCols = state.hiddenCols;
             this.submitDisabled = false;
             this.formulaResults = {};
             this.currentDataKey = key;
@@ -1258,6 +1275,14 @@
 
           isHidden: function (id) {
             return !!this.hiddenState[id];
+          },
+          isColHidden: function (colIndex) {
+            return !!this.hiddenCols[colIndex + 1];
+          },
+          colStyle: function (i, w) {
+            return this.hiddenCols[i + 1]
+              ? { visibility: 'collapse', width: '0' }
+              : { width: w };
           },
           isDisabled: function (id) {
             return !!this.disabledState[id];
