@@ -211,7 +211,7 @@
                     <!-- 公式 — scoreFormulaIds 中的用 fm 值，其余用 formulaResults -->
                     <span v-else-if="item.isFormula" class="formula-val">{{ scoreFormulaIds[item.cell.id] ? fm[item.cell.id] : formulaResults[item.cell.id] }}</span>
                     <!-- 表单控件 -->
-                    <form-item v-else-if="item.isControl" :prop="item.cell.id">
+                    <form-item v-else-if="item.isControl" :prop="formRules[item.cell.id] ? item.cell.id : ''">
                       <!-- text input -->
                       <i-input v-if="item.cell.type==='input'"
                         :value="fm[item.cell.id]"
@@ -1109,20 +1109,26 @@
       }
 
       // ======================== depends 条件求值 ========================
-      // 统一使用 fm.xxx 引用表单值，extra.xxx 引用第三方值
+      // 同时支持 fm.xxx（推荐）和裸 cell id（兼容后端旧数据）
       function evalDepends(expr, fm, cellMap, extra) {
         try {
-          return new Function('fm', 'extra', '"use strict"; return (' + expr + ')')(fm, extra || {});
+          var locals = Object.keys(fm).map(function (k) {
+            return 'var ' + k + '=fm[' + JSON.stringify(k) + '];';
+          }).join('');
+          return new Function('fm', 'extra', locals + 'return(' + expr + ')')(fm, extra || {});
         } catch (e) {
           return false;
         }
       }
 
       // ======================== custom 自定义校验表达式 ========================
-      // 统一使用 value=当前值, fm.xxx=表单值, extra.xxx=第三方值
+      // 同时支持 value/fm.xxx/extra.xxx（推荐）和裸 cell id（兼容后端旧数据）
       function evalCustom(expr, value, fm, cellMap, extra) {
         try {
-          return new Function('value', 'fm', 'extra', '"use strict"; return (' + expr + ')')(value, fm, extra || {});
+          var locals = Object.keys(fm).map(function (k) {
+            return 'var ' + k + '=fm[' + JSON.stringify(k) + '];';
+          }).join('');
+          return new Function('value', 'fm', 'extra', locals + 'return(' + expr + ')')(value, fm, extra || {});
         } catch (ex) {
           return false;
         }
@@ -1325,12 +1331,15 @@
 
           // ────── 校验规则（完全数据驱动）──────
           buildRules: function (cell) {
+            var self = this;
             var v = cell.validation;
             if (!v) return [];
             var isNum = cell.type === 'number';
             var isCheckbox = cell.type === 'checkbox';
+            var isUpload = cell.type === 'upload';
+            var isArrayType = isCheckbox || isUpload;
             var trigger =
-              isNum || cell.type === 'select' || cell.type === 'radio' || cell.type === 'upload'
+              isNum || cell.type === 'select' || cell.type === 'radio' || isUpload
                 ? 'change'
                 : 'blur';
             // 格式1: rules 数组
@@ -1343,8 +1352,8 @@
                 if (isNum && rule.required && !rule.validator && !rule.depends && !rule.custom) {
                   rule.type = rule.type || 'number';
                 }
-                // checkbox 类型：required 时确保空数组被视为空
-                if (isCheckbox && rule.required && !rule.type) {
+                // checkbox / upload 类型：required 时确保空数组被视为空
+                if (isArrayType && rule.required && !rule.type) {
                   rule.type = 'array';
                 }
                 // ── required 为字符串时 → 转为 required:true + depends ──
@@ -1430,14 +1439,13 @@
                   delete rule.message;
                   delete rule.depends;
                   delete rule.custom;
-                  delete rule.validator;
                 }
                 return rule;
               });
             }
             // 格式2: 简写
             var rules = [];
-            var defaultType = isNum ? 'number' : isCheckbox ? 'array' : 'string';
+            var defaultType = isNum ? 'number' : isArrayType ? 'array' : 'string';
             if (v.required)
               rules.push({
                 required: true,
