@@ -1266,6 +1266,7 @@
             this.hiddenCols = state.hiddenCols;
             this.submitDisabled = false;
             this.formulaResults = {};
+            this.extraContext = {};
             this.currentDataKey = key;
             var self = this;
             this.$nextTick(function () {
@@ -1883,6 +1884,7 @@
               if (c.disabled) self.$set(self.disabledState, c.id, true);
               if (c._hidden) self.$set(self.hiddenState, c.id, true);
             });
+            this.extraContext = {};
             this.submitDisabled = false;
             this.$refs.mainForm.resetFields();
             this.recalc();
