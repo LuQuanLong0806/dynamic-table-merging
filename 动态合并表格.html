@@ -1780,7 +1780,7 @@
                     ? Number(item.value)
                     : null
                 );
-              } else if (cell.type === 'checkbox') {
+              } else if (cell.type === 'checkbox' || cell.type === 'upload') {
                 self.$set(
                   self.fm,
                   item.id,
