@@ -1135,7 +1135,7 @@
         <th class="axis-corner"></th>
         <th v-for="c in colCount" :key="'ax-c-'+c" class="axis-col-head">{{c}}</th>
       </tr>
-      <tr v-for="(row,ri) in gridRows" :key="ri">
+      <tr v-for="(row,ri) in gridRows" v-if="isRowVisible(ri)" :key="ri">
         <td class="axis-row-head">{{ri+1}}</td>
         <template v-for="(entry,ci) in row">
           <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
@@ -1317,6 +1317,7 @@ var app=new Vue({
     setVal:function(id,val){var cell=this.cellMap[id];if(cell&&cell.type==='number'){val=val===''||val===undefined||val===null?null:Number(val);}this.\$set(this.fm,id,val);var self=this;this.\$nextTick(function(){var fi=self.\$refs.mainForm.fields.find(function(f){return f.prop===id;});if(fi)fi.validateState='';});},
     getItems:function(e){var _self=this;var list=[{cell:e.cell,isText:e.isText,isControl:e.isControl,isFormula:e.isFormula}];(e.alts||[]).forEach(function(a){list.push({cell:a.cell,isText:a.cell.type==='text',isControl:['input','number','select','radio','checkbox','date','upload'].indexOf(a.cell.type)>=0,isFormula:a.cell.type==='formula'});});return list;},
     isHidden:function(id){return!!this.hiddenState[id];},
+    isRowVisible:function(ri){var targetY=ri+1;for(var i=0;i<this.config.cells.length;i++){var c=this.config.cells[i];if(this.isHidden(c.id))continue;var yr=parseRange(c.y);if(yr.start<=targetY&&yr.end>=targetY)return true;}return false;},
     applyVisibility:function(){var ds={},hs={},mode=this.previewMode;this.config.cells.forEach(function(c){if(c.disabled)ds[c.id]=true;});this.config.cells.forEach(function(c){if(c._hidden)hs[c.id]=true;if(mode==='portal'&&c.portalHide)hs[c.id]=true;if(mode==='platform'&&c.platformHide)hs[c.id]=true;});this.disabledState=ds;this.hiddenState=hs;},
     isDisabled:function(id){return!!this.disabledState[id];},
     getNum:function(c,k){var v=c.validation;if(!v)return undefined;var r;if(v.rules)v.rules.forEach(function(x){if(x[k]!=null)r=x[k];});if(r==null&&v[k]!=null)r=v[k];return r;},
