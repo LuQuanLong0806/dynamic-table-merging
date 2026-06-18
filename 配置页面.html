@@ -600,7 +600,7 @@
               <i-switch v-model="autoPreview" size="small" @on-change="onAutoToggle" />
               <span class="toolbar-divider"></span>
               <span class="auto-tip">视角</span>
-              <radio-group v-model="previewMode" size="small" @on-change="schedulePreview" type="button">
+              <radio-group v-model="previewMode" size="small" @on-change="onPreviewModeChange" type="button">
                 <radio label="portal"><span>门户端</span></radio>
                 <radio label="platform"><span>管理端</span></radio>
               </radio-group>
@@ -608,7 +608,13 @@
               <span class="stat-chip">单元格 {{config.cells.length}}</span>
               <span class="stat-chip">X {{maxX || '-'}}</span>
               <span class="stat-chip">Y {{maxY || '-'}}</span>
-              <span class="stat-chip stat-warn" v-if="duplicateIds.length">重复 {{duplicateIds.length}}</span>
+              <tooltip placement="bottom" transfer v-if="duplicateIds.length">
+                <span class="stat-chip stat-warn">重复 {{duplicateIds.length}}</span>
+                <div slot="content" style="white-space:normal;max-width:260px;">
+                  <div style="font-weight:600;margin-bottom:4px;">重复的 ID:</div>
+                  <div v-for="id in duplicateIds" :key="id" style="line-height:1.6;">• {{ id }}</div>
+                </div>
+              </tooltip>
               <span class="stat-chip stat-warn" v-if="emptyIdCount">缺ID {{emptyIdCount}}</span>
               <i-button size="small" @click="refreshPreview">刷新预览</i-button>
               <i-button size="small" @click="openInNewWindow">新窗口</i-button>
@@ -855,10 +861,7 @@
               <span class="expr-chip tpl" @click="insertFormula('CALC_SCORE')">CALC_SCORE</span>
               <span class="expr-chip tpl" @click="insertFormula('CALC()')">CALC()</span>
             </div>
-            <div class="expr-hint">点击下方单元格 id 可插入到公式末尾。CALC 内可用 Math.max/Math.round/三元表达式。</div>
-            <div class="expr-chips">
-              <span v-for="c in idChips" :key="c.id" class="expr-chip" @click="insertId(c.id)" v-if="c.id !== cell.id">{{c.id}}</span>
-            </div>
+            <div class="expr-hint">单元格 id 可在预览徽章或列表抽屉里查看。CALC 内可用 Math.max/Math.round/三元表达式。</div>
           </div>
 
           <!-- upload -->
@@ -929,9 +932,6 @@
                 </div>
               </div>
               <div v-if="!validationRules.length" style="color:#999;font-size:12px;">尚未配置校验规则</div>
-            </div>
-            <div class="expr-hint" v-if="hasCellIds">
-              可引用单元格：<span class="expr-chip" v-for="c in idChips" :key="c.id" @click="insertToRule(c.id)" v-if="c.id !== cell.id">{{c.id}}</span>
             </div>
           </div>
 
@@ -1052,7 +1052,7 @@
 <style>
   * { box-sizing:border-box; font-family:'Microsoft YaHei',sans-serif; }
   body { margin:14px; background:#fff; }
-  .table-wrapper { overflow-x:auto; background:#fff; padding:8px; }
+  .table-wrapper { overflow:auto; max-height:calc(100vh - 60px); background:#fff; padding:8px; }
   h2 { text-align:center; color:#333; margin:0 0 12px; font-size:16px; }
   table { width:100%; border-collapse:collapse; table-layout:fixed; word-break:break-word; }
   th,td { border:1px solid #999; padding:6px 8px; text-align:center; vertical-align:middle; font-size:13px; line-height:1.5; position:relative; }
@@ -1249,7 +1249,6 @@ var app=new Vue({
       }
       return cw;
     }
-  },
   },
   methods:{
     buildRules:function(cell){
@@ -1522,9 +1521,6 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           hasLinkage: function () {
             return ['select', 'radio'].indexOf(this.cell.type) >= 0;
           },
-          hasCellIds: function () {
-            return (this.idChips || []).length > 1;
-          },
           idChips: function () {
             return (this.allCells || [])
               .filter(function (c) { return c.id; })
@@ -1592,22 +1588,8 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             this.$set(r, 'enum', arr);
             this.$emit('change');
           },
-          insertToRule: function (id) {
-            // 把 id 插到当前 cell 第一个有 custom/validator/depends 的规则里
-            var rules = this.validationRules;
-            for (var i = rules.length - 1; i >= 0; i--) {
-              var r = rules[i];
-              if (r.kind === 'custom' && r.custom !== undefined) { r.custom = (r.custom || '') + ' ' + id; this.$emit('change'); return; }
-              if (r.kind === 'validator' && r.validator !== undefined) { r.validator = (r.validator || '') + ' ' + id; this.$emit('change'); return; }
-              if (r.kind === 'depends' && r.depends !== undefined) { r.depends = (r.depends || '') + ' ' + id; this.$emit('change'); return; }
-            }
-          },
           insertFormula: function (tpl) {
             this.$set(this.cell, 'calculationFormula', (this.cell.calculationFormula || '') + tpl);
-            this.$emit('change');
-          },
-          insertId: function (id) {
-            this.$set(this.cell, 'calculationFormula', (this.cell.calculationFormula || '') + id);
             this.$emit('change');
           },
           addLinkage: function () {
@@ -1909,6 +1891,14 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           },
           onAutoToggle: function (val) {
             if (val) this.refreshPreview();
+          },
+          onPreviewModeChange: function () {
+            var iframe = document.getElementById('previewFrame');
+            if (!iframe) return;
+            try {
+              var win = iframe.contentWindow;
+              if (win && win.setPreviewMode) win.setPreviewMode(this.previewMode);
+            } catch (e) {}
           },
           refreshPreview: function () {
             this._pushPreview(this._stripInternal());

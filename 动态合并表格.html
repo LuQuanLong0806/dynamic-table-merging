@@ -1256,6 +1256,16 @@
           // ────── 取值/赋值（统一入口，保证 Vue 响应式）──────
           setVal: function (id, val) {
             var cell = this.cellMap[id];
+            var oldVal = this.fm[id];
+            console.log(
+              '%c[setVal] %s',
+              'color:#19be6b;font-weight:bold',
+              id,
+              '\n  type:    ', cell ? cell.type : '?',
+              '\n  content: ', cell ? cell.content : '?',
+              '\n  old:     ', oldVal,
+              '\n  new:     ', val
+            );
             if (cell && cell.type === 'number') {
               val =
                 val === '' || val === undefined || val === null
