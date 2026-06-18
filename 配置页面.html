@@ -1,0 +1,2265 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>动态表格配置器</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/view-design@4.7.0/dist/styles/iview.css"
+      onerror="
+        this.onerror = null;
+        this.href = 'https://unpkg.com/view-design@4.7.0/dist/styles/iview.css';
+      "
+    />
+    <style>
+      * {
+        box-sizing: border-box;
+        font-family: 'Microsoft YaHei', sans-serif;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        overflow: hidden;
+        background: #f0f2f5;
+      }
+      #app {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      /* ===== 顶部 ===== */
+      .app-header {
+        background: #fff;
+        border-bottom: 1px solid #e8e8e8;
+        padding: 10px 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+        z-index: 10;
+      }
+      .app-header .logo {
+        font-size: 17px;
+        font-weight: bold;
+        color: #2a5db0;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .app-header .logo .dot {
+        width: 8px;
+        height: 8px;
+        background: #19be6b;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .app-header .title-input {
+        width: 280px;
+      }
+      .app-header .actions {
+        display: flex;
+        gap: 6px;
+        margin-left: auto;
+      }
+
+      /* ===== 主体 ===== */
+      .app-main {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+      }
+
+      /* ===== 预览面板（全宽） ===== */
+      .preview-panel--full {
+        flex: 1;
+        width: 100%;
+      }
+      .toolbar-divider {
+        width: 1px;
+        height: 18px;
+        background: #e0e0e0;
+        margin: 0 6px;
+      }
+      .state-radio-row {
+        padding: 4px 0;
+      }
+      .state-radio-row .ivu-radio-wrapper {
+        margin-right: 16px;
+      }
+      .template-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .template-card {
+        border: 1px solid #e8e8e8;
+        border-radius: 6px;
+        padding: 14px 10px;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.15s;
+        background: #fff;
+      }
+      .template-card:hover {
+        border-color: #2d8cf0;
+        background: #f0f7ff;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(45, 140, 240, 0.15);
+      }
+      .template-card .template-icon {
+        font-size: 28px;
+        line-height: 1;
+        margin-bottom: 6px;
+      }
+      .template-card .template-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 4px;
+      }
+      .template-card .template-desc {
+        font-size: 11px;
+        color: #888;
+        line-height: 1.4;
+      }
+      .stat-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        font-size: 12px;
+        color: #515a6e;
+        background: #f5f7fa;
+        border-radius: 10px;
+        border: 1px solid #e8eaec;
+      }
+      .stat-chip.stat-warn {
+        color: #ed4014;
+        background: #fff1f0;
+        border-color: #ffccc7;
+      }
+
+      .cell-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+      }
+      .cell-list--drawer {
+        padding: 4px 0;
+      }
+      .list-drawer-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 0 12px;
+        border-bottom: 1px solid #e8e8e8;
+        margin-bottom: 12px;
+      }
+      .list-drawer-toolbar .spacer { flex: 1; }
+      .empty-state {
+        padding: 80px 20px;
+        text-align: center;
+        color: #999;
+      }
+      .empty-state .icon {
+        font-size: 48px;
+        color: #d9d9d9;
+        margin-bottom: 12px;
+      }
+
+      /* ===== 单元格卡片 ===== */
+      .cell-card {
+        background: #fff;
+        border: 1px solid #e8e8e8;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        transition: box-shadow 0.2s, border-color 0.2s;
+      }
+      .cell-card:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      }
+      .cell-card.expanded {
+        border-color: #2a5db0;
+        box-shadow: 0 2px 10px rgba(42, 93, 176, 0.12);
+      }
+      .cell-card.has-error {
+        border-color: #ffccc7;
+      }
+      .cell-card.has-error.expanded {
+        border-color: #ed4014;
+      }
+      .cell-card.flash {
+        animation: card-flash 1.4s ease-out;
+      }
+      @keyframes card-flash {
+        0%   { box-shadow: 0 0 0 0 rgba(25,190,107,0.0); border-color:#2a5db0; }
+        15%  { box-shadow: 0 0 0 6px rgba(25,190,107,0.55); border-color:#19be6b; }
+        100% { box-shadow: 0 0 0 0 rgba(25,190,107,0.0); border-color:#2a5db0; }
+      }
+      /* 抽屉里的卡片：去除折叠头部动画，body 总展开 */
+      .edit-drawer .cell-card { margin-bottom: 0; }
+      .edit-drawer .cell-card .cell-toggle { display: none; }
+      .edit-drawer .cell-card .cell-header { cursor: default; background: #f5f7fa; }
+      .edit-drawer .ivu-drawer-body { padding: 12px; background: #fafafa; }
+      .cell-header {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        cursor: pointer;
+        gap: 8px;
+        user-select: none;
+      }
+      .cell-toggle {
+        color: #999;
+        transition: transform 0.2s;
+        width: 14px;
+        text-align: center;
+        font-size: 12px;
+      }
+      .cell-card.expanded .cell-toggle {
+        transform: rotate(90deg);
+        color: #2a5db0;
+      }
+      .cell-id-tag {
+        background: #e6f0ff;
+        color: #2a5db0;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        font-family: Consolas, monospace;
+        flex-shrink: 0;
+      }
+      .cell-id-tag.duplicate {
+        background: #fff1f0;
+        color: #cf1322;
+      }
+      .cell-id-tag.empty {
+        background: #fff7e6;
+        color: #d46b08;
+      }
+      .cell-type-tag {
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        color: #fff;
+        flex-shrink: 0;
+        line-height: 1.4;
+      }
+      .cell-type-tag.label {
+        background: #888;
+      }
+      .cell-type-tag.text {
+        background: #2db7f5;
+      }
+      .cell-type-tag.input {
+        background: #19be6b;
+      }
+      .cell-type-tag.number {
+        background: #ed4014;
+      }
+      .cell-type-tag.select {
+        background: #ff9900;
+      }
+      .cell-type-tag.radio {
+        background: #5cadff;
+      }
+      .cell-type-tag.checkbox {
+        background: #6c5ce7;
+      }
+      .cell-type-tag.date {
+        background: #00b894;
+      }
+      .cell-type-tag.upload {
+        background: #fd79a8;
+      }
+      .cell-type-tag.formula {
+        background: #e17055;
+      }
+      .cell-coord {
+        color: #888;
+        font-size: 12px;
+        font-family: Consolas, monospace;
+        flex-shrink: 0;
+        background: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 3px;
+      }
+      .cell-preview {
+        color: #555;
+        font-size: 12px;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+      }
+      .cell-actions {
+        display: flex;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+      .cell-actions .ivu-btn {
+        padding: 0 8px;
+        height: 24px;
+        line-height: 22px;
+        font-size: 12px;
+      }
+      .cell-body {
+        padding: 12px 16px 14px;
+        border-top: 1px solid #f0f0f0;
+        background: #fcfcfd;
+      }
+      .field-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px 12px;
+      }
+      .field-grid .full {
+        grid-column: 1 / -1;
+      }
+      .field-grid .span2 {
+        grid-column: span 2;
+      }
+      .field-group {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px dashed #e8e8e8;
+      }
+      .field-group-title {
+        font-size: 13px;
+        font-weight: bold;
+        color: #2a5db0;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .field-group-title .badge-count {
+        background: #e6f0ff;
+        color: #2a5db0;
+        padding: 0 6px;
+        border-radius: 8px;
+        font-size: 11px;
+        line-height: 16px;
+      }
+      .field-group-title .add-btn {
+        margin-left: auto;
+      }
+
+      /* ===== 预览面板 ===== */
+      .preview-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #f5f7fa;
+        overflow: hidden;
+        min-width: 0;
+      }
+      .preview-toolbar {
+        padding: 8px 16px;
+        background: #fff;
+        border-bottom: 1px solid #e8e8e8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      .preview-toolbar .spacer {
+        flex: 1;
+      }
+      .preview-toolbar .auto-tip {
+        font-size: 12px;
+        color: #888;
+      }
+      .preview-frame-wrap {
+        flex: 1;
+        overflow: hidden;
+        padding: 12px;
+        position: relative;
+      }
+      #previewFrame {
+        width: 100%;
+        height: 100%;
+        border: 1px solid #e8e8e8;
+        border-radius: 4px;
+        background: #fff;
+      }
+      .preview-error {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        background: rgba(255, 245, 245, 0.97);
+        color: #cf1322;
+        padding: 28px;
+        border-radius: 4px;
+        border: 1px solid #ffccc7;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        text-align: center;
+        font-size: 13px;
+        line-height: 1.6;
+        overflow: auto;
+      }
+      .preview-error-icon {
+        font-size: 36px;
+      }
+      .preview-error-text {
+        max-width: 480px;
+      }
+
+      /* ===== 子列表编辑器（options/rules/actions） ===== */
+      .sub-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .sub-item {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        padding: 6px;
+        background: #fff;
+        border: 1px solid #f0f0f0;
+        border-radius: 4px;
+      }
+      .sub-item .row-grow {
+        flex: 1;
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        min-width: 0;
+      }
+      .sub-item .row-grow .ivu-input-wrapper,
+      .sub-item .row-grow .ivu-select,
+      .sub-item .row-grow .ivu-input-number,
+      .sub-item .row-grow .ivu-date-picker {
+        flex: 1;
+        min-width: 0;
+      }
+      .sub-item .sub-remove {
+        flex-shrink: 0;
+      }
+      .sub-item-vertical {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+      }
+      .sub-item-vertical .row-grow {
+        width: 100%;
+      }
+      .target-picker {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .target-picker .target-id {
+        flex: 1;
+        min-width: 120px;
+      }
+      .target-picker .target-act {
+        width: 100px;
+      }
+      .target-picker .target-val {
+        flex: 1;
+        min-width: 80px;
+      }
+
+      .row-target-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 4px;
+      }
+      .row-target-item {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        padding: 4px 6px;
+        background: #f9f9f9;
+        border-radius: 3px;
+        font-size: 12px;
+      }
+      .row-target-item .row-num {
+        width: 80px;
+        flex-shrink: 0;
+      }
+      .row-target-item .cols-input {
+        flex: 1;
+      }
+      .row-target-item .sub-remove {
+        flex-shrink: 0;
+      }
+
+      /* ===== 表达式辅助 ===== */
+      .expr-hint {
+        margin-top: 4px;
+        font-size: 11px;
+        color: #999;
+      }
+      .expr-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 4px;
+      }
+      .expr-chip {
+        background: #f0f5ff;
+        color: #2a5db0;
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 11px;
+        cursor: pointer;
+        font-family: Consolas, monospace;
+        border: 1px solid #d6e4ff;
+        transition: background 0.15s;
+      }
+      .expr-chip:hover {
+        background: #d6e4ff;
+      }
+      .expr-chip.tpl {
+        background: #f6ffed;
+        color: #389e0d;
+        border-color: #b7eb8f;
+      }
+      .expr-chip.tpl:hover {
+        background: #b7eb8f;
+      }
+
+      /* ===== JSON 弹窗 ===== */
+      .json-modal-textarea .ivu-input {
+        font-family: Consolas, monospace;
+        font-size: 12px;
+      }
+
+      .size-mini .ivu-btn {
+        padding: 0 8px;
+        height: 22px;
+        line-height: 20px;
+        font-size: 11px;
+      }
+
+      /* 滚动条美化 */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 0, 0, 0.3);
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <!-- ==================== 主应用模板 ==================== -->
+    <script type="text/x-template" id="app-tpl">
+      <div class="app-root" style="display:flex;flex-direction:column;height:100vh;">
+        <!-- 顶部 -->
+        <header class="app-header">
+          <div class="logo"><span class="dot"></span>动态表格配置器</div>
+          <i-input
+            v-model="config.title"
+            placeholder="表格标题（对应 title 字段）"
+            class="title-input"
+            @on-change="schedulePreview"
+          />
+          <div class="actions">
+            <i-button type="primary" @click="showTemplateModal = true">+ 添加单元格</i-button>
+            <i-button @click="listDrawerOpen = true">📋 单元格列表</i-button>
+            <i-button @click="showImportModal = true">导入 JSON</i-button>
+            <i-button type="primary" @click="openExport">导出 JSON</i-button>
+            <i-button @click="copyJSON">复制 JSON</i-button>
+            <i-button @click="loadSample">载入示例</i-button>
+            <i-button @click="confirmClear">清空</i-button>
+          </div>
+        </header>
+
+        <!-- 主体：预览占满全宽 -->
+        <main class="app-main">
+          <section class="preview-panel preview-panel--full">
+            <div class="preview-toolbar">
+              <span class="auto-tip">自动预览</span>
+              <i-switch v-model="autoPreview" size="small" @on-change="onAutoToggle" />
+              <span class="toolbar-divider"></span>
+              <span class="auto-tip">视角</span>
+              <radio-group v-model="previewMode" size="small" @on-change="schedulePreview" type="button">
+                <radio label="portal"><span>门户端</span></radio>
+                <radio label="platform"><span>管理端</span></radio>
+              </radio-group>
+              <span class="spacer"></span>
+              <span class="stat-chip">单元格 {{config.cells.length}}</span>
+              <span class="stat-chip">X {{maxX || '-'}}</span>
+              <span class="stat-chip">Y {{maxY || '-'}}</span>
+              <span class="stat-chip stat-warn" v-if="duplicateIds.length">重复 {{duplicateIds.length}}</span>
+              <span class="stat-chip stat-warn" v-if="emptyIdCount">缺ID {{emptyIdCount}}</span>
+              <i-button size="small" @click="refreshPreview">刷新预览</i-button>
+              <i-button size="small" @click="openInNewWindow">新窗口</i-button>
+              <i-button size="small" @click="exportFile">下载 JSON</i-button>
+            </div>
+            <div class="preview-frame-wrap">
+              <iframe id="previewFrame" frameborder="0"></iframe>
+              <div v-if="previewError" class="preview-error">
+                <div class="preview-error-icon">⚠</div>
+                <div class="preview-error-text">{{previewError}}</div>
+                <i-button size="small" @click="previewError = ''; refreshPreview()">重试</i-button>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <!-- 编辑抽屉：点击徽章打开 -->
+        <drawer
+          :value="editDrawerOpen"
+          @on-close="closeEditDrawer"
+          :width="520"
+          :title="editDrawerTitle"
+          :mask="true"
+          :transfer="true"
+          class-name="edit-drawer"
+        >
+          <div v-if="!editDrawerCell" style="padding:24px;color:#999;text-align:center;">
+            单元格已删除
+          </div>
+          <cell-card
+            v-else
+            :cell="editDrawerCell"
+            :index="editDrawerIndex"
+            :total="config.cells.length"
+            :all-cells="config.cells"
+            :is-duplicate="duplicateIds.indexOf(editDrawerCell.id) >= 0"
+            :expanded-set="expandedSet"
+            @toggle="onToggle"
+            @remove="onEditRemove"
+            @move-up="onEditMove(-1)"
+            @move-down="onEditMove(1)"
+            @duplicate="onEditDuplicate"
+            @change="schedulePreview"
+          ></cell-card>
+        </drawer>
+
+        <!-- 列表抽屉：管理所有单元格 -->
+        <drawer
+          v-model="listDrawerOpen"
+          :width="560"
+          title="单元格列表"
+          :transfer="true"
+          class-name="list-drawer"
+        >
+          <div class="list-drawer-toolbar">
+            <i-button size="small" type="primary" @click="addCell">+ 添加</i-button>
+            <i-button size="small" @click="toggleAll(true)">全展开</i-button>
+            <i-button size="small" @click="toggleAll(false)">全折叠</i-button>
+            <span class="spacer"></span>
+            <span style="font-size:12px;color:#888;">点击卡片标题展开/收起；点徽章上的 ⚙ 直接编辑</span>
+          </div>
+          <div class="cell-list cell-list--drawer">
+            <div v-if="!config.cells.length" class="empty-state">
+              <div class="icon">▣</div>
+              <div>暂无单元格，点击"+ 添加"或顶部"载入示例"开始</div>
+            </div>
+            <cell-card
+              v-for="(cell, i) in config.cells"
+              :key="cell.__uid"
+              :cell="cell"
+              :index="i"
+              :total="config.cells.length"
+              :all-cells="config.cells"
+              :is-duplicate="duplicateIds.indexOf(cell.id) >= 0"
+              :expanded-set="expandedSet"
+              @toggle="onToggle"
+              @remove="removeCell"
+              @move-up="moveUp"
+              @move-down="moveDown"
+              @duplicate="duplicateCell"
+              @change="schedulePreview"
+            ></cell-card>
+          </div>
+        </drawer>
+
+        <!-- 导入弹窗 -->
+        <modal
+          v-model="showImportModal"
+          title="导入 JSON"
+          width="700"
+          :mask-closable="false"
+          ok-text="导入"
+          cancel-text="取消"
+          @on-ok="doImport"
+        >
+          <i-input
+            v-model="importText"
+            type="textarea"
+            :rows="18"
+            placeholder='粘贴 JSON，格式：{"title":"...","cells":[...]}'
+            class="json-modal-textarea"
+          />
+          <div v-if="importError" style="color:#ed4014;margin-top:8px;font-size:12px;">{{importError}}</div>
+        </modal>
+
+        <!-- 导出弹窗 -->
+        <modal v-model="showExportModal" title="导出 JSON" width="700" footer-hide>
+          <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;">
+            <i-button size="small" @click="copyExport">复制</i-button>
+            <i-button size="small" @click="exportFile">下载</i-button>
+            <i-switch v-model="minifyExport" size="small" />
+            <span style="font-size:12px;color:#888;">压缩为一行</span>
+            <span style="flex:1"></span>
+            <span style="font-size:12px;color:#888;">{{exportSize}}</span>
+          </div>
+          <i-input
+            :value="exportText"
+            type="textarea"
+            :rows="22"
+            readonly
+            class="json-modal-textarea"
+          />
+        </modal>
+
+        <!-- 模板选择弹窗 -->
+        <modal
+          v-model="showTemplateModal"
+          title="选择单元格模板"
+          width="640"
+          :mask-closable="true"
+          footer-hide
+        >
+          <div class="template-grid">
+            <div
+              v-for="t in cellTemplates"
+              :key="t.key"
+              class="template-card"
+              @click="addFromTemplate(t)"
+            >
+              <div class="template-icon">{{t.icon}}</div>
+              <div class="template-name">{{t.name}}</div>
+              <div class="template-desc">{{t.desc}}</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:#888;text-align:center;">
+            创建后会自动定位到下一个空位（x:1, y:{{maxY + 1}}），可在抽屉里改坐标
+          </div>
+        </modal>
+      </div>
+    </script>
+
+    <!-- ==================== 单元格卡片模板 ==================== -->
+    <script type="text/x-template" id="cell-card-tpl">
+      <div class="cell-card" :class="{ expanded: isExpanded, 'has-error': isDuplicate || !cell.id }"
+           :data-cell-id="cell.id">
+        <div class="cell-header" @click="$emit('toggle', cell.__uid)">
+          <span class="cell-toggle">▶</span>
+          <span class="cell-id-tag" :class="{ duplicate: isDuplicate, empty: !cell.id }">
+            {{cell.id || '(未命名)'}}
+          </span>
+          <span class="cell-type-tag" :class="cell.type">{{typeLabel}}</span>
+          <span class="cell-coord">x:{{cell.x}} y:{{cell.y}}</span>
+          <span class="cell-preview" v-html="previewText"></span>
+          <span class="cell-actions" @click.stop>
+            <i-button size="small" @click="$emit('move-up', index)" :disabled="index === 0">↑</i-button>
+            <i-button size="small" @click="$emit('move-down', index)" :disabled="index === total - 1">↓</i-button>
+            <i-button size="small" @click="$emit('duplicate', index)">复制</i-button>
+            <i-button size="small" type="error" ghost @click="$emit('remove', index)">删</i-button>
+          </span>
+        </div>
+
+        <div class="cell-body" v-show="isExpanded" @change="$emit('change')" @input="$emit('change')">
+          <!-- 基础字段 -->
+          <div class="field-grid">
+            <div>
+              <label class="field-label">ID</label>
+              <i-input v-model="cell.id" size="small" placeholder="唯一标识，如 h1 / c8_benchmark" />
+            </div>
+            <div>
+              <label class="field-label">类型 type</label>
+              <i-select v-model="cell.type" size="small" @on-change="onTypeChange">
+                <i-option v-for="t in types" :value="t.v" :key="t.v">{{t.l}}</i-option>
+              </i-select>
+            </div>
+            <div>
+              <label class="field-label">&nbsp;</label>
+              <div style="font-size:11px;color:#888;padding-top:6px;">{{typeHint}}</div>
+            </div>
+            <div>
+              <label class="field-label">列坐标 x</label>
+              <i-input v-model="cell.x" size="small" placeholder="如 1 或 3,5（合并多列）" />
+            </div>
+            <div>
+              <label class="field-label">行坐标 y</label>
+              <i-input v-model="cell.y" size="small" placeholder="如 1 或 1,2（合并多行）" />
+            </div>
+            <div>
+              <label class="field-label">初始值 value</label>
+              <i-input v-model="cell.value" size="small" placeholder="可选" />
+            </div>
+            <div class="full">
+              <label class="field-label">显示内容 content（支持 HTML）</label>
+              <i-input v-model="cell.content" type="textarea" :rows="2" size="small" placeholder="label/text 显示的文本；select/radio 的提示文字" />
+            </div>
+            <div class="full" v-if="hasPlaceholder">
+              <label class="field-label">占位提示 placeholder</label>
+              <i-input v-model="cell.placeholder" size="small" placeholder="输入框/数字框的占位提示" />
+            </div>
+            <div v-if="cell.type === 'label' || cell.type === 'text'">
+              <label class="field-label">溢出隐藏 clampLines</label>
+              <input-number v-model="cell.clampLines" size="small" :min="0" :step="1" placeholder="0" style="width:100%" />
+              <div style="font-size:11px;color:#888;padding-top:2px;">0 或空 = 全部显示；N = 截断到 N 行（鼠标悬停看完整）</div>
+            </div>
+          </div>
+
+          <!-- 类型相关 -->
+          <!-- options -->
+          <div class="field-group" v-if="hasOptions">
+            <div class="field-group-title">
+              选项 options
+              <span class="badge-count">{{(cell.options || []).length}}</span>
+              <i-button class="add-btn" size="small" type="primary" ghost @click="addOption">+ 添加选项</i-button>
+            </div>
+            <div class="sub-list">
+              <div class="sub-item" v-for="(opt, i) in (cell.options || [])" :key="i">
+                <div class="row-grow">
+                  <i-input v-model="opt.label" size="small" placeholder="显示文字" />
+                  <i-input v-model="opt.value" size="small" placeholder="值 value" style="max-width:140px;" />
+                </div>
+                <i-button class="sub-remove" size="small" type="error" ghost @click="removeOption(i)">×</i-button>
+              </div>
+              <div v-if="!(cell.options && cell.options.length)" style="color:#999;font-size:12px;">尚未配置选项</div>
+            </div>
+          </div>
+
+          <!-- formula -->
+          <div class="field-group" v-if="cell.type === 'formula'">
+            <div class="field-group-title">公式 calculationFormula</div>
+            <i-input v-model="cell.calculationFormula" type="textarea" :rows="2" size="small" placeholder="如 SUM(c6,e5,f5) 或 CALC(Math.max(0, bm-bl))" />
+            <div class="expr-chips">
+              <span class="expr-chip tpl" @click="insertFormula('SUM()')">SUM()</span>
+              <span class="expr-chip tpl" @click="insertFormula('AVG()')">AVG()</span>
+              <span class="expr-chip tpl" @click="insertFormula('MIN()')">MIN()</span>
+              <span class="expr-chip tpl" @click="insertFormula('CALC_SCORE')">CALC_SCORE</span>
+              <span class="expr-chip tpl" @click="insertFormula('CALC()')">CALC()</span>
+            </div>
+            <div class="expr-hint">点击下方单元格 id 可插入到公式末尾。CALC 内可用 Math.max/Math.round/三元表达式。</div>
+            <div class="expr-chips">
+              <span v-for="c in idChips" :key="c.id" class="expr-chip" @click="insertId(c.id)" v-if="c.id !== cell.id">{{c.id}}</span>
+            </div>
+          </div>
+
+          <!-- upload -->
+          <div class="field-group" v-if="cell.type === 'upload'">
+            <div class="field-group-title">上传配置</div>
+            <div class="field-grid">
+              <div>
+                <label class="field-label">允许格式 accept</label>
+                <i-input v-model="cell.accept" size="small" placeholder=".pdf,.jpg,.png" />
+              </div>
+              <div>
+                <label class="field-label">最大体积 maxSize(MB)</label>
+                <input-number v-model="cell.maxSize" size="small" :min="0" :step="1" style="width:100%" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 校验 validation -->
+          <div class="field-group" v-if="hasValidation">
+            <div class="field-group-title">
+              校验规则 validation.rules
+              <span class="badge-count">{{(cell.validation && cell.validation.rules || []).length}}</span>
+              <i-button class="add-btn" size="small" type="primary" ghost @click="addRule">+ 添加规则</i-button>
+            </div>
+            <div class="sub-list">
+              <div class="sub-item sub-item-vertical" v-for="(r, i) in validationRules" :key="i">
+                <div class="row-grow">
+                  <i-select v-model="r.kind" size="small" style="width:140px;flex:0 0 140px;" @on-change="onRuleKindChange(r)">
+                    <i-option value="required">必填 required</i-option>
+                    <i-option value="number">数值范围 min/max</i-option>
+                    <i-option value="string">长度 min/max</i-option>
+                    <i-option value="pattern">正则 pattern</i-option>
+                    <i-option value="len">定长 len</i-option>
+                    <i-option value="array">数组长度 array</i-option>
+                    <i-option value="enum">枚举 enum</i-option>
+                    <i-option value="custom">自定义 custom 表达式</i-option>
+                    <i-option value="validator">validator 函数体</i-option>
+                    <i-option value="depends">条件必填 depends</i-option>
+                  </i-select>
+                  <i-input v-model="r.message" size="small" placeholder="错误提示文字" style="flex:1;" />
+                  <i-button class="sub-remove" size="small" type="error" ghost @click="removeRule(i)">×</i-button>
+                </div>
+                <div class="row-grow" v-if="r.kind === 'number' || r.kind === 'string' || r.kind === 'array'">
+                  <input-number v-model="r.min" size="small" placeholder="min" style="flex:1;" />
+                  <input-number v-model="r.max" size="small" placeholder="max" style="flex:1;" />
+                </div>
+                <div class="row-grow" v-if="r.kind === 'enum'">
+                  <i-input v-model="r.enumStr" size="small" placeholder='枚举值，逗号分隔，如 A,B,C' style="flex:1;" @on-change="syncEnum(r)" />
+                </div>
+                <div class="row-grow" v-if="r.kind === 'pattern'">
+                  <i-input v-model="r.pattern" size="small" placeholder='如 ^\d+$' style="flex:1;" />
+                </div>
+                <div class="row-grow" v-if="r.kind === 'len'">
+                  <input-number v-model="r.len" size="small" placeholder="长度" style="flex:1;" />
+                </div>
+                <div class="row-grow" v-if="r.kind === 'custom'">
+                  <i-input v-model="r.custom" size="small" placeholder='表达式，如 value >= bm && value <= bl' style="flex:1;" />
+                </div>
+                <div class="row-grow" v-if="r.kind === 'validator'">
+                  <i-input v-model="r.validator" type="textarea" :rows="2" size="small" placeholder='函数体，参数 (value, fm, extra)，return true 校验通过' style="flex:1;" />
+                </div>
+                <div class="row-grow" v-if="r.kind === 'depends'">
+                  <i-input v-model="r.depends" size="small" placeholder='条件表达式，如 bm_r42 != null' style="flex:1;" />
+                </div>
+                <div class="row-grow" v-if="r.kind === 'custom' || r.kind === 'validator'">
+                  <i-checkbox v-model="r.useDepends">附加条件</i-checkbox>
+                  <i-input v-show="r.useDepends" v-model="r.depends" size="small" placeholder="depends 表达式" style="flex:1;" />
+                </div>
+              </div>
+              <div v-if="!validationRules.length" style="color:#999;font-size:12px;">尚未配置校验规则</div>
+            </div>
+            <div class="expr-hint" v-if="hasCellIds">
+              可引用单元格：<span class="expr-chip" v-for="c in idChips" :key="c.id" @click="insertToRule(c.id)" v-if="c.id !== cell.id">{{c.id}}</span>
+            </div>
+          </div>
+
+          <!-- 联动 linkage -->
+          <div class="field-group" v-if="hasLinkage">
+            <div class="field-group-title">
+              联动 linkage
+              <span class="badge-count">{{(cell.linkage || []).length}}</span>
+              <i-button class="add-btn" size="small" type="primary" ghost @click="addLinkage">+ 添加触发</i-button>
+            </div>
+            <div class="sub-list">
+              <div class="sub-item sub-item-vertical" v-for="(lk, li) in (cell.linkage || [])" :key="li">
+                <div class="row-grow">
+                  <span style="font-size:12px;color:#888;flex-shrink:0;">当选择</span>
+                  <i-select v-model="lk.trigger" size="small" style="flex:1;" :placeholder="(cell.options && cell.options.length) ? '选择 trigger' : '先配置 options'">
+                    <i-option v-for="opt in (cell.options || [])" :value="opt.value" :key="opt.value">{{opt.label}} ({{opt.value}})</i-option>
+                  </i-select>
+                  <span style="font-size:12px;color:#888;flex-shrink:0;">时执行</span>
+                  <i-button class="sub-remove" size="small" type="error" ghost @click="removeLinkage(li)">×</i-button>
+                </div>
+                <div class="sub-list" style="padding-left:12px;">
+                  <div class="sub-item" v-for="(a, ai) in lk.actions" :key="ai">
+                    <div class="row-grow target-picker">
+                      <i-select v-model="a.kind" size="small" class="target-act" @on-change="onActionKindChange(a)">
+                        <i-option value="enable">启用 enable</i-option>
+                        <i-option value="disable">禁用 disable</i-option>
+                        <i-option value="show">显示 show</i-option>
+                        <i-option value="hide">隐藏 hide</i-option>
+                        <i-option value="clear">清空 clear</i-option>
+                        <i-option value="setValue">设置值 setValue</i-option>
+                        <i-option value="rowEnable">行启用 rowEnable</i-option>
+                        <i-option value="rowDisable">行禁用 rowDisable</i-option>
+                        <i-option value="rowClear">行清空 rowClear</i-option>
+                      </i-select>
+                      <i-select v-if="!a.kind || !a.kind.startsWith('row')" v-model="a.target" size="small" filterable class="target-id" placeholder="选择目标控件">
+                        <i-option v-for="c in idChips" :value="c.id" :key="c.id">{{c.id}} ({{c.type}})</i-option>
+                      </i-select>
+                      <i-input v-if="a.kind === 'setValue'" v-model="a.value" size="small" class="target-val" placeholder="要设置的值" />
+                    </div>
+                    <i-button class="sub-remove" size="small" type="error" ghost @click="removeAction(li, ai)">×</i-button>
+                  </div>
+                </div>
+                <!-- rowTargets 嵌套（当 actions 中有 row* 类型时展示） -->
+                <div v-for="(a, ai) in lk.actions" :key="'rt-'+ai" v-if="a.kind && a.kind.startsWith('row')">
+                  <div style="font-size:12px;color:#888;margin:6px 0 4px 12px;">「{{a.kind}}」行绑定 rowTargets：</div>
+                  <div class="row-target-list" style="padding-left:12px;">
+                    <div class="row-target-item" v-for="(rt, ri) in (a.rowTargets || [])" :key="ri">
+                      <input-number v-model="rt.row" size="small" :min="1" class="row-num" placeholder="行号" />
+                      <i-select v-model="rt.cols" size="small" multiple filterable class="cols-input" placeholder="选择该行被作用的控件">
+                        <i-option v-for="c in idChips" :value="c.id" :key="c.id">{{c.id}} ({{c.type}})</i-option>
+                      </i-select>
+                      <i-button class="sub-remove" size="small" type="error" ghost @click="removeRowTarget(a, ri)">×</i-button>
+                    </div>
+                  </div>
+                  <div style="padding-left:12px;margin-top:4px;">
+                    <i-button size="small" @click="addRowTarget(a)">+ 添加行</i-button>
+                  </div>
+                </div>
+                <div style="padding-left:12px;margin-top:4px;">
+                  <i-button size="small" @click="addAction(lk)">+ 添加动作</i-button>
+                </div>
+              </div>
+              <div v-if="!(cell.linkage && cell.linkage.length)" style="color:#999;font-size:12px;">尚未配置联动</div>
+            </div>
+          </div>
+
+          <!-- 状态开关（4 选 1） -->
+          <div class="field-group">
+            <div class="field-group-title">
+              状态
+              <span style="font-size:11px;color:#888;font-weight:normal;margin-left:6px;">单选：只可同时启用一种</span>
+            </div>
+            <div class="state-radio-row">
+              <radio-group :value="visibilityState" @on-change="setVisibilityState">
+                <radio label="normal"><span>正常</span></radio>
+                <radio label="disabled"><span>只读 disabled</span></radio>
+                <radio label="portalHide"><span>门户端隐藏 portalHide</span></radio>
+                <radio label="platformHide"><span>管理端隐藏 platformHide</span></radio>
+              </radio-group>
+            </div>
+            <div style="margin-top:6px;">
+              <i-checkbox :value="!!cell._hidden" @on-change="v => toggleFlag('_hidden', v)">
+                <span style="font-size:12px;color:#888;">调试用：内部隐藏 _hidden（任何模式都不显示）</span>
+              </i-checkbox>
+            </div>
+          </div>
+        </div>
+      </div>
+    </script>
+
+    <!-- ==================== Vue / iView ==================== -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"></script>
+    <script>
+      if (!window.Vue)
+        document.write(
+          '<script src="https://unpkg.com/vue@2.7.16/dist/vue.min.js"><\/script>'
+        );
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/view-design@4.7.0/dist/iview.min.js"></script>
+    <script>
+      if (!window.iview)
+        document.write(
+          '<script src="https://unpkg.com/view-design@4.7.0/dist/iview.min.js"><\/script>'
+        );
+    </script>
+    <script>
+      /* ====================================================================
+       * 预览引擎模板（基于 动态合并表格.html 抽取核心渲染逻辑）
+       * 通过 Blob URL 注入 iframe，对外暴露 window.setPreviewData(data)
+       * ==================================================================== */
+      function previewEngineHTML() {
+        return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Preview</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/view-design@4.7.0/dist/styles/iview.css" onerror="this.onerror=null;this.href='https://unpkg.com/view-design@4.7.0/dist/styles/iview.css';">
+<style>
+  * { box-sizing:border-box; font-family:'Microsoft YaHei',sans-serif; }
+  body { margin:14px; background:#fff; }
+  .table-wrapper { overflow-x:auto; background:#fff; padding:8px; }
+  h2 { text-align:center; color:#333; margin:0 0 12px; font-size:16px; }
+  table { width:100%; border-collapse:collapse; table-layout:fixed; word-break:break-word; }
+  th,td { border:1px solid #999; padding:6px 8px; text-align:center; vertical-align:middle; font-size:13px; line-height:1.5; position:relative; }
+  th { background:#d0d8e8; font-weight:bold; }
+  td { background:#fff; }
+  tr:hover td { background:#f0f5ff; }
+  .cell-group { background:#e8edf5; font-weight:bold; }
+  .alt-item { width:100%; }
+  .formula-val { font-weight:bold; color:#2a5db0; font-size:15px; }
+  td .ivu-form-item { margin-bottom:0; }
+  td .ivu-form-item-error-tip { position:relative; padding-top:2px; font-size:11px; }
+  td .ivu-input-number, td .ivu-select { width:100%; }
+  .radio-in-cell { text-align:left; padding:2px 0; }
+  .radio-in-cell .ivu-radio-group { display:flex!important; flex-direction:column; align-items:flex-start; gap:8px; }
+  .radio-in-cell .ivu-radio-wrapper { white-space:normal!important; height:auto!important; line-height:1.5!important; display:block!important; margin-right:0; }
+  .radio-in-cell .ivu-radio-wrapper > .ivu-radio { vertical-align:top; margin-top:2px; }
+  .upload-in-cell { text-align:left; padding:2px 0; }
+  .upload-link { text-decoration:underline; color:#2a5db0; cursor:pointer; }
+  .uploaded-file { display:flex; align-items:center; margin-top:4px; gap:4px; }
+  .remove-file-icon { cursor:pointer; color:#999; font-size:16px; }
+  .remove-file-icon:hover { color:#ed4014; }
+  .preview-empty { padding:60px 20px; text-align:center; color:#999; }
+  .toolbar { padding:8px 0; text-align:center; }
+  .toolbar .ivu-btn { margin:0 4px; }
+  .cell-clamp {
+    display:-webkit-box;
+    -webkit-line-clamp:5;
+    line-clamp:5;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    word-break:break-word;
+    line-height:1.5;
+    max-height:7.5em;
+  }
+  .cell-tooltip {
+    max-width:500px;
+    max-height:400px;
+    overflow-y:auto;
+    white-space:normal;
+    line-height:1.6;
+    font-size:13px;
+  }
+  .axis-col-width { width:34px; }
+  .axis-corner, .axis-col-head, .axis-row-head {
+    background:#f5f7fa !important;
+    color:#909399 !important;
+    font-size:11px !important;
+    font-weight:normal !important;
+    padding:2px 4px !important;
+    text-align:center !important;
+    border-color:#d0d7de !important;
+    user-select:none;
+  }
+  .axis-corner { background:#ebeef5 !important; }
+  .axis-row-top { position:sticky; top:0; z-index:2; }
+  .cell-id-badge {
+    position:absolute; top:1px; left:2px;
+    font-size:10px; line-height:1; padding:1px 4px;
+    color:#fff; background:#2d8cf0; border-radius:3px;
+    cursor:pointer; opacity:.55; transition:opacity .15s, background .15s;
+    user-select:none; z-index:3; font-weight:bold;
+  }
+  .cell-id-badge:hover { opacity:1; background:#19be6b; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="text/x-template" id="prev-tpl">
+<div class="table-wrapper">
+  <h2>{{config.title || '(未设置标题)'}}</h2>
+  <div v-if="!config.cells || !config.cells.length" class="preview-empty">暂无单元格，请在左侧配置</div>
+  <i-form v-else ref="mainForm" :model="fm" :rules="formRules">
+    <table>
+      <colgroup>
+        <col class="axis-col-width">
+        <col v-for="(s,i) in colWidthsFinal" :key="i" :style="s">
+      </colgroup>
+      <tr class="axis-row-top">
+        <th class="axis-corner"></th>
+        <th v-for="c in colCount" :key="'ax-c-'+c" class="axis-col-head">{{c}}</th>
+      </tr>
+      <tr v-for="(row,ri) in gridRows" :key="ri">
+        <td class="axis-row-head">{{ri+1}}</td>
+        <template v-for="(entry,ci) in row">
+          <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
+              :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
+              :class="'cell-id-' + entry.cell.id">
+            <span class="cell-id-badge" @click.stop="clickId(entry.cell.id)" title="点击打开此单元格的配置">{{entry.cell.id}}</span>
+            <tooltip placement="top" transfer :delay="200">
+              <div v-if="entry.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(entry.cell.clampLines)" v-html="entry.cell.content"></div>
+              <div v-else v-html="entry.cell.content"></div>
+              <div slot="content" class="cell-tooltip" v-html="entry.cell.content"></div>
+            </tooltip>
+          </th>
+          <td v-else-if="!entry.skip && entry.cell && !isHidden(entry.cell.id)"
+              :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
+              :class="[entry.cls, 'cell-id-' + entry.cell.id]">
+            <span class="cell-id-badge" @click.stop="clickId(entry.cell.id)" title="点击打开此单元格的配置">{{entry.cell.id}}</span>
+            <div v-for="item in getItems(entry)" :key="item.cell.id" class="alt-item">
+              <tooltip v-if="item.isText" placement="top" transfer :delay="200">
+                <div v-if="item.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(item.cell.clampLines)" v-html="item.cell.content || ''"></div>
+                <div v-else v-html="item.cell.content || ''"></div>
+                <div slot="content" class="cell-tooltip" v-html="item.cell.content || ''"></div>
+              </tooltip>
+              <span v-else-if="item.isFormula" class="formula-val">{{formulaResults[item.cell.id]}}</span>
+              <form-item v-else-if="item.isControl" :prop="formRules[item.cell.id] ? item.cell.id : ''">
+                <i-input v-if="item.cell.type==='input'" :value="fm[item.cell.id]" @input="v=>setVal(item.cell.id,v)" :placeholder="item.cell.placeholder||item.cell.content||''" :disabled="isDisabled(item.cell.id)" @on-blur="onBlur(item.cell.id)"/>
+                <input-number v-if="item.cell.type==='number'" :value="fm[item.cell.id]" @on-change="v=>setVal(item.cell.id,v)" :placeholder="item.cell.placeholder||''" :min="getNum(item.cell,'min')" :max="getNum(item.cell,'max')" :disabled="isDisabled(item.cell.id)" style="width:100%"/>
+                <i-select v-if="item.cell.type==='select'" :value="fm[item.cell.id]" @on-change="v=>{setVal(item.cell.id,v);onChange(item.cell.id)}" :placeholder="item.cell.content||'请选择'" :disabled="isDisabled(item.cell.id)" clearable>
+                  <i-option v-for="opt in (item.cell.options||[])" :value="opt.value" :key="opt.value">{{opt.label}}</i-option>
+                </i-select>
+                <div v-if="item.cell.type==='radio'" class="radio-in-cell">
+                  <radio-group :value="fm[item.cell.id]" @on-change="v=>{setVal(item.cell.id,v);onChange(item.cell.id)}" vertical>
+                    <radio v-for="opt in (item.cell.options||[])" :label="opt.value" :key="opt.value" :disabled="isDisabled(item.cell.id)"><span v-html="opt.label"></span></radio>
+                  </radio-group>
+                </div>
+                <checkbox-group v-if="item.cell.type==='checkbox'" :value="fm[item.cell.id]" @on-change="v=>{setVal(item.cell.id,v);onChange(item.cell.id)}">
+                  <checkbox v-for="opt in (item.cell.options||[])" :label="opt.value" :key="opt.value">{{opt.label}}</checkbox>
+                </checkbox-group>
+                <date-picker v-if="item.cell.type==='date'" :value="fm[item.cell.id]" @on-change="v=>{setVal(item.cell.id,v);onChange(item.cell.id)}" type="date" placeholder="选择日期" :disabled="isDisabled(item.cell.id)"/>
+                <div v-if="item.cell.type==='upload'" class="upload-in-cell">
+                  <label class="upload-link" v-if="!isDisabled(item.cell.id)">上传附件<input type="file" :accept="item.cell.accept||''" style="display:none" @change="function(e){onUploadFile(item.cell.id,e)}"/></label>
+                  <div v-for="(f,fi) in getUploadFileList(item.cell.id)" :key="fi" class="uploaded-file">
+                    <span>{{f.name}}</span>
+                    <span v-if="!isDisabled(item.cell.id)" class="remove-file-icon" @click="removeUpload(item.cell.id,fi)">&times;</span>
+                  </div>
+                </div>
+              </form-item>
+            </div>
+          </td>
+          <td v-else-if="!entry.skip" :key="ci"></td>
+        </template>
+      </tr>
+    </table>
+  </i-form>
+  <div class="toolbar">
+    <i-button type="primary" size="small" @click="handleSubmit">提交(输出到console)</i-button>
+    <i-button size="small" @click="handleReset">重置</i-button>
+  </div>
+</div>
+</` + `script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"><\/` + `script>
+<script>if(!window.Vue)document.write('<script src="https://unpkg.com/vue@2.7.16/dist/vue.min.js"><\\/script>');<\/` + `script>
+<script src="https://cdn.jsdelivr.net/npm/view-design@4.7.0/dist/iview.min.js"><\/` + `script>
+<script>if(!window.iview)document.write('<script src="https://unpkg.com/view-design@4.7.0/dist/iview.min.js"><\\/script>');<\/` + `script>
+<script>
+function parseRange(v){var p=String(v).split(',').map(Number);return{start:Math.min.apply(null,p),end:Math.max.apply(null,p),span:Math.max.apply(null,p)-Math.min.apply(null,p)+1};}
+function buildFormModel(cells){var m={};cells.forEach(function(c){if(c.type==='number')m[c.id]=c.value!=null&&c.value!==''?Number(c.value):null;else if(c.type==='checkbox')m[c.id]=Array.isArray(c.value)?c.value:[];else if(c.type==='upload')m[c.id]=Array.isArray(c.value)?c.value:[];else if(['input','select','radio','date'].indexOf(c.type)>=0)m[c.id]=c.value!=null?c.value:'';});return m;}
+function buildGrid(cells){var cellMap={};cells.forEach(function(c){cellMap[c.id]=c;});var maxC=0,maxR=0;cells.forEach(function(c){var xr=parseRange(c.x),yr=parseRange(c.y);if(xr.end>maxC)maxC=xr.end;if(yr.end>maxR)maxR=yr.end;});var G=[],O=[];for(var r=0;r<maxR;r++){G[r]=[];O[r]=[];for(var c=0;c<maxC;c++){G[r][c]=null;O[r][c]=false;}}var sorted=cells.slice().sort(function(a,b){return parseRange(b.y).span*parseRange(b.x).span-parseRange(a.y).span*parseRange(a.x).span;});sorted.forEach(function(cell){var xr=parseRange(cell.x),yr=parseRange(cell.y);var r0=yr.start-1,c0=xr.start-1;var entry={cell:cell,rowspan:yr.span,colspan:xr.span,alts:null};if(G[r0][c0]){if(!G[r0][c0].alts)G[r0][c0].alts=[];G[r0][c0].alts.push(entry);return;}G[r0][c0]=entry;for(var r=r0;r<r0+yr.span&&r<maxR;r++)for(var c=c0;c<c0+xr.span&&c<maxC;c++)if(!(r===r0&&c===c0))O[r][c]=true;});var rows=[];for(var r=0;r<maxR;r++){var cols=[];for(var c=0;c<maxC;c++){if(O[r][c]){cols.push({skip:true});continue;}var e=G[r][c];if(!e){cols.push({skip:false,cell:null});continue;}var isCtrl=['input','number','select','radio','checkbox','date','upload'].indexOf(e.cell.type)>=0;var cls=[];if(e.cell.type==='text'&&(c===0||c===2)&&/<b>/.test(e.cell.content||''))cls.push('cell-group');cols.push({skip:false,cell:e.cell,rowspan:e.rowspan,colspan:e.colspan,alts:e.alts||[],isLabel:e.cell.type==='label',isText:e.cell.type==='text',isControl:isCtrl,isFormula:e.cell.type==='formula',cls:cls.join(' ')});}rows.push(cols);}return{rows:rows,cellMap:cellMap,maxC:maxC,maxR:maxR};}
+function evalDepends(expr,fm,extra){try{var locals=Object.keys(fm).map(function(k){return'var '+k+'=fm['+JSON.stringify(k)+'];';}).join('');return new Function('fm','extra',locals+'return('+expr+')')(fm,extra||{});}catch(e){return false;}}
+function evalCustom(expr,value,fm,extra){try{var locals=Object.keys(fm).map(function(k){return'var '+k+'=fm['+JSON.stringify(k)+'];';}).join('');return new Function('value','fm','extra',locals+'return('+expr+')')(value,fm,extra||{});}catch(ex){return false;}}
+
+var app=new Vue({
+  el:'#app',template:'#prev-tpl',
+  data:function(){return{config:{title:'',cells:[]},gridRows:[],cellMap:{},fm:{},disabledState:{},hiddenState:{},extraContext:{},formulaResults:{},previewMode:'portal'};},
+  computed:{
+    formRules:function(){var R={},self=this;(this.config.cells||[]).forEach(function(c){if(c.validation&&!self.isHidden(c.id)&&!self.isDisabled(c.id))R[c.id]=self.buildRules(c);});return R;},
+    colCount:function(){return this.gridRows.length?this.gridRows[0].length:0;},
+    previewModeLabel:function(){return this.previewMode==='platform'?'管理端预览':'门户端预览';},
+    hiddenCols:function(){
+      if(!this.config.cells.length)return{};
+      var self=this;var maxC=0;
+      this.config.cells.forEach(function(c){var xr=parseRange(c.x);if(xr.end>maxC)maxC=xr.end;});
+      var R={};for(var ci=0;ci<maxC;ci++)R[ci]=true;
+      this.config.cells.forEach(function(c){if(!self.isHidden(c.id)){var xr=parseRange(c.x);for(var i=xr.start-1;i<xr.end;i++)R[i]=false;}});
+      return R;
+    },
+    hiddenColCount:function(){return Object.keys(this.hiddenCols).filter(function(k){return this.hiddenCols[k];},this).length;},
+    fixedCols:function(){
+      var RULES=[{p:/^(序号|编号|No\.?)$/i,w:4},{p:/^(一级|二级|三级)指标$/,w:6},{p:/^评分规则$/,w:6},{p:/^(分值|得分)$/,w:5}];
+      var f={};
+      this.config.cells.forEach(function(c){
+        if(!c.content)return;
+        var t=String(c.content).replace(/<[^>]+>/g,'').trim();
+        for(var i=0;i<RULES.length;i++){
+          if(RULES[i].p.test(t)){var xr=parseRange(c.x);if(xr.span===1)f[xr.start-1]=RULES[i].w;break;}
+        }
+      });
+      return f;
+    },
+    colWidthsFinal:function(){
+      var self=this;var total=this.colCount;if(!total)return[];
+      var fixedTotal=0,fixedCount=0;
+      Object.keys(this.fixedCols).forEach(function(k){if(!self.hiddenCols[k]){fixedTotal+=self.fixedCols[k];fixedCount++;}});
+      var visibleCount=total-this.hiddenColCount;
+      var remainCols=visibleCount-fixedCount;
+      var cw=[];
+      for(var i=0;i<total;i++){
+        if(this.hiddenCols[i]){cw.push({width:'0',visibility:'collapse'});}
+        else if(this.fixedCols[i]!=null){cw.push({width:this.fixedCols[i]+'%'});}
+        else if(remainCols>0){cw.push({width:((100-fixedTotal)/remainCols)+'%'});}
+        else{cw.push({width:(100/total)+'%'});}
+      }
+      return cw;
+    }
+  },
+  },
+  methods:{
+    buildRules:function(cell){
+      var self=this;var v=cell.validation;if(!v)return[];
+      var isNum=cell.type==='number';
+      var isCheckbox=cell.type==='checkbox';
+      var isUpload=cell.type==='upload';
+      var isArrayType=isCheckbox||isUpload;
+      var trigger=isNum||cell.type==='select'||cell.type==='radio'||isUpload?'change':'blur';
+      if(!v.rules||!v.rules.length)return [];
+      return v.rules.map(function(r){
+        var rule={};
+        for(var k in r)rule[k]=r[k];
+        if(!rule.trigger)rule.trigger=trigger;
+        // 同步 enumStr → enum（来自配置页字符串编辑）
+        if(rule.enumStr!=null&&!rule.enum){
+          rule.enum=String(rule.enumStr).split(',').map(function(s){return s.trim();}).filter(Boolean);
+        }
+        delete rule.enumStr;delete rule.kind;delete rule.useDepends;
+        if(isNum&&rule.required&&!rule.validator&&!rule.depends&&!rule.custom)rule.type=rule.type||'number';
+        if(isArrayType&&rule.required&&!rule.type)rule.type='array';
+        if(typeof rule.required==='string'){rule.depends=rule.required;rule.required=true;}
+        // upload type:array + min：自动构建数组长度校验（对齐线上）
+        if(isUpload&&rule.type==='array'&&rule.min!=null&&!rule.depends&&!rule.validator&&!rule.custom){
+          var minVal=rule.min,msg=rule.message||('至少添加'+minVal+'条数据');
+          rule.validator=(function(min,m){
+            return function(r,value,callback){
+              var ok=false;
+              if(Array.isArray(value))ok=value.length>=min;
+              else if(typeof value==='string'){
+                var t=value.trim();
+                if(!t)ok=false;
+                else{try{var p=JSON.parse(t);if(Array.isArray(p))ok=p.length>=min;else if(p&&typeof p==='object')ok=!!p.path;else ok=false;}catch(e){ok=!!t;}}}
+              else if(value!=null)ok=!!String(value).trim();
+              if(ok)callback();else callback(new Error(m));
+            };
+          })(minVal,msg);
+          delete rule.type;delete rule.min;
+          return rule;
+        }
+        if(rule.depends||rule.custom||rule.validator){
+          var depExpr=rule.depends||null;
+          var customExpr=rule.custom||null;
+          var validatorFn=rule.validator||null;
+          var orig={required:rule.required,type:rule.type,min:rule.min,max:rule.max,pattern:rule.pattern,len:rule.len,enum:rule.enum,message:rule.message||'校验未通过'};
+          rule.validator=(function(dep,custom,vfn,o){
+            var compiledFn=null;
+            if(vfn){try{compiledFn=new Function('value','fm','extra',vfn);}catch(ex){compiledFn=null;}}
+            return function(r,value,callback){
+              if(dep&&!evalDepends(dep,self.fm,self.extraContext)){callback();return;}
+              if(compiledFn){try{var result=compiledFn(value,self.fm,self.extraContext);if(!result){callback(new Error(o.message));return;}}catch(ex){callback(new Error(o.message));return;}}
+              if(custom){if(!evalCustom(custom,value,self.fm,self.extraContext)){callback(new Error(o.message));return;}}
+              if(o.required){var empty=value==null||value===''||(Array.isArray(value)&&value.length===0);if(empty){callback(new Error(o.message));return;}}
+              if(o.type==='number'&&value!=null&&value!==''){var n=Number(value);if(isNaN(n)){callback(new Error(o.message));return;}if(o.min!=null&&n<o.min){callback(new Error(o.message));return;}if(o.max!=null&&n>o.max){callback(new Error(o.message));return;}}
+              if(o.pattern){var re=typeof o.pattern==='string'?new RegExp(o.pattern):o.pattern;if(!re.test(String(value))){callback(new Error(o.message));return;}}
+              if(o.len!=null&&String(value).length!==o.len){callback(new Error(o.message));return;}
+              if(o.enum&&Array.isArray(o.enum)&&o.enum.length){if(o.enum.indexOf(value)===-1){callback(new Error(o.message));return;}}
+              callback();
+            };
+          })(depExpr,customExpr,validatorFn,orig);
+          delete rule.required;delete rule.type;delete rule.min;delete rule.max;delete rule.pattern;delete rule.len;delete rule.enum;delete rule.message;delete rule.depends;delete rule.custom;
+        }
+        return rule;
+      });
+    },
+    setVal:function(id,val){var cell=this.cellMap[id];if(cell&&cell.type==='number'){val=val===''||val===undefined||val===null?null:Number(val);}this.\$set(this.fm,id,val);var self=this;this.\$nextTick(function(){var fi=self.\$refs.mainForm.fields.find(function(f){return f.prop===id;});if(fi)fi.validateState='';});},
+    getItems:function(e){var _self=this;var list=[{cell:e.cell,isText:e.isText,isControl:e.isControl,isFormula:e.isFormula}];(e.alts||[]).forEach(function(a){list.push({cell:a.cell,isText:a.cell.type==='text',isControl:['input','number','select','radio','checkbox','date','upload'].indexOf(a.cell.type)>=0,isFormula:a.cell.type==='formula'});});return list;},
+    isHidden:function(id){return!!this.hiddenState[id];},
+    applyVisibility:function(){var ds={},hs={},mode=this.previewMode;this.config.cells.forEach(function(c){if(c.disabled)ds[c.id]=true;});this.config.cells.forEach(function(c){if(c._hidden)hs[c.id]=true;if(mode==='portal'&&c.portalHide)hs[c.id]=true;if(mode==='platform'&&c.platformHide)hs[c.id]=true;});this.disabledState=ds;this.hiddenState=hs;},
+    isDisabled:function(id){return!!this.disabledState[id];},
+    getNum:function(c,k){var v=c.validation;if(!v)return undefined;var r;if(v.rules)v.rules.forEach(function(x){if(x[k]!=null)r=x[k];});if(r==null&&v[k]!=null)r=v[k];return r;},
+    onChange:function(id){this.handleLinkage(id);this.recalc();this.validateField(id);},
+    onBlur:function(id){this.validateField(id);},
+    validateField:function(id){var self=this;this.\$nextTick(function(){if(self.\$refs.mainForm)self.\$refs.mainForm.validateField(id);});},
+    handleLinkage:function(id){var cell=this.cellMap[id];if(!cell||!cell.linkage)return;var val=String(this.fm[id]);var self=this;cell.linkage.forEach(function(rule){if(String(rule.trigger)===val)rule.actions.forEach(function(a){self.applyAction(a);});});},
+    applyAction:function(a){var self=this,t=a.target;if(t){if(a.type==='show')this.\$set(this.hiddenState,t,false);else if(a.type==='hide')this.\$set(this.hiddenState,t,true);else if(a.type==='enable')this.\$set(this.disabledState,t,false);else if(a.type==='disable')this.\$set(this.disabledState,t,true);else if(a.type==='clear')this.doClear(t);else if(a.type==='setValue')this.\$set(this.fm,t,a.value||'');return;}var targets=a.rowTargets;if(!targets)return;targets.forEach(function(rt){rt.cols.forEach(function(cid){if(a.type==='rowEnable')self.\$set(self.disabledState,cid,false);else if(a.type==='rowDisable')self.\$set(self.disabledState,cid,true);else if(a.type==='rowClear')self.doClear(cid);});});},
+    doClear:function(id){if(!this.fm.hasOwnProperty(id))return;var tc=this.cellMap[id];var empty=tc&&tc.type==='checkbox'?'[]':(tc&&tc.type==='number'?null:'');if(tc&&tc.type==='checkbox')empty=[];this.\$set(this.fm,id,empty);},
+    recalc:function(){var self=this;(this.config.cells||[]).forEach(function(c){if(c.type!=='formula'||!c.calculationFormula)return;self.\$set(self.formulaResults,c.id,self.evalF(c.calculationFormula));});},
+    evalF:function(f){var self=this,m;m=f.match(/^SUM\\((.+)\\)\$/i);if(m){var s=0;m[1].split(',').map(function(x){return x.trim();}).forEach(function(id){var c=self.cellMap[id];if(c){var v=c.type==='text'?parseFloat(c.content):parseFloat(self.fm[id]);if(!isNaN(v))s+=v;}});return s;}m=f.match(/^AVG\\((.+)\\)\$/i);if(m){var s2=0,n=0;m[1].split(',').map(function(x){return x.trim();}).forEach(function(id){var v=parseFloat(self.fm[id]);if(!isNaN(v)){s2+=v;n++;}});return n?+(s2/n).toFixed(2):0;}m=f.match(/^MIN\\((.+)\\)\$/i);if(m){var vals=[];m[1].split(',').map(function(x){return x.trim();}).forEach(function(id){var v=parseFloat(self.fm[id]);if(!isNaN(v))vals.push(v);});return vals.length?Math.min.apply(null,vals):0;}if(f==='CALC_SCORE'){var t=0;self.config.cells.forEach(function(c){if(c.type==='number'&&self.fm[c.id]!=null){var v=parseFloat(self.fm[c.id]);if(!isNaN(v))t+=v;}});return t?t.toFixed(2):'';}m=f.match(/^CALC\\((.+)\\)\$/i);if(m){var expr=m[1];Object.keys(self.cellMap).forEach(function(id){var v=parseFloat(self.fm[id]);if(!isNaN(v))expr=expr.replace(new RegExp('\\\\b'+id+'\\\\b','g'),v);});try{return new Function('Math','"use strict"; return ('+expr+')')(Math);}catch(x){return'ERR';}}try{var e=f;Object.keys(self.cellMap).forEach(function(id){var v=parseFloat(self.fm[id]);if(!isNaN(v))e=e.replace(new RegExp('\\\\b'+id+'\\\\b','g'),v);});if(/^[\\d\\s+\\-*/().]+\$/.test(e))return new Function('"use strict"; return ('+e+')')();}catch(x){}return f;},
+    onUploadFile:function(id,e){var file=e.target.files&&e.target.files[0];if(!file)return;var cell=this.cellMap[id];if(cell&&cell.accept){var ext='.'+file.name.split('.').pop().toLowerCase();var allowed=cell.accept.toLowerCase().split(',').map(function(s){return s.trim();});if(allowed.indexOf(ext)<0){e.target.value='';return;}}var list=this.fm[id]||[];list.push({name:file.name,size:file.size,type:file.type});this.\$set(this.fm,id,list);e.target.value='';this.onChange(id);},
+    getUploadFileList:function(id){var v=this.fm[id];return Array.isArray(v)?v:[];},
+    removeUpload:function(id,index){var list=this.fm[id]||[];list.splice(index,1);this.\$set(this.fm,id,list);this.onChange(id);},
+    handleSubmit:function(){var self=this;this.\$refs.mainForm.validate(function(valid){if(valid){var result={title:self.config.title,cells:[]};self.config.cells.forEach(function(c){if(['label','text','formula'].indexOf(c.type)>=0)return;if(self.isHidden(c.id)||self.isDisabled(c.id))return;result.cells.push({id:c.id,type:c.type,value:self.fm[c.id]});});console.log('预览提交数据:',JSON.stringify(result,null,2));window.parent&&window.parent.postMessage({type:'preview-submit',data:result},'*');}else{window.parent&&window.parent.postMessage({type:'preview-validate-fail'},'*');}});},
+    handleReset:function(){var self=this;this.config.cells.forEach(function(c){if(c.type==='number')self.\$set(self.fm,c.id,c.value!=null&&c.value!==''?Number(c.value):null);else if(c.type==='checkbox')self.\$set(self.fm,c.id,[]);else if(c.type==='upload')self.\$set(self.fm,c.id,[]);else if(['input','select','radio','date'].indexOf(c.type)>=0)self.\$set(self.fm,c.id,c.value!=null?c.value:'');});this.disabledState={};this.hiddenState={};this.config.cells.forEach(function(c){if(c.disabled)self.\$set(self.disabledState,c.id,true);if(c._hidden)self.\$set(self.hiddenState,c.id,true);if(c.portalHide)self.\$set(self.hiddenState,c.id,true);});this.recalc();},
+    clickId:function(id){if(window.parent&&window.parent!==window){window.parent.postMessage({type:'preview-click-id',id:id||''},'*');}},
+    clampStyle:function(lines){var n=Number(lines);if(!n||n<=0)return{};return{'-webkit-line-clamp':String(n),'line-clamp':String(n),'max-height':(n*1.5)+'em'};},
+  }
+});
+
+window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[]};var grid=buildGrid(app.config.cells);app.gridRows=grid.rows;app.cellMap=grid.cellMap;app.fm=buildFormModel(app.config.cells);app.applyVisibility();app.formulaResults={};app.\$nextTick(function(){app.recalc();if(app.\$refs.mainForm)app.\$refs.mainForm.resetFields();});}catch(e){console.error('setPreviewData error',e);}};
+window.setPreviewMode=function(mode){app.previewMode=mode||'portal';app.applyVisibility();};
+
+window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-preview'){window.setPreviewData(e.data.data);}});
+<\/` + `script>
+</body>
+</html>`;
+      }
+
+      /* ====================================================================
+       * 主配置应用
+       * ==================================================================== */
+      var TYPE_LIST = [
+        { v: 'label', l: 'label 表头/标签' },
+        { v: 'text', l: 'text 静态文本' },
+        { v: 'input', l: 'input 文本输入' },
+        { v: 'number', l: 'number 数字输入' },
+        { v: 'select', l: 'select 下拉' },
+        { v: 'radio', l: 'radio 单选' },
+        { v: 'checkbox', l: 'checkbox 多选' },
+        { v: 'date', l: 'date 日期' },
+        { v: 'upload', l: 'upload 上传' },
+        { v: 'formula', l: 'formula 公式' }
+      ];
+      var TYPE_HINTS = {
+        label: '表头或左侧行标题',
+        text: '静态展示文本，可含 <b>...</b>',
+        input: '单行文本输入',
+        number: '数值输入，自动转 Number',
+        select: '下拉单选',
+        radio: '单选，竖排展示',
+        checkbox: '多选，值为数组',
+        date: '日期选择',
+        upload: '文件上传，值为数组',
+        formula: '由其它字段计算得出'
+      };
+      var TYPE_LABELS = {
+        label: 'label', text: 'text', input: 'input', number: 'number',
+        select: 'select', radio: 'radio', checkbox: 'checkbox',
+        date: 'date', upload: 'upload', formula: 'formula'
+      };
+      var STORAGE_KEY = 'dynamic-table-config-v1';
+
+      // 模板预设（小白友好）
+      var CELL_TEMPLATES = [
+        { key: 'label',   icon: '🏷️', name: '标题 / 标签',  desc: '表头或行首的纯文字', build: function (id, x, y) { return { id: id, type: 'label', x: x, y: y, content: '新标题' }; } },
+        { key: 'text',    icon: '📝', name: '静态文本',     desc: '展示文字（可含 <b>加粗</b>）', build: function (id, x, y) { return { id: id, type: 'text', x: x, y: y, content: '说明文字' }; } },
+        { key: 'input',   icon: '✏️', name: '文本输入',     desc: '单行输入框', build: function (id, x, y) { return { id: id, type: 'input', x: x, y: y, content: '', placeholder: '请输入', validation: { rules: [ { kind: 'required', required: false, message: '此项为必填' } ] } }; } },
+        { key: 'number',  icon: '🔢', name: '数字输入',     desc: '数值，可设最小/最大值', build: function (id, x, y) { return { id: id, type: 'number', x: x, y: y, content: '', placeholder: '请输入数字', validation: { rules: [ { kind: 'number', type: 'number', min: 0, max: 100, message: '请输入 0-100 之间的数字' } ] } }; } },
+        { key: 'select',  icon: '📋', name: '下拉选择',     desc: '单选下拉框', build: function (id, x, y) { return { id: id, type: 'select', x: x, y: y, content: '请选择', options: [ { value: '1', label: '选项一' }, { value: '2', label: '选项二' } ] }; } },
+        { key: 'radio',   icon: '🔘', name: '单选题',       desc: '竖排单选', build: function (id, x, y) { return { id: id, type: 'radio', x: x, y: y, content: '', options: [ { value: '1', label: '选项一' }, { value: '2', label: '选项二' }, { value: '3', label: '选项三' } ] }; } },
+        { key: 'checkbox',icon: '☑️', name: '多选题',       desc: '多选，值为数组', build: function (id, x, y) { return { id: id, type: 'checkbox', x: x, y: y, content: '', options: [ { value: 'a', label: '选项 A' }, { value: 'b', label: '选项 B' } ] }; } },
+        { key: 'date',    icon: '📅', name: '日期',         desc: '日期选择器', build: function (id, x, y) { return { id: id, type: 'date', x: x, y: y, content: '' }; } },
+        { key: 'upload',  icon: '📎', name: '文件上传',     desc: '附件上传，值为数组', build: function (id, x, y) { return { id: id, type: 'upload', x: x, y: y, content: '', accept: '.pdf,.doc,.docx,.jpg,.png' }; } },
+        { key: 'formula', icon: 'Σ',  name: '公式 / 求和',  desc: 'SUM/AVG/MIN/CALC 等', build: function (id, x, y) { return { id: id, type: 'formula', x: x, y: y, content: '合计', calculationFormula: 'SUM()' }; } }
+      ];
+
+      var uidSeed = 0;
+      function newUid() { return 'c' + (++uidSeed) + '_' + Date.now().toString(36); }
+
+      // 生成默认 cell
+      function makeCell(partial) {
+        var cell = Object.assign(
+          {
+            __uid: newUid(),
+            id: '',
+            x: '1',
+            y: '1',
+            type: 'text',
+            content: ''
+          },
+          partial || {}
+        );
+        return cell;
+      }
+
+      // 载入示例（精简版结构示意）
+      function makeSample() {
+        return {
+          title: '示例：能源指标评分表',
+          cells: [
+            makeCell({ id: 'h1', x: '1', y: '1', type: 'label', content: '指标' }),
+            makeCell({ id: 'h2', x: '2', y: '1', type: 'label', content: '分值' }),
+            makeCell({ id: 'h3', x: '3', y: '1', type: 'label', content: '标杆值' }),
+            makeCell({ id: 'h4', x: '4', y: '1', type: 'label', content: '基准值' }),
+            makeCell({ id: 'h5', x: '5', y: '1', type: 'label', content: '指标值' }),
+            makeCell({ id: 'h6', x: '6', y: '1', type: 'label', content: '得分' }),
+            makeCell({ id: 'g1', x: '1', y: '2,3', type: 'text', content: '<b>能源低碳化</b>' }),
+            makeCell({
+              id: 'c1_type', x: '2', y: '2,3', type: 'select', content: '是否有适用国家强制性标准',
+              options: [
+                { label: '有适用标准', value: 'has' },
+                { label: '无适用标准', value: 'no' }
+              ],
+              validation: { rules: [{ required: true, message: '请选择' }] },
+              linkage: [
+                {
+                  trigger: 'has',
+                  actions: [
+                    { target: 'c1_bm', type: 'enable', kind: 'enable' },
+                    { target: 'c1_bl', type: 'enable', kind: 'enable' },
+                    { target: 'c1_indval', type: 'enable', kind: 'enable' }
+                  ]
+                },
+                {
+                  trigger: 'no',
+                  actions: [
+                    { target: 'c1_bm', type: 'disable', kind: 'disable' },
+                    { target: 'c1_bm', type: 'clear', kind: 'clear' },
+                    { target: 'c1_bl', type: 'disable', kind: 'disable' },
+                    { target: 'c1_bl', type: 'clear', kind: 'clear' },
+                    { target: 'c1_indval', type: 'disable', kind: 'disable' },
+                    { target: 'c1_indval', type: 'clear', kind: 'clear' }
+                  ]
+                }
+              ]
+            }),
+            makeCell({
+              id: 'c1_bm', x: '3', y: '2,3', type: 'number', placeholder: '标杆值',
+              validation: { rules: [{ required: true, message: '请输入标杆值' }, { type: 'number', min: 0, message: '不能为负' }] }
+            }),
+            makeCell({
+              id: 'c1_bl', x: '4', y: '2,3', type: 'number', placeholder: '基准值',
+              validation: { rules: [{ required: true, message: '请输入基准值' }, { type: 'number', min: 0, message: '不能为负' }] }
+            }),
+            makeCell({
+              id: 'c1_indval', x: '5', y: '2,3', type: 'number', placeholder: '指标值',
+              validation: { rules: [{ required: true, message: '请输入指标值' }, { type: 'number', min: 0, message: '不能为负' }] }
+            }),
+            makeCell({
+              id: 'c1_score', x: '6', y: '2,3', type: 'formula',
+              calculationFormula: 'CALC_SCORE'
+            })
+          ]
+        };
+      }
+
+      // cell-card 组件
+      Vue.component('cell-card', {
+        template: '#cell-card-tpl',
+        props: {
+          cell: Object,
+          index: Number,
+          total: Number,
+          allCells: Array,
+          isDuplicate: Boolean,
+          expandedSet: Object
+        },
+        data: function () {
+          return { types: TYPE_LIST };
+        },
+        computed: {
+          isExpanded: function () {
+            return !!this.expandedSet[this.cell.__uid];
+          },
+          visibilityState: function () {
+            if (this.cell.disabled) return 'disabled';
+            if (this.cell.portalHide) return 'portalHide';
+            if (this.cell.platformHide) return 'platformHide';
+            return 'normal';
+          },
+          typeLabel: function () {
+            return TYPE_LABELS[this.cell.type] || this.cell.type;
+          },
+          typeHint: function () {
+            return TYPE_HINTS[this.cell.type] || '';
+          },
+          previewText: function () {
+            var c = this.cell.content || '';
+            return c.replace(/<[^>]+>/g, '').slice(0, 60);
+          },
+          hasPlaceholder: function () {
+            return ['input', 'number'].indexOf(this.cell.type) >= 0;
+          },
+          hasOptions: function () {
+            return ['select', 'radio', 'checkbox'].indexOf(this.cell.type) >= 0;
+          },
+          hasValidation: function () {
+            return ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(this.cell.type) >= 0;
+          },
+          hasLinkage: function () {
+            return ['select', 'radio'].indexOf(this.cell.type) >= 0;
+          },
+          hasCellIds: function () {
+            return (this.idChips || []).length > 1;
+          },
+          idChips: function () {
+            return (this.allCells || [])
+              .filter(function (c) { return c.id; })
+              .map(function (c) { return { id: c.id, type: c.type }; });
+          },
+          validationRules: function () {
+            if (!this.cell.validation) this.$set(this.cell, 'validation', { rules: [] });
+            if (!this.cell.validation.rules) this.$set(this.cell.validation, 'rules', []);
+            return this.cell.validation.rules;
+          }
+        },
+        methods: {
+          onTypeChange: function () {
+            // 类型切换时保证必要字段
+            if (this.hasOptions && !this.cell.options) {
+              this.$set(this.cell, 'options', []);
+            }
+            if (this.cell.type === 'formula' && !this.cell.calculationFormula) {
+              this.$set(this.cell, 'calculationFormula', '');
+            }
+            this.$emit('change');
+          },
+          addOption: function () {
+            if (!this.cell.options) this.$set(this.cell, 'options', []);
+            this.cell.options.push({ label: '', value: '' });
+            this.$emit('change');
+          },
+          removeOption: function (i) {
+            this.cell.options.splice(i, 1);
+            this.$emit('change');
+          },
+          addRule: function () {
+            if (!this.cell.validation) this.$set(this.cell, 'validation', { rules: [] });
+            if (!this.cell.validation.rules) this.$set(this.cell.validation, 'rules', []);
+            this.cell.validation.rules.push({ kind: 'required', required: true, message: '' });
+            this.$emit('change');
+          },
+          removeRule: function (i) {
+            this.cell.validation.rules.splice(i, 1);
+            this.$emit('change');
+          },
+          onRuleKindChange: function (r) {
+            // 用对象替换避免 Vue 2 新字段非响应式问题
+            var rules = this.cell.validation.rules;
+            var idx = rules.indexOf(r);
+            if (idx < 0) return;
+            var nr = { kind: r.kind, message: r.message || '', useDepends: false };
+            if (r.kind === 'required') nr.required = true;
+            else if (r.kind === 'number') { nr.type = 'number'; nr.min = r.min != null ? r.min : null; nr.max = r.max != null ? r.max : null; }
+            else if (r.kind === 'string') { nr.type = 'string'; nr.min = r.min != null ? r.min : null; nr.max = r.max != null ? r.max : null; }
+            else if (r.kind === 'array') { nr.type = 'array'; nr.min = r.min != null ? r.min : null; nr.max = r.max != null ? r.max : null; }
+            else if (r.kind === 'pattern') nr.pattern = r.pattern || '';
+            else if (r.kind === 'len') nr.len = r.len != null ? r.len : null;
+            else if (r.kind === 'enum') { nr.enum = r.enum || []; nr.enumStr = (r.enum || []).join(','); }
+            else if (r.kind === 'custom') { nr.custom = r.custom || ''; nr.depends = ''; }
+            else if (r.kind === 'validator') { nr.validator = r.validator || ''; nr.depends = ''; }
+            else if (r.kind === 'depends') { nr.required = true; nr.depends = r.depends || ''; }
+            this.$set(rules, idx, nr);
+            this.$emit('change');
+          },
+          syncEnum: function (r) {
+            var arr = String(r.enumStr == null ? '' : r.enumStr)
+              .split(',').map(function (s) { return s.trim(); })
+              .filter(Boolean);
+            this.$set(r, 'enum', arr);
+            this.$emit('change');
+          },
+          insertToRule: function (id) {
+            // 把 id 插到当前 cell 第一个有 custom/validator/depends 的规则里
+            var rules = this.validationRules;
+            for (var i = rules.length - 1; i >= 0; i--) {
+              var r = rules[i];
+              if (r.kind === 'custom' && r.custom !== undefined) { r.custom = (r.custom || '') + ' ' + id; this.$emit('change'); return; }
+              if (r.kind === 'validator' && r.validator !== undefined) { r.validator = (r.validator || '') + ' ' + id; this.$emit('change'); return; }
+              if (r.kind === 'depends' && r.depends !== undefined) { r.depends = (r.depends || '') + ' ' + id; this.$emit('change'); return; }
+            }
+          },
+          insertFormula: function (tpl) {
+            this.$set(this.cell, 'calculationFormula', (this.cell.calculationFormula || '') + tpl);
+            this.$emit('change');
+          },
+          insertId: function (id) {
+            this.$set(this.cell, 'calculationFormula', (this.cell.calculationFormula || '') + id);
+            this.$emit('change');
+          },
+          addLinkage: function () {
+            if (!this.cell.linkage) this.$set(this.cell, 'linkage', []);
+            this.cell.linkage.push({ trigger: '', actions: [] });
+            this.$emit('change');
+          },
+          removeLinkage: function (i) {
+            this.cell.linkage.splice(i, 1);
+            this.$emit('change');
+          },
+          addAction: function (lk) {
+            lk.actions.push({ kind: 'enable', target: '', type: 'enable' });
+            this.$emit('change');
+          },
+          removeAction: function (li, ai) {
+            this.cell.linkage[li].actions.splice(ai, 1);
+            this.$emit('change');
+          },
+          onActionKindChange: function (a) {
+            // 用对象替换避免新字段非响应式
+            var lk = null, ai = -1;
+            for (var i = 0; i < this.cell.linkage.length; i++) {
+              var j = this.cell.linkage[i].actions.indexOf(a);
+              if (j >= 0) { lk = this.cell.linkage[i]; ai = j; break; }
+            }
+            if (!lk) return;
+            var na = { kind: a.kind, type: a.kind, target: a.target || '' };
+            if (a.kind === 'setValue') na.value = a.value != null ? a.value : '';
+            if (a.kind && a.kind.indexOf('row') === 0) {
+              na.rowTargets = (a.rowTargets || []).map(function (rt) {
+                return { row: rt.row || 1, cols: Array.isArray(rt.cols) ? rt.cols : [] };
+              });
+            }
+            this.$set(lk.actions, ai, na);
+            this.$emit('change');
+          },
+          addRowTarget: function (a) {
+            if (!a.rowTargets) this.$set(a, 'rowTargets', []);
+            a.rowTargets.push({ row: 1, cols: [] });
+            this.$emit('change');
+          },
+          removeRowTarget: function (a, ri) {
+            a.rowTargets.splice(ri, 1);
+            this.$emit('change');
+          },
+          toggleFlag: function (key, val) {
+            this.$set(this.cell, key, val);
+            this.$emit('change');
+          },
+          setVisibilityState: function (state) {
+            this.$set(this.cell, 'disabled', state === 'disabled');
+            this.$set(this.cell, 'portalHide', state === 'portalHide');
+            this.$set(this.cell, 'platformHide', state === 'platformHide');
+            this.$emit('change');
+          }
+        }
+      });
+
+      // 主应用
+      new Vue({
+        el: '#app',
+        template: '#app-tpl',
+        data: function () {
+          var init = this._loadInit();
+          return {
+            config: init.config,
+            expandedSet: {},
+            autoPreview: true,
+            showImportModal: false,
+            importText: '',
+            importError: '',
+            showExportModal: false,
+            minifyExport: false,
+            previewTimer: null,
+            previewReady: false,
+            pendingPreviewData: null,
+            previewError: '',
+            editDrawerUid: null,
+            listDrawerOpen: false,
+            previewMode: 'portal',
+            showTemplateModal: false,
+            cellTemplates: CELL_TEMPLATES
+          };
+        },
+        computed: {
+          maxX: function () {
+            var m = 0;
+            this.config.cells.forEach(function (c) {
+              var parts = String(c.x || '').split(',');
+              parts.forEach(function (p) { var n = parseInt(p, 10); if (!isNaN(n) && n > m) m = n; });
+            });
+            return m;
+          },
+          maxY: function () {
+            var m = 0;
+            this.config.cells.forEach(function (c) {
+              var parts = String(c.y || '').split(',');
+              parts.forEach(function (p) { var n = parseInt(p, 10); if (!isNaN(n) && n > m) m = n; });
+            });
+            return m;
+          },
+          duplicateIds: function () {
+            var seen = {}, dup = {};
+            this.config.cells.forEach(function (c) {
+              if (!c.id) return;
+              if (seen[c.id]) dup[c.id] = true;
+              seen[c.id] = true;
+            });
+            return Object.keys(dup);
+          },
+          emptyIdCount: function () {
+            return this.config.cells.filter(function (c) { return !c.id; }).length;
+          },
+          exportText: function () {
+            return this.serializeJSON(!this.minifyExport);
+          },
+          exportSize: function () {
+            var bytes = new Blob([this.exportText]).size;
+            return bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB';
+          },
+          editDrawerCell: function () {
+            if (!this.editDrawerUid) return null;
+            for (var i = 0; i < this.config.cells.length; i++) {
+              if (this.config.cells[i].__uid === this.editDrawerUid) return this.config.cells[i];
+            }
+            return null;
+          },
+          editDrawerIndex: function () {
+            if (!this.editDrawerUid) return -1;
+            for (var i = 0; i < this.config.cells.length; i++) {
+              if (this.config.cells[i].__uid === this.editDrawerUid) return i;
+            }
+            return -1;
+          },
+          editDrawerOpen: function () {
+            return !!this.editDrawerCell;
+          },
+          editDrawerTitle: function () {
+            var c = this.editDrawerCell;
+            if (!c) return '编辑单元格';
+            return '编辑单元格 · ' + (c.id || '(未命名)') + ' · ' + (TYPE_LABELS[c.type] || c.type);
+          }
+        },
+        mounted: function () {
+          this._initPreview();
+          this._watchStorage();
+        },
+        methods: {
+          _loadInit: function () {
+            // 优先 localStorage
+            try {
+              var saved = localStorage.getItem(STORAGE_KEY);
+              if (saved) {
+                var parsed = JSON.parse(saved);
+                if (parsed && parsed.cells) {
+                  parsed.cells.forEach(function (c) { c.__uid = newUid(); });
+                  return { config: parsed };
+                }
+              }
+            } catch (e) {}
+            var s = makeSample();
+            return { config: s };
+          },
+          _watchStorage: function () {
+            var self = this;
+            this.$watch(
+              function () { return JSON.stringify(self._stripInternal()); },
+              function () {
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(self._stripInternal())); } catch (e) {}
+                self.schedulePreview();
+              }
+            );
+          },
+          _stripInternal: function () {
+            return {
+              title: this.config.title,
+              cells: this.config.cells.map(function (c) {
+                var out = {};
+                for (var k in c) {
+                  if (k === '__uid') continue;
+                  out[k] = c[k];
+                }
+                if (out.validation && Array.isArray(out.validation.rules)) {
+                  out.validation = { rules: out.validation.rules.map(function (r) {
+                    var nr = {};
+                    for (var k in r) {
+                      if (k === 'kind' || k === 'enumStr' || k === 'useDepends') continue;
+                      nr[k] = r[k];
+                    }
+                    return nr;
+                  }) };
+                }
+                return out;
+              })
+            };
+          },
+          _initPreview: function () {
+            var self = this;
+            var iframe = document.getElementById('previewFrame');
+            var html = previewEngineHTML();
+            // 优先用 srcdoc：origin 继承父页面，file:// 也能正常访问 contentWindow
+            var loaded = false;
+            function onLoad() {
+              if (loaded) return;
+              loaded = true;
+              console.log('[配置页] preview iframe load 事件触发');
+              self._pushPreview(self._stripInternal());
+            }
+            try {
+              if ('srcdoc' in iframe) {
+                iframe.setAttribute('srcdoc', html);
+              } else {
+                // 退化方案：Blob URL（某些场景会被视为跨源）
+                var blob = new Blob([html], { type: 'text/html' });
+                iframe.src = URL.createObjectURL(blob);
+              }
+            } catch (e) {
+              console.error('[配置页] 注入预览失败:', e);
+              self.previewError = '预览引擎注入失败: ' + e.message;
+            }
+            iframe.addEventListener('load', onLoad);
+            // 兜底诊断：6s 后还没就绪，给出提示
+            setTimeout(function () {
+              if (self.previewError) return;
+              try {
+                var win = iframe.contentWindow;
+                if (!win) {
+                  self.previewError = '无法访问预览 iframe（跨源限制）。请用静态服务器（node server.js）打开本页面。';
+                } else if (!win.setPreviewData) {
+                  self.previewError = '预览引擎 6 秒内未就绪。可能 CDN (Vue/iView) 加载失败，请检查网络后刷新。';
+                } else {
+                  console.log('[配置页] 预览引擎已就绪');
+                }
+              } catch (e) {
+                self.previewError = '预览跨源访问被浏览器拦截，请用 http 服务器打开本页面（双击打开在 file:// 协议下可能受限）。';
+              }
+            }, 6000);
+            // 监听预览端提交 & 点击 id
+            window.addEventListener('message', function (e) {
+              if (!e.data) return;
+              if (e.data.type === 'preview-submit') {
+                self.$Message.success('预览提交成功，数据已输出到 console');
+              } else if (e.data.type === 'preview-validate-fail') {
+                self.$Message.error('预览校验未通过');
+              } else if (e.data.type === 'preview-click-id') {
+                self.focusCellById(e.data.id);
+              }
+            });
+          },
+          _pushPreview: function (data) {
+            var iframe = document.getElementById('previewFrame');
+            if (!iframe) return;
+            try {
+              var win = iframe.contentWindow;
+              if (!win) {
+                console.warn('[配置页] iframe.contentWindow 不可访问');
+                return;
+              }
+              if (win.setPreviewData) {
+                win.setPreviewData(data);
+                if (win.setPreviewMode) win.setPreviewMode(this.previewMode);
+                this.previewError = '';
+                return;
+              }
+              // 重试等待 setPreviewData 就绪
+              var self = this;
+              var tries = 0;
+              var timer = setInterval(function () {
+                tries++;
+                try {
+                  if (win.setPreviewData) {
+                    clearInterval(timer);
+                    win.setPreviewData(data);
+                    if (win.setPreviewMode) win.setPreviewMode(self.previewMode);
+                    self.previewError = '';
+                    console.log('[配置页] setPreviewData 重试成功 (tries=' + tries + ')');
+                  } else if (tries > 50) {
+                    clearInterval(timer);
+                    console.warn('[配置页] setPreviewData 5s 内未就绪');
+                  }
+                } catch (e) {
+                  clearInterval(timer);
+                  self.previewError = '预览推送异常: ' + e.message + '。建议用 http 服务器打开。';
+                }
+              }, 100);
+            } catch (e) {
+              this.previewError = '预览跨源访问被浏览器拦截：' + e.message + '。请用 http 服务器打开本页面。';
+              console.warn('[配置页] push preview failed:', e);
+            }
+          },
+          schedulePreview: function () {
+            var self = this;
+            if (!this.autoPreview) return;
+            if (this.previewTimer) clearTimeout(this.previewTimer);
+            this.previewTimer = setTimeout(function () {
+              self._pushPreview(self._stripInternal());
+            }, 400);
+          },
+          onAutoToggle: function (val) {
+            if (val) this.refreshPreview();
+          },
+          refreshPreview: function () {
+            this._pushPreview(this._stripInternal());
+          },
+          openInNewWindow: function () {
+            var data = this._stripInternal();
+            var html = previewEngineHTML().replace(
+              'window.addEventListener',
+              'window.addEventListener'
+            );
+            // 注入自动初始化：在 setPreviewData 定义后立即调用
+            html = html.replace(
+              "window.addEventListener('message'",
+              "setTimeout(function(){try{window.setPreviewData(" + JSON.stringify(data) + ");window.setPreviewMode(" + JSON.stringify(this.previewMode) + ");}catch(e){console.error(e);}},300); window.addEventListener('message'"
+            );
+            var blob = new Blob([html], { type: 'text/html' });
+            var url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+          },
+          addCell: function () {
+            var c = makeCell({ id: 'cell_' + (this.config.cells.length + 1), x: '1', y: String(this.maxY + 1 || 2), type: 'text', content: '' });
+            this.config.cells.push(c);
+            this.$set(this.expandedSet, c.__uid, true);
+            this.schedulePreview();
+          },
+          removeCell: function (i) {
+            this.config.cells.splice(i, 1);
+            this.schedulePreview();
+          },
+          moveUp: function (i) {
+            if (i === 0) return;
+            var arr = this.config.cells;
+            var tmp = arr[i - 1];
+            arr.splice(i - 1, 1, arr[i]);
+            arr.splice(i, 1, tmp);
+            this.schedulePreview();
+          },
+          moveDown: function (i) {
+            if (i === this.config.cells.length - 1) return;
+            var arr = this.config.cells;
+            var tmp = arr[i + 1];
+            arr.splice(i + 1, 1, arr[i]);
+            arr.splice(i, 1, tmp);
+            this.schedulePreview();
+          },
+          duplicateCell: function (i) {
+            var src = this.config.cells[i];
+            var copy = JSON.parse(JSON.stringify(src));
+            copy.__uid = newUid();
+            copy.id = (src.id || 'cell') + '_copy';
+            this.config.cells.splice(i + 1, 0, copy);
+            this.$set(this.expandedSet, copy.__uid, true);
+            this.schedulePreview();
+          },
+          onToggle: function (uid) {
+            this.$set(this.expandedSet, uid, !this.expandedSet[uid]);
+          },
+          focusCellById: function (id) {
+            if (!id) return;
+            var idx = -1;
+            for (var i = 0; i < this.config.cells.length; i++) {
+              if (this.config.cells[i].id === id) { idx = i; break; }
+            }
+            if (idx < 0) {
+              this.$Message.info('未找到 id = ' + id + ' 的单元格');
+              return;
+            }
+            this.openEditDrawer(this.config.cells[idx].__uid);
+          },
+          openEditDrawer: function (uid) {
+            this.editDrawerUid = uid;
+            this.$set(this.expandedSet, uid, true);
+          },
+          closeEditDrawer: function () {
+            this.editDrawerUid = null;
+          },
+          addCellAndEdit: function () {
+            this.showTemplateModal = true;
+          },
+          addFromTemplate: function (tpl) {
+            var id = tpl.key + '_' + (this.config.cells.length + 1);
+            var x = '1';
+            var y = String((this.maxY || 1) + 1);
+            var partial = tpl.build(id, x, y);
+            var c = makeCell(partial);
+            this.config.cells.push(c);
+            this.showTemplateModal = false;
+            this.schedulePreview();
+            this.openEditDrawer(c.__uid);
+          },
+          onEditRemove: function () {
+            var i = this.editDrawerIndex;
+            if (i < 0) return;
+            this.editDrawerUid = null;
+            this.config.cells.splice(i, 1);
+            this.schedulePreview();
+          },
+          onEditMove: function (delta) {
+            var i = this.editDrawerIndex;
+            if (i < 0) return;
+            var j = i + delta;
+            if (j < 0 || j >= this.config.cells.length) return;
+            var arr = this.config.cells;
+            var tmp = arr[j];
+            arr.splice(j, 1, arr[i]);
+            arr.splice(i, 1, tmp);
+            this.schedulePreview();
+          },
+          onEditDuplicate: function () {
+            var i = this.editDrawerIndex;
+            if (i < 0) return;
+            var src = this.config.cells[i];
+            var copy = JSON.parse(JSON.stringify(src));
+            copy.__uid = newUid();
+            copy.id = (src.id || 'cell') + '_copy';
+            this.config.cells.splice(i + 1, 0, copy);
+            this.openEditDrawer(copy.__uid);
+            this.schedulePreview();
+          },
+          toggleAll: function (expand) {
+            var self = this;
+            this.config.cells.forEach(function (c) {
+              self.$set(self.expandedSet, c.__uid, expand);
+            });
+          },
+          loadSample: function () {
+            var s = makeSample();
+            this.config = s;
+            this.expandedSet = {};
+            this.schedulePreview();
+            this.$Message.success('已载入示例');
+          },
+          confirmClear: function () {
+            var self = this;
+            this.$Modal.confirm({
+              title: '确认清空',
+              content: '将清空所有单元格配置，确定继续？',
+              onOk: function () {
+                self.config = { title: self.config.title, cells: [] };
+                self.expandedSet = {};
+                self.schedulePreview();
+              }
+            });
+          },
+          serializeJSON: function (pretty) {
+            var data = this._stripInternal();
+            // 清理空字段，避免导出垃圾
+            var cleaned = {
+              title: data.title || '',
+              cells: data.cells.map(function (c) {
+                var out = { id: c.id, x: String(c.x), y: String(c.y), type: c.type };
+                if (c.content) out.content = c.content;
+                if (c.value !== undefined && c.value !== '' && c.value !== null) out.value = c.value;
+                if (c.placeholder) out.placeholder = c.placeholder;
+                if (c.options && c.options.length) out.options = c.options.filter(function (o) { return o.label || o.value; });
+                if (c.calculationFormula) out.calculationFormula = c.calculationFormula;
+                if (c.accept) out.accept = c.accept;
+                if (c.maxSize != null) out.maxSize = c.maxSize;
+                if (c.disabled) out.disabled = true;
+                if (c._hidden) out._hidden = true;
+                if (c.portalHide) out.portalHide = true;
+                if (c.platformHide) out.platformHide = true;
+                if (c.clampLines != null && c.clampLines > 0) out.clampLines = Number(c.clampLines);
+                // validation：把 rule 上的 kind 字段去掉，按 kind 写入正式字段
+                if (c.validation && c.validation.rules && c.validation.rules.length) {
+                  out.validation = { rules: c.validation.rules.map(serializeRule).filter(function (r) { return Object.keys(r).length > 0; }) };
+                }
+                if (c.linkage && c.linkage.length) {
+                  out.linkage = c.linkage.filter(function (lk) { return lk.trigger && lk.actions && lk.actions.length; }).map(function (lk) {
+                    return {
+                      trigger: lk.trigger,
+                      actions: lk.actions.filter(function (a) { return a.kind; }).map(serializeAction)
+                    };
+                  });
+                }
+                return out;
+              })
+            };
+            return JSON.stringify(cleaned, null, pretty ? 2 : 0);
+          },
+          openExport: function () {
+            this.showExportModal = true;
+          },
+          copyExport: function () {
+            var self = this;
+            this._copyText(this.exportText).then(function () {
+              self.$Message.success('已复制到剪贴板');
+            });
+          },
+          copyJSON: function () {
+            var self = this;
+            this._copyText(this.serializeJSON(true)).then(function () {
+              self.$Message.success('已复制完整 JSON');
+            });
+          },
+          exportFile: function () {
+            var text = this.serializeJSON(!this.minifyExport);
+            var title = (this.config.title || 'table').replace(/[\\/:*?"<>|]/g, '_');
+            var blob = new Blob([text], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = title + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          },
+          doImport: function () {
+            this.importError = '';
+            var text = this.importText.trim();
+            if (!text) {
+              this.importError = '请粘贴 JSON 内容';
+              return;
+            }
+            try {
+              var data = JSON.parse(text);
+              if (!data || typeof data !== 'object' || !Array.isArray(data.cells)) {
+                this.importError = 'JSON 必须包含 cells 数组';
+                return;
+              }
+              // 规范化：补 __uid、规范化 validation/linkage 的 kind 字段
+              data.cells.forEach(function (c) {
+                c.__uid = newUid();
+                if (c.validation && c.validation.rules) {
+                  c.validation.rules.forEach(inferRuleKind);
+                }
+                if (c.linkage) {
+                  c.linkage.forEach(function (lk) {
+                    (lk.actions || []).forEach(inferActionKind);
+                  });
+                }
+              });
+              this.config = { title: data.title || '', cells: data.cells };
+              this.expandedSet = {};
+              this.showImportModal = false;
+              this.importText = '';
+              this.schedulePreview();
+              this.$Message.success('已导入 ' + data.cells.length + ' 个单元格');
+            } catch (e) {
+              this.importError = 'JSON 解析失败：' + e.message;
+            }
+          },
+          _copyText: function (text) {
+            return new Promise(function (resolve, reject) {
+              try {
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(text).then(resolve, function () {
+                    fallbackCopy(text); resolve();
+                  });
+                } else {
+                  fallbackCopy(text); resolve();
+                }
+              } catch (e) {
+                fallbackCopy(text); resolve();
+              }
+            });
+          }
+        }
+      });
+
+      // ---------- 序列化辅助 ----------
+      function serializeRule(r) {
+        var out = {};
+        var k = r.kind || 'required';
+        if (r.message) out.message = r.message;
+        if (k === 'required') {
+          out.required = true;
+        } else if (k === 'number') {
+          out.type = 'number';
+          if (r.min != null && r.min !== '') out.min = Number(r.min);
+          if (r.max != null && r.max !== '') out.max = Number(r.max);
+        } else if (k === 'string') {
+          out.type = 'string';
+          if (r.min != null && r.min !== '') out.min = Number(r.min);
+          if (r.max != null && r.max !== '') out.max = Number(r.max);
+        } else if (k === 'array') {
+          out.type = 'array';
+          if (r.min != null && r.min !== '') out.min = Number(r.min);
+          if (r.max != null && r.max !== '') out.max = Number(r.max);
+        } else if (k === 'pattern') {
+          if (r.pattern) out.pattern = r.pattern;
+        } else if (k === 'len') {
+          if (r.len != null && r.len !== '') out.len = Number(r.len);
+        } else if (k === 'enum') {
+          var arr = Array.isArray(r.enum) ? r.enum.slice()
+            : String(r.enumStr == null ? '' : r.enumStr).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+          if (arr.length) out.enum = arr;
+        } else if (k === 'custom') {
+          if (r.custom) out.custom = r.custom;
+          if (r.useDepends && r.depends) out.depends = r.depends;
+        } else if (k === 'validator') {
+          if (r.validator) out.validator = r.validator;
+          if (r.useDepends && r.depends) out.depends = r.depends;
+        } else if (k === 'depends') {
+          out.required = true;
+          if (r.depends) out.depends = r.depends;
+        }
+        return out;
+      }
+
+      function serializeAction(a) {
+        var out = { type: a.kind };
+        if (a.kind === 'setValue') {
+          out.target = a.target;
+          out.value = a.value != null ? a.value : '';
+        } else if (a.kind.indexOf('row') === 0) {
+          out.rowTargets = (a.rowTargets || []).filter(function (rt) { return rt.row && rt.cols && rt.cols.length; });
+        } else {
+          out.target = a.target;
+        }
+        return out;
+      }
+
+      function inferRuleKind(r) {
+        if (r.validator) r.kind = 'validator';
+        else if (r.custom) r.kind = 'custom';
+        else if (r.depends && r.required) r.kind = 'depends';
+        else if (r.depends) r.kind = 'custom', r.custom = '';
+        else if (r.enum) { r.kind = 'enum'; r.enumStr = (Array.isArray(r.enum) ? r.enum : []).join(','); }
+        else if (r.pattern) r.kind = 'pattern';
+        else if (r.len != null) r.kind = 'len';
+        else if (r.type === 'array') r.kind = 'array';
+        else if (r.type === 'string') r.kind = 'string';
+        else if (r.type === 'number' && (r.min != null || r.max != null)) r.kind = 'number';
+        else r.kind = 'required';
+        if (r.depends && (r.kind === 'custom' || r.kind === 'validator')) r.useDepends = true;
+      }
+
+      function inferActionKind(a) {
+        a.kind = a.type;
+        if (a.target) {} // 单目标已存在
+        if (a.type && a.type.indexOf('row') === 0) {
+          if (!a.rowTargets) a.rowTargets = [];
+          a.rowTargets.forEach(function (rt) {
+            if (!Array.isArray(rt.cols)) rt.cols = [];
+            if (rt.row == null) rt.row = 1;
+          });
+        }
+      }
+
+      function fallbackCopy(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    </script>
+  </body>
+</html>
