@@ -204,7 +204,31 @@
       .edit-drawer .cell-card { margin-bottom: 0; }
       .edit-drawer .cell-card .cell-toggle { display: none; }
       .edit-drawer .cell-card .cell-header { cursor: default; background: #f5f7fa; }
-      .edit-drawer .ivu-drawer-body { padding: 12px; background: #fafafa; }
+      .edit-drawer .ivu-drawer-body { padding: 12px; background: #fafafa; display: flex; flex-direction: column; }
+      .edit-drawer-footer {
+        position: sticky; bottom: 0;
+        margin: 12px -12px -12px;
+        padding: 10px 12px;
+        background: #fff;
+        border-top: 1px solid #e8eaec;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px;
+      }
+      .edit-save-status {
+        font-size: 12px; color: #888;
+        display: inline-flex; align-items: center; gap: 6px;
+      }
+      .edit-save-status .dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #c5c8ce;
+      }
+      .edit-save-status.synced { color: #19be6b; }
+      .edit-save-status.synced .dot { background: #19be6b; }
+      .edit-save-status.dirty:not(.synced) { color: #ff9900; }
+      .edit-save-status.dirty:not(.synced) .dot { background: #ff9900; }
+      .edit-drawer-actions { display: flex; align-items: center; gap: 12px; }
+      .revert-link { font-size: 12px; color: #ed4014; }
+      .revert-link.disabled { color: #c5c8ce; cursor: not-allowed; text-decoration: none; }
       .cell-header {
         display: flex;
         align-items: center;
@@ -542,6 +566,16 @@
         font-size: 12px;
       }
 
+      /* ===== 使用说明弹窗 ===== */
+      .help-content { font-size: 13px; line-height: 1.7; color: #333; max-height: 70vh; overflow-y: auto; padding-right: 8px; }
+      .help-content h3 { margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e8eaec; color: #19be6b; font-size: 14px; }
+      .help-content h3:first-child { margin-top: 0; }
+      .help-content p { margin: 4px 0; }
+      .help-content ul, .help-content ol { margin: 4px 0 4px 20px; padding: 0; }
+      .help-content li { margin: 2px 0; }
+      .help-content code { background: #f5f7fa; padding: 1px 5px; border-radius: 3px; font-family: Consolas, monospace; font-size: 12px; color: #c5302b; }
+      .help-content b { color: #2a5db0; }
+
       .size-mini .ivu-btn {
         padding: 0 8px;
         height: 22px;
@@ -584,6 +618,7 @@
           <div class="actions">
             <i-button type="primary" @click="showTemplateModal = true">+ 添加单元格</i-button>
             <i-button @click="listDrawerOpen = true">📋 单元格列表</i-button>
+            <i-button @click="showHelpModal = true">📖 使用说明</i-button>
             <i-button @click="showImportModal = true">导入 JSON</i-button>
             <i-button type="primary" @click="openExport">导出 JSON</i-button>
             <i-button @click="copyJSON">复制 JSON</i-button>
@@ -644,24 +679,47 @@
           <div v-if="!editDrawerCell" style="padding:24px;color:#999;text-align:center;">
             单元格已删除
           </div>
-          <cell-card
-            v-else
-            :cell="editDrawerCell"
-            :index="editDrawerIndex"
-            :total="config.cells.length"
-            :all-cells="config.cells"
-            :is-duplicate="duplicateIds.indexOf(editDrawerCell.id) >= 0"
-            :expanded-set="expandedSet"
-            @toggle="onToggle"
-            @remove="onEditRemove"
-            @move-up="onEditMove(-1)"
-            @move-down="onEditMove(1)"
-            @duplicate="onEditDuplicate"
-            @change="schedulePreview"
-          ></cell-card>
+          <template v-else>
+            <cell-card
+              :cell="editDrawerCell"
+              :index="editDrawerIndex"
+              :total="config.cells.length"
+              :all-cells="config.cells"
+              :is-duplicate="duplicateIds.indexOf(editDrawerCell.id) >= 0"
+              :expanded-set="expandedSet"
+              @toggle="onToggle"
+              @remove="onEditRemove"
+              @move-up="onEditMove(-1)"
+              @move-down="onEditMove(1)"
+              @duplicate="onEditDuplicate"
+              @change="schedulePreview"
+            ></cell-card>
+            <div class="edit-drawer-footer">
+              <div class="edit-save-status" :class="{ dirty: editDrawerDirty, synced: editDrawerDirty && autoPreview }">
+                <template v-if="!editDrawerDirty">
+                  <span class="dot"></span> 未修改
+                </template>
+                <template v-else-if="autoPreview">
+                  <span class="dot"></span> 已同步到预览 · {{editDrawerSavedText}}
+                </template>
+                <template v-else>
+                  <span class="dot"></span> 已修改，自动预览未开启
+                </template>
+              </div>
+              <div class="edit-drawer-actions">
+                <a
+                  href="javascript:void(0)"
+                  class="revert-link"
+                  :class="{ disabled: !editDrawerDirty }"
+                  @click="editDrawerDirty && revertEditDrawer()"
+                >放弃修改</a>
+                <i-button type="primary" size="small" @click="commitEditDrawer">确定</i-button>
+              </div>
+            </div>
+          </template>
         </drawer>
 
-        <!-- 列表抽屉：管理所有单元格 -->
+        <!-- 列表抽屉：管理所有单元格（关闭时不渲染，避免大量 cell-card 常驻） -->
         <drawer
           v-model="listDrawerOpen"
           :width="560"
@@ -669,35 +727,37 @@
           :transfer="true"
           class-name="list-drawer"
         >
-          <div class="list-drawer-toolbar">
-            <i-button size="small" type="primary" @click="addCell">+ 添加</i-button>
-            <i-button size="small" @click="toggleAll(true)">全展开</i-button>
-            <i-button size="small" @click="toggleAll(false)">全折叠</i-button>
-            <span class="spacer"></span>
-            <span style="font-size:12px;color:#888;">点击卡片标题展开/收起；点徽章上的 ⚙ 直接编辑</span>
-          </div>
-          <div class="cell-list cell-list--drawer">
-            <div v-if="!config.cells.length" class="empty-state">
-              <div class="icon">▣</div>
-              <div>暂无单元格，点击"+ 添加"或顶部"载入示例"开始</div>
+          <template v-if="listDrawerOpen">
+            <div class="list-drawer-toolbar">
+              <i-button size="small" type="primary" @click="addCell">+ 添加</i-button>
+              <i-button size="small" @click="toggleAll(true)">全展开</i-button>
+              <i-button size="small" @click="toggleAll(false)">全折叠</i-button>
+              <span class="spacer"></span>
+              <span style="font-size:12px;color:#888;">点击卡片标题展开/收起；点徽章上的 ⚙ 直接编辑</span>
             </div>
-            <cell-card
-              v-for="(cell, i) in config.cells"
-              :key="cell.__uid"
-              :cell="cell"
-              :index="i"
-              :total="config.cells.length"
-              :all-cells="config.cells"
-              :is-duplicate="duplicateIds.indexOf(cell.id) >= 0"
-              :expanded-set="expandedSet"
-              @toggle="onToggle"
-              @remove="removeCell"
-              @move-up="moveUp"
-              @move-down="moveDown"
-              @duplicate="duplicateCell"
-              @change="schedulePreview"
-            ></cell-card>
-          </div>
+            <div class="cell-list cell-list--drawer">
+              <div v-if="!config.cells.length" class="empty-state">
+                <div class="icon">▣</div>
+                <div>暂无单元格，点击"+ 添加"或顶部"载入示例"开始</div>
+              </div>
+              <cell-card
+                v-for="(cell, i) in config.cells"
+                :key="cell.__uid"
+                :cell="cell"
+                :index="i"
+                :total="config.cells.length"
+                :all-cells="config.cells"
+                :is-duplicate="duplicateIds.indexOf(cell.id) >= 0"
+                :expanded-set="expandedSet"
+                @toggle="onToggle"
+                @remove="removeCell"
+                @move-up="moveUp"
+                @move-down="moveDown"
+                @duplicate="duplicateCell"
+                @change="schedulePreview"
+              ></cell-card>
+            </div>
+          </template>
         </drawer>
 
         <!-- 导入弹窗 -->
@@ -718,6 +778,77 @@
             class="json-modal-textarea"
           />
           <div v-if="importError" style="color:#ed4014;margin-top:8px;font-size:12px;">{{importError}}</div>
+        </modal>
+
+        <!-- 使用说明弹窗 -->
+        <modal v-model="showHelpModal" title="使用说明" width="720" footer-hide class="help-modal">
+          <div class="help-content">
+            <h3>① 坐标系统</h3>
+            <p>每个单元格用 <code>x</code>（列）和 <code>y</code>（行）定位，从 1 开始。</p>
+            <ul>
+              <li>单个位置：<code>x: "1"</code>、<code>y: "3"</code></li>
+              <li>合并多列：<code>x: "1,3"</code> 表示列 1-3 合并</li>
+              <li>合并多行：<code>y: "3,5"</code> 表示行 3-5 合并</li>
+              <li>跨行跨列：<code>x: "1,3" y: "3,5"</code> = 9 格合并</li>
+            </ul>
+
+            <h3>② 单元格类型（9 种）</h3>
+            <ul>
+              <li><b>label</b>：表头/标题（粗体背景）</li>
+              <li><b>text</b>：静态文字（可含 <code>&lt;b&gt;</code> 加粗）</li>
+              <li><b>input / number</b>：单行文本 / 数字输入</li>
+              <li><b>select / radio / checkbox</b>：下拉 / 单选 / 多选（需配 <code>options</code>）</li>
+              <li><b>date / upload</b>：日期 / 附件上传</li>
+              <li><b>formula</b>：公式计算（只读展示）</li>
+            </ul>
+
+            <h3>③ 校验规则（validation.rules）</h3>
+            <p>每条规则独立，可叠加。常用字段：</p>
+            <ul>
+              <li><code>required: true</code> + <code>message</code>：必填</li>
+              <li><code>type: "number"</code> + <code>min</code>/<code>max</code>：数值范围</li>
+              <li><code>type: "array"</code> + <code>min</code>：checkbox/upload 至少 N 项</li>
+              <li><code>pattern: "^\d+$"</code>：正则匹配</li>
+              <li><code>enumStr: "A,B,C"</code>：枚举值（逗号分隔，自动转 enum）</li>
+              <li><code>custom: "value >= bm && value <= bl"</code>：表达式校验</li>
+              <li><code>depends: "bm_r42 != null"</code>：依赖条件（条件不满足跳过校验）</li>
+              <li><code>validator: "return value !== ''"</code>：函数体（参数 value/fm/extra）</li>
+            </ul>
+
+            <h3>④ 联动（linkage）</h3>
+            <p>当某个 cell 的值变化时触发动作。结构：<code>trigger</code>（触发值）→ <code>actions</code>（动作列表）</p>
+            <ul>
+              <li>单格动作：<code>show/hide/enable/disable/clear/setValue</code> + <code>target</code></li>
+              <li>行级动作：<code>rowEnable/rowDisable/rowClear</code> + <code>rowTargets</code>（一次操作多列）</li>
+            </ul>
+
+            <h3>⑤ 公式（formula.calculationFormula）</h3>
+            <ul>
+              <li><code>SUM(c6, e5, f5)</code>：求和（text 类型取 content 数字）</li>
+              <li><code>AVG(c6, e5)</code>：平均（保留 2 位小数）</li>
+              <li><code>MIN(c6, e5)</code>：最小值</li>
+              <li><code>CALC_SCORE</code>：所有 number cell 求和</li>
+              <li><code>CALC(Math.max(0, bm - bl))</code>：表达式（cell id 直接引用）</li>
+            </ul>
+
+            <h3>⑥ 隐藏 / 禁用</h3>
+            <ul>
+              <li><code>portalHide: true</code>：企业端隐藏</li>
+              <li><code>platformHide: true</code>：管理端隐藏</li>
+              <li><code>_hidden: true</code>：双端都隐藏（调试用）</li>
+              <li><code>disabled: true</code>：只读（控件禁用）</li>
+              <li>整列无可见 cell 时自动 collapse；整行无可见 cell 时整行不渲染</li>
+            </ul>
+
+            <h3>⑦ 推荐工作流</h3>
+            <ol>
+              <li>载入示例或从模板添加几个 cell</li>
+              <li>右侧预览表格，点徽章可快速定位编辑</li>
+              <li>切换企业端/管理端预览，验证隐藏效果</li>
+              <li>填值 → 提交，控制台查看输出 JSON</li>
+              <li>导出 JSON 给后端</li>
+            </ol>
+          </div>
         </modal>
 
         <!-- 导出弹窗 -->
@@ -1125,7 +1256,7 @@
 <div class="table-wrapper">
   <h2>{{config.title || '(未设置标题)'}}</h2>
   <div v-if="!config.cells || !config.cells.length" class="preview-empty">暂无单元格，请在左侧配置</div>
-  <i-form v-else ref="mainForm" :model="fm" :rules="formRules">
+  <i-form v-else ref="mainForm" :model="fm" :rules="formRules" :validate-on-rule-change="false">
     <table>
       <colgroup>
         <col class="axis-col-width">
@@ -1154,9 +1285,9 @@
             <span class="cell-id-badge" @click.stop="clickId(entry.cell.id)" title="点击打开此单元格的配置">{{entry.cell.id}}</span>
             <div v-for="item in getItems(entry)" :key="item.cell.id" class="alt-item">
               <tooltip v-if="item.isText" placement="top" transfer :delay="200">
-                <div v-if="item.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(item.cell.clampLines)" v-html="item.cell.content || ''"></div>
-                <div v-else v-html="item.cell.content || ''"></div>
-                <div slot="content" class="cell-tooltip" v-html="item.cell.content || ''"></div>
+                <div v-if="item.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(item.cell.clampLines)" v-html="item.cell.content || ''" v-once></div>
+                <div v-else v-html="item.cell.content || ''" v-once></div>
+                <div slot="content" class="cell-tooltip" v-html="item.cell.content || ''" v-once></div>
               </tooltip>
               <span v-else-if="item.isFormula" class="formula-val">{{formulaResults[item.cell.id]}}</span>
               <form-item v-else-if="item.isControl" :prop="formRules[item.cell.id] ? item.cell.id : ''">
@@ -1208,7 +1339,7 @@ function evalCustom(expr,value,fm,extra){try{var locals=Object.keys(fm).map(func
 
 var app=new Vue({
   el:'#app',template:'#prev-tpl',
-  data:function(){return{config:{title:'',cells:[]},gridRows:[],cellMap:{},fm:{},disabledState:{},hiddenState:{},extraContext:{},formulaResults:{},previewMode:'portal'};},
+  data:function(){return{config:{title:'',cells:[]},gridRows:[],cellMap:{},fm:{},disabledState:{},hiddenState:{},extraContext:{},formulaResults:{},previewMode:'portal',fieldMap:{}};},
   computed:{
     formRules:function(){var R={},self=this;(this.config.cells||[]).forEach(function(c){if(c.validation&&!self.isHidden(c.id)&&!self.isDisabled(c.id))R[c.id]=self.buildRules(c);});return R;},
     colCount:function(){return this.gridRows.length?this.gridRows[0].length:0;},
@@ -1314,7 +1445,7 @@ var app=new Vue({
         return rule;
       });
     },
-    setVal:function(id,val){var cell=this.cellMap[id];if(cell&&cell.type==='number'){val=val===''||val===undefined||val===null?null:Number(val);}this.\$set(this.fm,id,val);var self=this;this.\$nextTick(function(){var fi=self.\$refs.mainForm.fields.find(function(f){return f.prop===id;});if(fi)fi.validateState='';});},
+    setVal:function(id,val){var cell=this.cellMap[id];if(cell&&cell.type==='number'){val=val===''||val===undefined||val===null?null:Number(val);}this.\$set(this.fm,id,val);var fi=this.fieldMap&&this.fieldMap[id];if(fi)fi.validateState='';},
     getItems:function(e){var _self=this;var list=[{cell:e.cell,isText:e.isText,isControl:e.isControl,isFormula:e.isFormula}];(e.alts||[]).forEach(function(a){list.push({cell:a.cell,isText:a.cell.type==='text',isControl:['input','number','select','radio','checkbox','date','upload'].indexOf(a.cell.type)>=0,isFormula:a.cell.type==='formula'});});return list;},
     isHidden:function(id){return!!this.hiddenState[id];},
     isRowVisible:function(ri){var targetY=ri+1;for(var i=0;i<this.config.cells.length;i++){var c=this.config.cells[i];if(this.isHidden(c.id))continue;var yr=parseRange(c.y);if(yr.start<=targetY&&yr.end>=targetY)return true;}return false;},
@@ -1339,7 +1470,7 @@ var app=new Vue({
   }
 });
 
-window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[]};var grid=buildGrid(app.config.cells);app.gridRows=grid.rows;app.cellMap=grid.cellMap;app.fm=buildFormModel(app.config.cells);app.applyVisibility();app.formulaResults={};app.\$nextTick(function(){app.recalc();if(app.\$refs.mainForm)app.\$refs.mainForm.resetFields();});}catch(e){console.error('setPreviewData error',e);}};
+window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[]};var grid=buildGrid(app.config.cells);app.gridRows=grid.rows;app.cellMap=grid.cellMap;app.fm=buildFormModel(app.config.cells);app.applyVisibility();app.formulaResults={};app.\$nextTick(function(){app.recalc();if(app.\$refs.mainForm){app.\$refs.mainForm.resetFields();app.fieldMap={};(app.\$refs.mainForm.fields||[]).forEach(function(f){if(f.prop)app.fieldMap[f.prop]=f;});}});}catch(e){console.error('setPreviewData error',e);}};
 window.setPreviewMode=function(mode){app.previewMode=mode||'portal';app.applyVisibility();};
 
 window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-preview'){window.setPreviewData(e.data.data);}});
@@ -1670,13 +1801,23 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             pendingPreviewData: null,
             previewError: '',
             editDrawerUid: null,
+            editDrawerSnapshot: null,
+            editDrawerLastSaved: null,
+            editDrawerDirty: false,
             listDrawerOpen: false,
             previewMode: 'portal',
             showTemplateModal: false,
+            showHelpModal: false,
             cellTemplates: CELL_TEMPLATES
           };
         },
         computed: {
+          editDrawerSavedText: function () {
+            if (!this.editDrawerLastSaved) return '';
+            var d = this.editDrawerLastSaved;
+            function p(n) { return n < 10 ? '0' + n : '' + n; }
+            return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+          },
           maxX: function () {
             var m = 0;
             this.config.cells.forEach(function (c) {
@@ -1884,6 +2025,10 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           },
           schedulePreview: function () {
             var self = this;
+            if (this.editDrawerOpen) {
+              this.editDrawerDirty = true;
+              this.editDrawerLastSaved = new Date();
+            }
             if (!this.autoPreview) return;
             if (this.previewTimer) clearTimeout(this.previewTimer);
             this.previewTimer = setTimeout(function () {
@@ -1972,9 +2117,32 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           openEditDrawer: function (uid) {
             this.editDrawerUid = uid;
             this.$set(this.expandedSet, uid, true);
+            var c = this.editDrawerCell;
+            this.editDrawerSnapshot = c ? JSON.parse(JSON.stringify(c)) : null;
+            this.editDrawerLastSaved = null;
+            this.editDrawerDirty = false;
           },
           closeEditDrawer: function () {
             this.editDrawerUid = null;
+            this.editDrawerSnapshot = null;
+            this.editDrawerLastSaved = null;
+            this.editDrawerDirty = false;
+          },
+          commitEditDrawer: function () {
+            this.closeEditDrawer();
+          },
+          revertEditDrawer: function () {
+            var i = this.editDrawerIndex;
+            if (i < 0 || !this.editDrawerSnapshot) {
+              this.closeEditDrawer();
+              return;
+            }
+            var snap = this.editDrawerSnapshot;
+            var cur = this.config.cells[i];
+            Object.keys(cur).forEach(function (k) { if (!(k in snap)) delete cur[k]; });
+            Object.keys(snap).forEach(function (k) { cur[k] = JSON.parse(JSON.stringify(snap[k])); });
+            this.closeEditDrawer();
+            this.schedulePreview();
           },
           addCellAndEdit: function () {
             this.showTemplateModal = true;
