@@ -611,10 +611,52 @@
       }
 
       /* ==================== 预览渲染子组件（替代 iframe）样式 ==================== */
+      .preview-renderer {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+      }
       .preview-renderer .table-wrapper {
-        overflow-x: auto;
+        overflow: auto;
+        flex: 1;
+        min-height: 0;
         background: #fff;
         padding: 8px;
+      }
+      .preview-renderer .axis-row-top {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+      .preview-renderer .axis-row-head {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+      }
+      .preview-renderer .axis-corner {
+        position: sticky;
+        top: 0;
+        left: 0;
+        z-index: 3;
+      }
+      .preview-renderer .axis-col-width {
+        width: 34px;
+      }
+      .preview-renderer .axis-corner,
+      .preview-renderer .axis-col-head,
+      .preview-renderer .axis-row-head {
+        background: #f5f7fa !important;
+        color: #909399 !important;
+        font-size: 11px !important;
+        font-weight: normal !important;
+        padding: 2px 4px !important;
+        text-align: center !important;
+        border-color: #d0d7de !important;
+        user-select: none;
+      }
+      .preview-renderer .axis-corner {
+        background: #ebeef5 !important;
       }
       .preview-renderer table {
         width: 100%;
@@ -1396,9 +1438,15 @@
           <i-form ref="mainForm" :model="fm" :rules="formRules" :validate-on-rule-change="false">
             <table>
               <colgroup>
+                <col class="axis-col-width">
                 <col v-for="(w,i) in colWidths" :key="i" :style="w">
               </colgroup>
-              <tr v-for="(row, ri) in gridRows" :key="ri">
+              <tr class="axis-row-top">
+                <th class="axis-corner"></th>
+                <th v-for="c in colCount" :key="'ax-c-'+c" class="axis-col-head">{{c}}</th>
+              </tr>
+              <tr v-for="(row, ri) in gridRows" v-if="isRowVisible(ri)" :key="ri">
+                <td class="axis-row-head">{{ri+1}}</td>
                 <template v-for="(entry, ci) in row">
                   <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
                       :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci">
@@ -2247,6 +2295,9 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               }
             });
             return R;
+          },
+          colCount: function () {
+            return this.gridRows.length ? this.gridRows[0].length : 0;
           }
         },
         watch: {
@@ -2369,6 +2420,16 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             return list;
           },
           isHidden: function (id) { return !!this.hiddenState[id]; },
+          isRowVisible: function (ri) {
+            var targetY = ri + 1;
+            for (var i = 0; i < this.config.cells.length; i++) {
+              var c = this.config.cells[i];
+              if (this.isHidden(c.id)) continue;
+              var yr = pr_parseRange(c.y);
+              if (yr.start <= targetY && yr.end >= targetY) return true;
+            }
+            return false;
+          },
           isColHidden: function (colIndex) { return !!this.hiddenCols[colIndex]; },
           clampStyle: function (lines) {
             var n = Number(lines);
