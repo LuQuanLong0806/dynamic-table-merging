@@ -904,6 +904,7 @@
               <span class="toolbar-divider"></span>
               <span class="auto-tip">视角</span>
               <radio-group v-model="previewMode" size="small" type="button">
+                <radio label="all"><span>全部</span></radio>
                 <radio label="portal"><span>门户端</span></radio>
                 <radio label="platform"><span>管理端</span></radio>
               </radio-group>
@@ -2040,12 +2041,13 @@ var app=new Vue({
     handleSubmit:function(){var self=this;this.\$refs.mainForm.validate(function(valid){if(valid){var result={title:self.config.title,cells:[]};self.config.cells.forEach(function(c){if(['label','text','formula'].indexOf(c.type)>=0)return;if(self.isHidden(c.id)||self.isDisabled(c.id))return;result.cells.push({id:c.id,type:c.type,value:self.fm[c.id]});});console.log('预览提交数据:',JSON.stringify(result,null,2));window.parent&&window.parent.postMessage({type:'preview-submit',data:result},'*');}else{window.parent&&window.parent.postMessage({type:'preview-validate-fail'},'*');}});},
     handleReset:function(){var self=this;this.config.cells.forEach(function(c){if(c.type==='number')self.\$set(self.fm,c.id,c.value!=null&&c.value!==''?Number(c.value):null);else if(c.type==='checkbox')self.\$set(self.fm,c.id,[]);else if(['input','select','radio','date','upload'].indexOf(c.type)>=0)self.\$set(self.fm,c.id,c.value!=null?c.value:'');});this.applyVisibility();this.recalc();},
     clickId:function(id){if(window.parent&&window.parent!==window){window.parent.postMessage({type:'preview-click-id',id:id||''},'*');}},
+    rebuildAll:function(){var cells=(this.config&&this.config.cells)||[];var ds={},hs={},mode=this.previewMode;cells.forEach(function(c){if(c.disabled)ds[c.id]=true;});cells.forEach(function(c){if(c._hidden)hs[c.id]=true;if(mode==='all')return;if(mode==='portal'&&c.portalHide)hs[c.id]=true;if(mode==='platform'&&c.platformHide)hs[c.id]=true;});var visibleCells=cells.filter(function(c){return !hs[c.id];});var grid=buildGrid(visibleCells);this.gridRows=grid.rows;this.cellMap=grid.cellMap;this.fm=buildFormModel(cells);this.disabledState=ds;this.hiddenState=hs;this.formulaResults={};this._eventFnCache={};var self=this;this.\$nextTick(function(){self.recalc();if(self.\$refs.mainForm){self.\$refs.mainForm.resetFields();self.fieldMap={};(self.\$refs.mainForm.fields||[]).forEach(function(f){if(f.prop)self.fieldMap[f.prop]=f;});}});},
     clampStyle:function(lines){var n=Number(lines);if(!n||n<=0)return{};return{'-webkit-line-clamp':String(n),'line-clamp':String(n),'max-height':(n*1.5)+'em'};},
   }
 });
 
-window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[]};var grid=buildGrid(app.config.cells);app.gridRows=grid.rows;app.cellMap=grid.cellMap;app.fm=buildFormModel(app.config.cells);app.applyVisibility();app.formulaResults={};app._eventFnCache={};app.\$nextTick(function(){app.recalc();if(app.\$refs.mainForm){app.\$refs.mainForm.resetFields();app.fieldMap={};(app.\$refs.mainForm.fields||[]).forEach(function(f){if(f.prop)app.fieldMap[f.prop]=f;});}});}catch(e){console.error('setPreviewData error',e);}};
-window.setPreviewMode=function(mode){app.previewMode=mode||'portal';app.applyVisibility();};
+window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[]};app.rebuildAll();}catch(e){console.error('setPreviewData error',e);}};
+window.setPreviewMode=function(mode){app.previewMode=mode||'portal';app.rebuildAll();};
 
 window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-preview'){window.setPreviewData(e.data.data);}});
 <\/` + `script>
@@ -2535,8 +2537,6 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
         methods: {
           _buildState: function (data) {
             var cells = (data && data.cells) || [];
-            var grid = pr_buildGrid(cells);
-            var fm = pr_buildFormModel(cells);
             var ds = {}, hs = {}, mode = this.mode;
             cells.forEach(function (c) { if (c.disabled) ds[c.id] = true; });
             cells.forEach(function (c) {
@@ -2544,6 +2544,10 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               if (mode === 'portal' && c.portalHide) hs[c.id] = true;
               if (mode === 'platform' && c.platformHide) hs[c.id] = true;
             });
+            // 按可见性过滤后再构建 grid，避免被隐藏的合并 cell 的 rowspan 干扰布局
+            var visibleCells = cells.filter(function (c) { return !hs[c.id]; });
+            var grid = pr_buildGrid(visibleCells);
+            var fm = pr_buildFormModel(cells);
             var maxC = 0;
             cells.forEach(function (c) { var xr = pr_parseRange(c.x); if (xr.end > maxC) maxC = xr.end; });
             // 列宽规则（对齐生产 dynamic-eval-table.vue 的 FIXED_COL_RULES）
@@ -3038,6 +3042,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             (this.config.cells || []).forEach(function (c) {
               if (c.disabled) ds[c.id] = true;
               if (c._hidden) hs[c.id] = true;
+              if (mode === 'all') return;
               if (mode === 'portal' && c.portalHide) hs[c.id] = true;
               if (mode === 'platform' && c.platformHide) hs[c.id] = true;
             });
@@ -3073,7 +3078,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             editDrawerLastSaved: null,
             editDrawerDirty: false,
             listDrawerOpen: false,
-            previewMode: 'portal',
+            previewMode: 'all',
             showTemplateModal: false,
             showHelpModal: false,
             cellTemplates: CELL_TEMPLATES
