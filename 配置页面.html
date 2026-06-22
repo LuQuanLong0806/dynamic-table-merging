@@ -1100,7 +1100,17 @@ events: {
   onChange: "fm.date_str = rawEvent.date ? rawEvent.date.toISOString() : ''"
 }</code></pre>
 
-            <h3>⑥ 公式（formula.calculationFormula）</h3>
+            <h3>⑥ 列宽权重（width）<span style="font-size:11px;color:#2d8cf0;font-weight:normal;"> 新</span></h3>
+            <p>每个第一行单列 cell 可配 <code>width</code> 字段（数字，作为权重）。列宽计算规则：</p>
+            <ul>
+              <li>列权重 = 第一行 cell 的 <code>width</code> 字段 &gt; 表头匹配 <code>FIXED_COL_RULES</code>（序号/编号 4，一/二/三级指标 6，评分规则 6，分值/得分 5）&gt; 0（参与剩余均分）</li>
+              <li>有权重的列按权重值占位，没权重的列均分剩余空间</li>
+              <li><b>归一化</b>：所有<b>可见列</b>宽度之和始终 = 100%。列被隐藏时，原本分给它的宽度按比例补给可见列</li>
+            </ul>
+            <pre style="background:#f6f8fa;padding:8px;border-radius:3px;font-size:11px;overflow-x:auto;"><code>// 让某列占 15% 权重
+{ id: "c1", x: "1", y: "1", type: "label", content: "指标", width: 15 }</code></pre>
+
+            <h3>⑦ 公式（formula.calculationFormula）</h3>
             <ul>
               <li><code>SUM(c6, e5, f5)</code>：求和（text 类型取 content 数字）</li>
               <li><code>AVG(c6, e5)</code>：平均（保留 2 位小数）</li>
@@ -1109,7 +1119,7 @@ events: {
               <li><code>CALC(Math.max(0, bm - bl))</code>：表达式（cell id 直接引用）</li>
             </ul>
 
-            <h3>⑦ 隐藏 / 禁用</h3>
+            <h3>⑧ 隐藏 / 禁用</h3>
             <ul>
               <li><code>portalHide: true</code>：企业端隐藏</li>
               <li><code>platformHide: true</code>：管理端隐藏</li>
@@ -1118,7 +1128,7 @@ events: {
               <li>整列无可见 cell 时自动 collapse；整行无可见 cell 时整行不渲染</li>
             </ul>
 
-            <h3>⑧ 推荐工作流</h3>
+            <h3>⑨ 推荐工作流</h3>
             <ol>
               <li>载入示例或从模板添加几个 cell</li>
               <li>右侧预览表格，点徽章可快速定位编辑</li>
@@ -1236,6 +1246,11 @@ events: {
               <label class="field-label">溢出隐藏 clampLines</label>
               <input-number v-model="cell.clampLines" size="small" :min="0" :step="1" placeholder="0" style="width:100%" />
               <div style="font-size:11px;color:#888;padding-top:2px;">0 或空 = 全部显示；N = 截断到 N 行（鼠标悬停看完整）</div>
+            </div>
+            <div v-if="isFirstRowCell">
+              <label class="field-label">列宽权重 width</label>
+              <input-number v-model="cell.width" size="small" :min="0" :step="1" placeholder="留空" style="width:100%" />
+              <div style="font-size:11px;color:#888;padding-top:2px;">配置后作为该列权重参与列宽计算，所有可见列权重和 = 100%</div>
             </div>
           </div>
 
@@ -2192,6 +2207,14 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           hasEvents: function () {
             return ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(this.cell.type) >= 0;
           },
+          isFirstRowCell: function () {
+            // y=1 且 x 是单列（非跨列）的 cell 才能配列宽权重
+            if (!this.cell.y) return false;
+            var yr = parseRange(this.cell.y);
+            if (yr.start !== 1) return false;
+            var xr = parseRange(this.cell.x);
+            return xr.span === 1;
+          },
           idChips: function () {
             return (this.allCells || [])
               .filter(function (c) { return c.id; })
@@ -2503,14 +2526,25 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               { p: /^评分规则$/, w: 6 },
               { p: /^(分值|得分)$/, w: 5 }
             ];
+            // 列宽权重：第一行 cell 的 width 字段 > FIXED_COL_RULES 匹配值
             var fixedCols = {};
             cells.forEach(function (c) {
+              var xr = pr_parseRange(c.x);
+              if (xr.span !== 1) return;
+              var yr = pr_parseRange(c.y);
+              if (yr.start !== 1) return;  // 只看第一行
+              var idx = xr.start - 1;
+              // 优先 cell.width
+              if (c.width != null && !isNaN(Number(c.width)) && Number(c.width) > 0) {
+                fixedCols[idx] = Number(c.width);
+                return;
+              }
+              // 回退 FIXED_COL_RULES
               if (!c.content) return;
               var text = String(c.content).replace(/<[^>]+>/g, '').trim();
               for (var ri = 0; ri < FIXED_COL_RULES.length; ri++) {
                 if (FIXED_COL_RULES[ri].p.test(text)) {
-                  var xr = pr_parseRange(c.x);
-                  if (xr.span === 1) fixedCols[xr.start - 1] = FIXED_COL_RULES[ri].w;
+                  fixedCols[idx] = FIXED_COL_RULES[ri].w;
                   break;
                 }
               }
@@ -2523,7 +2557,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                 for (var i = xr.start - 1; i < xr.end; i++) colHidden[i] = false;
               }
             });
-            // 计算 colWidthsFinal（对齐生产 colStyle）
+            // 计算列宽：固定权重列按权重，剩余列均分剩余空间
             var hiddenCount = 0, fixedTotal = 0, fixedCount = 0;
             for (var hi = 0; hi < maxC; hi++) {
               if (colHidden[hi]) { hiddenCount++; continue; }
@@ -2531,12 +2565,26 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             }
             var visibleCount = maxC - hiddenCount;
             var remainCols = visibleCount - fixedCount;
-            var cw = [];
+            var rawWidths = [];
             for (var cj = 0; cj < maxC; cj++) {
-              if (colHidden[cj]) cw.push({ visibility: 'collapse', width: '0' });
-              else if (fixedCols[cj] != null) cw.push({ width: fixedCols[cj] + '%' });
-              else if (remainCols > 0) cw.push({ width: ((100 - fixedTotal) / remainCols) + '%' });
-              else cw.push({ width: (100 / maxC) + '%' });
+              if (colHidden[cj]) { rawWidths.push(0); continue; }
+              if (fixedCols[cj] != null) rawWidths.push(fixedCols[cj]);
+              else if (remainCols > 0) rawWidths.push((100 - fixedTotal) / remainCols);
+              else rawWidths.push(100 / maxC);
+            }
+            // 归一化：可见列宽和 = 100%（隐藏列分走宽度补给可见列）
+            var visibleSum = 0;
+            for (var vi = 0; vi < maxC; vi++) {
+              if (!colHidden[vi]) visibleSum += rawWidths[vi];
+            }
+            var cw = [];
+            for (var fj = 0; fj < maxC; fj++) {
+              if (colHidden[fj]) {
+                cw.push({ visibility: 'collapse', width: '0' });
+              } else {
+                var pct = visibleSum > 0 ? (rawWidths[fj] / visibleSum) * 100 : (100 / visibleCount);
+                cw.push({ width: pct + '%' });
+              }
             }
             return {
               gridRows: grid.rows, cellMap: grid.cellMap, fm: fm,
@@ -3293,6 +3341,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                 if (c.portalHide) out.portalHide = true;
                 if (c.platformHide) out.platformHide = true;
                 if (c.clampLines != null && c.clampLines > 0) out.clampLines = Number(c.clampLines);
+                if (c.width != null && !isNaN(Number(c.width)) && Number(c.width) > 0) out.width = Number(c.width);
                 // validation：把 rule 上的 kind 字段去掉，按 kind 写入正式字段
                 if (c.validation && c.validation.rules && c.validation.rules.length) {
                   out.validation = { rules: c.validation.rules.map(serializeRule).filter(function (r) { return Object.keys(r).length > 0; }) };

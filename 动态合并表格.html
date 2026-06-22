@@ -1191,17 +1191,34 @@
               if (c._hidden) hs[c.id] = true;
               if (c.portalHide) hs[c.id] = true;
             });
-            // 计算每列宽度：隐藏列设为 0
+            // 计算每列宽度：第一行 cell.width > defaultWidths > 8（默认权重）
             var maxC = 0;
             data.cells.forEach(function (c) {
               var xr = parseRange(c.x);
               if (xr.end > maxC) maxC = xr.end;
             });
             var defaultWidths = {
-              1: '6%', 2: '3%', 3: '12%', 4: '12%', 5: '6%',
-              6: '4%', 7: '7%', 8: '7%', 9: '7%', 10: '6%',
-              11: '7%', 12: '12%', 13: '12%', 14: '10%', 15: '10%'
+              1: 6, 2: 3, 3: 12, 4: 12, 5: 6,
+              6: 4, 7: 7, 8: 7, 9: 7, 10: 6,
+              11: 7, 12: 12, 13: 12, 14: 10, 15: 10
             };
+            // 列权重：第一行单列 cell 的 width 字段 > defaultWidths > 8
+            var colWeights = {};
+            data.cells.forEach(function (c) {
+              var xr = parseRange(c.x);
+              if (xr.span !== 1) return;
+              var yr = parseRange(c.y);
+              if (yr.start !== 1) return;  // 只看第一行
+              var idx = xr.start;
+              if (c.width != null && !isNaN(Number(c.width)) && Number(c.width) > 0) {
+                colWeights[idx] = Number(c.width);
+              } else if (colWeights[idx] == null) {
+                colWeights[idx] = defaultWidths[idx] != null ? defaultWidths[idx] : 8;
+              }
+            });
+            for (var ci = 1; ci <= maxC; ci++) {
+              if (colWeights[ci] == null) colWeights[ci] = defaultWidths[ci] != null ? defaultWidths[ci] : 8;
+            }
             var colHidden = {};
             for (var ci = 1; ci <= maxC; ci++) colHidden[ci] = true;
             data.cells.forEach(function (c) {
@@ -1210,9 +1227,15 @@
                 for (var i = xr.start; i <= xr.end; i++) colHidden[i] = false;
               }
             });
+            // 归一化：可见列权重和 = 100%
+            var visibleSum = 0;
+            for (var vi = 1; vi <= maxC; vi++) {
+              if (!colHidden[vi]) visibleSum += colWeights[vi];
+            }
             var cw = [];
             for (var ci = 1; ci <= maxC; ci++) {
-              cw.push(defaultWidths[ci] || '8%');
+              if (colHidden[ci]) cw.push('0');
+              else cw.push((visibleSum > 0 ? (colWeights[ci] / visibleSum) * 100 : 100 / maxC) + '%');
             }
             return {
               config: data,
