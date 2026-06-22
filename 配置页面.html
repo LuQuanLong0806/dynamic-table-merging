@@ -814,6 +814,32 @@
       .preview-renderer .cell-id-badge.label-badge:hover {
         background: rgba(100, 100, 100, 0.9);
       }
+      .preview-renderer .cell-edit-icon {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 18px;
+        height: 18px;
+        line-height: 18px;
+        text-align: center;
+        color: #fff;
+        background: rgba(45, 140, 240, 0.85);
+        border-radius: 3px;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.15s, background 0.15s;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .preview-renderer .cell-edit-icon:hover {
+        background: rgba(45, 140, 240, 1);
+      }
+      .preview-renderer th:hover .cell-edit-icon,
+      .preview-renderer td:hover .cell-edit-icon {
+        opacity: 1;
+      }
       .preview-renderer .upload-in-cell {
         text-align: left;
         padding: 2px 0;
@@ -861,7 +887,6 @@
           />
           <div class="actions">
             <i-button type="primary" @click="showTemplateModal = true">+ 添加单元格</i-button>
-            <i-button @click="listDrawerOpen = true">📋 单元格列表</i-button>
             <i-button @click="showHelpModal = true">📖 使用说明</i-button>
             <i-button @click="showImportModal = true">导入 JSON</i-button>
             <i-button type="primary" @click="openExport">导出 JSON</i-button>
@@ -1617,14 +1642,16 @@ events: {
                 <template v-for="(entry, ci) in row">
                   <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
                       :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci">
-                    <span class="cell-id-badge label-badge" @click.stop="onIdClick(entry.cell.id)">{{entry.cell.id}}</span>
+                    <span class="cell-id-badge label-badge" @click.stop="copyId(entry.cell.id)" title="点击复制 ID">{{entry.cell.id}}</span>
+                    <span class="cell-edit-icon" @click.stop="onIdClick(entry.cell.id)" title="编辑此单元格"><Icon type="md-create" size="11" color="#fff" /></span>
                     <div v-if="entry.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(entry.cell.clampLines)" v-html="entry.cell.content"></div>
                     <div v-else v-html="entry.cell.content"></div>
                   </th>
                   <td v-else-if="!entry.skip && entry.cell && !isHidden(entry.cell.id)"
                       :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
                       :class="entry.cls">
-                    <span class="cell-id-badge" @click.stop="onIdClick(entry.cell.id)">{{entry.cell.id}}</span>
+                    <span class="cell-id-badge" @click.stop="copyId(entry.cell.id)" title="点击复制 ID">{{entry.cell.id}}</span>
+                    <span class="cell-edit-icon" @click.stop="onIdClick(entry.cell.id)" title="编辑此单元格"><Icon type="md-create" size="11" color="#fff" /></span>
                     <div v-for="item in getItems(entry)" :key="item.cell.id"
                          :data-cell-id="item.cell.id"
                          class="alt-item">
@@ -2210,9 +2237,9 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           isFirstRowCell: function () {
             // y=1 且 x 是单列（非跨列）的 cell 才能配列宽权重
             if (!this.cell.y) return false;
-            var yr = parseRange(this.cell.y);
+            var yr = pr_parseRange(this.cell.y);
             if (yr.start !== 1) return false;
-            var xr = parseRange(this.cell.x);
+            var xr = pr_parseRange(this.cell.x);
             return xr.span === 1;
           },
           idChips: function () {
@@ -2942,6 +2969,26 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           },
           onIdClick: function (id) {
             this.$emit('click-id', id);
+          },
+          copyId: function (id) {
+            if (!id) return;
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(id);
+              } else {
+                var ta = document.createElement('textarea');
+                ta.value = id;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+              }
+              this.$emit('copy-id', id);
+            } catch (e) {
+              console.error('复制失败', e);
+            }
           },
           handleSubmit: function () {
             var self = this;
