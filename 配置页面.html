@@ -492,6 +492,56 @@
       .rule-help b {
         color: #2d8cf0;
       }
+      .event-params-doc {
+        background: #fafbfc;
+        border: 1px solid #e8eaec;
+        border-radius: 3px;
+        padding: 6px 8px;
+        margin-bottom: 6px;
+      }
+      .event-param-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        font-size: 11px;
+        line-height: 1.6;
+        padding: 2px 0;
+        color: #515a6e;
+      }
+      .event-param-row .param-name {
+        background: #e8edf5;
+        color: #2a5db0;
+        padding: 0 6px;
+        border-radius: 2px;
+        font-family: 'Consolas', monospace;
+        flex-shrink: 0;
+        min-width: 70px;
+        text-align: center;
+      }
+      .event-param-row .param-type {
+        color: #888;
+        flex-shrink: 0;
+        min-width: 75px;
+        font-style: italic;
+      }
+      .event-param-row .param-desc {
+        flex: 1;
+      }
+      .event-param-row .param-desc code {
+        background: #e8edf5;
+        padding: 0 3px;
+        border-radius: 2px;
+        font-family: 'Consolas', monospace;
+        color: #2a5db0;
+      }
+      .event-param-row .raw-event-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        margin-top: 2px;
+        padding-left: 4px;
+        border-left: 2px solid #e8eaec;
+      }
       .target-picker {
         display: flex;
         gap: 4px;
@@ -1018,7 +1068,39 @@
               <li>行级动作：<code>rowEnable/rowDisable/rowClear</code> + <code>rowTargets</code>（一次操作多列）</li>
             </ul>
 
-            <h3>⑤ 公式（formula.calculationFormula）</h3>
+            <h3>⑤ 事件（events）<span style="font-size:11px;color:#2d8cf0;font-weight:normal;"> 新</span></h3>
+            <p>每个控件 cell 可配 <code>events</code> 字段，在值变化/失焦/输入时执行任意 JS 函数体。比 linkage 更灵活，能写跨字段重算、格式化、条件赋值等。</p>
+            <ul>
+              <li><code>onChange</code>：值变化后触发（所有控件通用）</li>
+              <li><code>onBlur</code>：失焦时触发（仅 input）</li>
+              <li><code>onInput</code>：输入中触发（仅 input，高频慎用）</li>
+            </ul>
+            <p>函数体签名 <code>(value, fm, extra, rawEvent)</code>：</p>
+            <ul>
+              <li><code>value</code>：当前字段的新值（已存入 fm[id]）</li>
+              <li><code>fm.字段ID</code>：读写整个表单 model（如 <code>fm.total = Number(fm.a) + Number(fm.b)</code>）</li>
+              <li><code>extra</code>：<code>{ cell, cellMap }</code>（cell 配置对象 + 所有 cell 字典）</li>
+              <li><code>rawEvent</code>：iView 组件原生事件参数 ——<br>
+                <span style="font-size:11px;color:#888;padding-left:14px;">
+                  input-number/select/radio/checkbox：<code>选中值</code>；<br>
+                  date：<code>{ date: Date对象, label: 'date' }</code>；<br>
+                  input on-blur：原生 <code>FocusEvent</code>；<br>
+                  input onInput：<code>输入字符串</code>
+                </span>
+              </li>
+            </ul>
+            <pre style="background:#f6f8fa;padding:8px;border-radius:3px;font-size:11px;overflow-x:auto;"><code>// 跨字段重算
+events: {
+  onChange: "fm.total = (Number(fm.a) || 0) + (Number(fm.b) || 0)",
+  onBlur: "fm.indval_r3 = (fm.indval_r3 || '').trim()"
+}
+
+// 拿原生参数：date-picker 选日期
+events: {
+  onChange: "fm.date_str = rawEvent.date ? rawEvent.date.toISOString() : ''"
+}</code></pre>
+
+            <h3>⑥ 公式（formula.calculationFormula）</h3>
             <ul>
               <li><code>SUM(c6, e5, f5)</code>：求和（text 类型取 content 数字）</li>
               <li><code>AVG(c6, e5)</code>：平均（保留 2 位小数）</li>
@@ -1027,7 +1109,7 @@
               <li><code>CALC(Math.max(0, bm - bl))</code>：表达式（cell id 直接引用）</li>
             </ul>
 
-            <h3>⑥ 隐藏 / 禁用</h3>
+            <h3>⑦ 隐藏 / 禁用</h3>
             <ul>
               <li><code>portalHide: true</code>：企业端隐藏</li>
               <li><code>platformHide: true</code>：管理端隐藏</li>
@@ -1036,7 +1118,7 @@
               <li>整列无可见 cell 时自动 collapse；整行无可见 cell 时整行不渲染</li>
             </ul>
 
-            <h3>⑦ 推荐工作流</h3>
+            <h3>⑧ 推荐工作流</h3>
             <ol>
               <li>载入示例或从模板添加几个 cell</li>
               <li>右侧预览表格，点徽章可快速定位编辑</li>
@@ -1297,7 +1379,7 @@
                     type="textarea"
                     :rows="2"
                     :value="typeof r.required === 'string' ? r.required : ''"
-                    @on-change="v => setRequiredExpr(r, v)"
+                    @input="v => setRequiredExpr(r, v)"
                     size="small"
                     placeholder="如 fm.indval_r3 != null && fm.indval_r3 != ''" />
                 </div>
@@ -1406,6 +1488,76 @@
             </div>
           </div>
 
+          <!-- 事件 events -->
+          <div class="field-group" v-if="hasEvents">
+            <div class="field-group-title">
+              事件 events
+              <span style="font-size:11px;color:#aaa;margin-left:8px;">函数签名 <code style="background:#eef2f8;padding:1px 4px;border-radius:2px;">(value, fm, extra, rawEvent) => { 函数体 }</code></span>
+            </div>
+            <div class="event-params-doc">
+              <div class="event-param-row">
+                <code class="param-name">value</code>
+                <span class="param-type">any</span>
+                <span class="param-desc">当前字段的新值（已写入 fm[id]，可直接用 <code>value</code> 或 <code>fm.当前字段ID</code>）</span>
+              </div>
+              <div class="event-param-row">
+                <code class="param-name">fm</code>
+                <span class="param-type">object</span>
+                <span class="param-desc">整个表单 model 对象。<b style="color:#2d8cf0;">可读可写</b>：<code>fm.total</code> 读其他字段，<code>fm.total = 100</code> 写入其他字段（触发响应式）</span>
+              </div>
+              <div class="event-param-row">
+                <code class="param-name">extra</code>
+                <span class="param-type">object</span>
+                <span class="param-desc"><code>{ cell, cellMap }</code>：cell=当前字段配置，cellMap=所有字段的 id → cell 字典（可遍历其他字段）</span>
+              </div>
+              <div class="event-param-row">
+                <code class="param-name">rawEvent</code>
+                <span class="param-type">iView 原参</span>
+                <span class="param-desc">随控件类型变化：
+                  <span class="raw-event-list">
+                    <span><b>input/number/select/radio/checkbox</b>：选中值</span>
+                    <span><b>date</b>：<code>{ date: Date对象, label: '2026-06-22' }</code></span>
+                    <span><b>input on-blur</b>：原生 <code>FocusEvent</code></span>
+                    <span><b>input onInput</b>：输入字符串</span>
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div class="sub-list">
+              <div class="sub-item sub-item-vertical">
+                <div class="row-grow">
+                  <span style="font-size:12px;color:#888;width:90px;flex-shrink:0;font-weight:bold;">onChange</span>
+                  <span style="font-size:11px;color:#aaa;flex:1;">值变化后触发（所有控件通用）。常用于跨字段重算 / 联动赋值</span>
+                </div>
+                <i-input :value="(cell.events || {}).onChange" @input="v => setEvent('onChange', v)" type="textarea" :rows="3"
+                  size="small" placeholder="如：fm.total = (Number(fm.a)||0) + (Number(fm.b)||0)" />
+              </div>
+              <div class="sub-item sub-item-vertical" v-if="cell.type === 'input'">
+                <div class="row-grow">
+                  <span style="font-size:12px;color:#888;width:90px;flex-shrink:0;font-weight:bold;">onBlur</span>
+                  <span style="font-size:11px;color:#aaa;flex:1;">输入框失焦时触发。适合做格式化（trim / 大小写）</span>
+                </div>
+                <i-input :value="(cell.events || {}).onBlur" @input="v => setEvent('onBlur', v)" type="textarea" :rows="2"
+                  size="small" placeholder="如：fm.indval_r3 = (fm.indval_r3 || '').trim()" />
+              </div>
+              <div class="sub-item sub-item-vertical" v-if="cell.type === 'input'">
+                <div class="row-grow">
+                  <span style="font-size:12px;color:#888;width:90px;flex-shrink:0;font-weight:bold;">onInput</span>
+                  <span style="font-size:11px;color:#aaa;flex:1;">输入中触发（每字符）。高频，慎用重逻辑</span>
+                </div>
+                <i-input :value="(cell.events || {}).onInput" @input="v => setEvent('onInput', v)" type="textarea" :rows="2"
+                  size="small" placeholder="如：fm.upper = String(fm.indval_r3 || '').toUpperCase()" />
+              </div>
+            </div>
+            <div class="rule-help">
+              <b>写法示例：</b>
+              <code>fm.total = (Number(fm.a)||0) + (Number(fm.b)||0)</code>（跨字段重算）·
+              <code>fm.date_str = rawEvent.date ? rawEvent.date.toISOString() : ''</code>（date-picker 拿 Date 对象）·
+              <code>if (fm.score > 80) fm.level = 'A'</code>（条件赋值）。
+              失败静默（仅 <code>console.error</code>，不中断主流程）。
+            </div>
+          </div>
+
           <!-- 状态开关（4 选 1） -->
           <div class="field-group">
             <div class="field-group-title">
@@ -1467,13 +1619,13 @@
                       <form-item v-else-if="item.isControl" :prop="formRules[item.cell.id] ? item.cell.id : ''">
                         <i-input v-if="item.cell.type==='input'"
                           :value="fm[item.cell.id]"
-                          @input="val => setVal(item.cell.id, val)"
+                          @input="val => { setVal(item.cell.id, val); onInput(item.cell.id, val); }"
                           :placeholder="item.cell.placeholder || item.cell.content || ''"
                           :disabled="isDisabled(item.cell.id)"
-                          @on-blur="onBlur(item.cell.id)" />
+                          @on-blur="e => onBlur(item.cell.id, e)" />
                         <input-number v-if="item.cell.type==='number'"
                           :value="fm[item.cell.id]"
-                          @on-change="val => setVal(item.cell.id, val)"
+                          @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id, val); }"
                           :placeholder="item.cell.placeholder || ''"
                           :min="getNum(item.cell, 'min')"
                           :max="getNum(item.cell, 'max')"
@@ -1481,14 +1633,14 @@
                           style="width:100%" />
                         <i-select v-if="item.cell.type==='select'"
                           :value="fm[item.cell.id]"
-                          @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id) }"
+                          @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id, val); }"
                           :placeholder="item.cell.content || '请选择'"
                           :disabled="isDisabled(item.cell.id)"
                           clearable>
                           <i-option v-for="opt in (item.cell.options||[])" :value="opt.value" :key="opt.value">{{opt.label}}</i-option>
                         </i-select>
                         <div v-if="item.cell.type==='radio'" class="radio-in-cell">
-                          <radio-group :value="fm[item.cell.id]" @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id) }" vertical>
+                          <radio-group :value="fm[item.cell.id]" @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id, val); }" vertical>
                             <radio v-for="opt in (item.cell.options||[])" :label="opt.value" :key="opt.value" :disabled="isDisabled(item.cell.id)">
                               <span v-html="opt.label"></span>
                             </radio>
@@ -1496,12 +1648,12 @@
                         </div>
                         <checkbox-group v-if="item.cell.type==='checkbox'"
                           :value="fm[item.cell.id]"
-                          @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id) }">
+                          @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id, val); }">
                           <checkbox v-for="opt in (item.cell.options||[])" :label="opt.value" :key="opt.value">{{opt.label}}</checkbox>
                         </checkbox-group>
                         <date-picker v-if="item.cell.type==='date'"
                           :value="fm[item.cell.id]"
-                          @on-change="val => { setVal(item.cell.id, val); onChange(item.cell.id) }"
+                          @on-change="(date, label) => { setVal(item.cell.id, date); onChange(item.cell.id, { date: date, label: label }); }"
                           type="date" placeholder="选择日期"
                           :disabled="isDisabled(item.cell.id)" />
                         <div v-if="item.cell.type==='upload'" class="upload-in-cell">
@@ -1669,20 +1821,20 @@
               <div v-else-if="item.isText" v-html="item.cell.content || ''" v-once></div>
               <span v-else-if="item.isFormula" class="formula-val">{{formulaResults[item.cell.id]}}</span>
               <form-item v-else-if="item.isControl" :prop="formRules[item.cell.id] ? item.cell.id : ''">
-                <i-input v-if="item.cell.type==='input'" :value="fm[item.cell.id]" @input="v=>setVal(item.cell.id,v)" :placeholder="item.cell.placeholder||item.cell.content||''" :disabled="isDisabled(item.cell.id)" @on-blur="onBlur(item.cell.id)"/>
-                <input-number v-if="item.cell.type==='number'" :value="fm[item.cell.id]" @on-change="v=>setVal(item.cell.id,v)" :placeholder="item.cell.placeholder||''" :min="getNum(item.cell,'min')" :max="getNum(item.cell,'max')" :disabled="isDisabled(item.cell.id)" style="width:100%"/>
-                <i-select v-if="item.cell.type==='select'" :value="fm[item.cell.id]" @on-change="v=>{setVal(item.cell.id,v);onChange(item.cell.id)}" :placeholder="item.cell.content||'请选择'" :disabled="isDisabled(item.cell.id)" clearable>
+                <i-input v-if="item.cell.type==='input'" :value="fm[item.cell.id]" @input="function(v){setVal(item.cell.id,v);onInput(item.cell.id,v);}" :placeholder="item.cell.placeholder||item.cell.content||''" :disabled="isDisabled(item.cell.id)" @on-blur="function(e){onBlur(item.cell.id,e);}"/>
+                <input-number v-if="item.cell.type==='number'" :value="fm[item.cell.id]" @on-change="function(v){setVal(item.cell.id,v);onChange(item.cell.id,v);}" :placeholder="item.cell.placeholder||''" :min="getNum(item.cell,'min')" :max="getNum(item.cell,'max')" :disabled="isDisabled(item.cell.id)" style="width:100%"/>
+                <i-select v-if="item.cell.type==='select'" :value="fm[item.cell.id]" @on-change="function(v){setVal(item.cell.id,v);onChange(item.cell.id,v);}" :placeholder="item.cell.content||'请选择'" :disabled="isDisabled(item.cell.id)" clearable>
                   <i-option v-for="opt in (item.cell.options||[])" :value="opt.value" :key="opt.value">{{opt.label}}</i-option>
                 </i-select>
                 <div v-if="item.cell.type==='radio'" class="radio-in-cell">
-                  <radio-group :value="fm[item.cell.id]" @on-change="v=>{setVal(item.cell.id,v);onChange(item.cell.id)}" vertical>
+                  <radio-group :value="fm[item.cell.id]" @on-change="function(v){setVal(item.cell.id,v);onChange(item.cell.id,v);}" vertical>
                     <radio v-for="opt in (item.cell.options||[])" :label="opt.value" :key="opt.value" :disabled="isDisabled(item.cell.id)"><span v-html="opt.label"></span></radio>
                   </radio-group>
                 </div>
-                <checkbox-group v-if="item.cell.type==='checkbox'" :value="fm[item.cell.id]" @on-change="v=>{setVal(item.cell.id,v);onChange(item.cell.id)}">
+                <checkbox-group v-if="item.cell.type==='checkbox'" :value="fm[item.cell.id]" @on-change="function(v){setVal(item.cell.id,v);onChange(item.cell.id,v);}">
                   <checkbox v-for="opt in (item.cell.options||[])" :label="opt.value" :key="opt.value">{{opt.label}}</checkbox>
                 </checkbox-group>
-                <date-picker v-if="item.cell.type==='date'" :value="fm[item.cell.id]" @on-change="v=>{setVal(item.cell.id,v);onChange(item.cell.id)}" type="date" placeholder="选择日期" :disabled="isDisabled(item.cell.id)"/>
+                <date-picker v-if="item.cell.type==='date'" :value="fm[item.cell.id]" @on-change="function(d,l){setVal(item.cell.id,d);onChange(item.cell.id,{date:d,label:l});}" type="date" placeholder="选择日期" :disabled="isDisabled(item.cell.id)"/>
                 <div v-if="item.cell.type==='upload'" class="upload-in-cell">
                   <label class="upload-link" v-if="!isDisabled(item.cell.id)">上传附件<input type="file" :accept="item.cell.accept||''" style="display:none" @change="function(e){onUploadFile(item.cell.id,e)}"/></label>
                   <div v-if="getUploadFileInfo(item.cell.id)" class="uploaded-file">
@@ -1717,7 +1869,7 @@ function evalCustom(expr,value,fm,extra){try{var locals=Object.keys(fm).map(func
 
 var app=new Vue({
   el:'#app',template:'#prev-tpl',
-  data:function(){return{config:{title:'',cells:[]},gridRows:[],cellMap:{},fm:{},disabledState:{},hiddenState:{},extraContext:{},formulaResults:{},previewMode:'portal',fieldMap:{}};},
+  data:function(){return{config:{title:'',cells:[]},gridRows:[],cellMap:{},fm:{},disabledState:{},hiddenState:{},extraContext:{},formulaResults:{},previewMode:'portal',fieldMap:{},_eventFnCache:{}};},
   computed:{
     formRules:function(){var R={},self=this;(this.config.cells||[]).forEach(function(c){if(c.validation&&!self.isHidden(c.id)&&!self.isDisabled(c.id))R[c.id]=self.buildRules(c);});return R;},
     colCount:function(){return this.gridRows.length?this.gridRows[0].length:0;},
@@ -1830,9 +1982,11 @@ var app=new Vue({
     applyVisibility:function(){var ds={},hs={},mode=this.previewMode;this.config.cells.forEach(function(c){if(c.disabled)ds[c.id]=true;});this.config.cells.forEach(function(c){if(c._hidden)hs[c.id]=true;if(mode==='portal'&&c.portalHide)hs[c.id]=true;if(mode==='platform'&&c.platformHide)hs[c.id]=true;});this.disabledState=ds;this.hiddenState=hs;},
     isDisabled:function(id){return!!this.disabledState[id];},
     getNum:function(c,k){var v=c.validation;if(!v)return undefined;var r;if(v.rules)v.rules.forEach(function(x){if(x[k]!=null)r=x[k];});if(r==null&&v[k]!=null)r=v[k];return r;},
-    onChange:function(id){this.handleLinkage(id);this.recalc();this.validateField(id);},
-    onBlur:function(id){this.validateField(id);},
-    validateField:function(id){var self=this;this.\$nextTick(function(){if(self.\$refs.mainForm)self.\$refs.mainForm.validateField(id);});},
+    onChange:function(id,rawEvent){this.handleLinkage(id);this.recalc();this.validateField(id);this.runCellEvent('change',id,this.fm[id],rawEvent);},
+    onBlur:function(id,rawEvent){this.validateField(id);this.runCellEvent('blur',id,this.fm[id],rawEvent);},
+    onInput:function(id,rawEvent){this.runCellEvent('input',id,this.fm[id],rawEvent);},
+    runCellEvent:function(eventType,id,value,rawEvent){var cell=this.cellMap[id];if(!cell||!cell.events)return;var key='on'+eventType.charAt(0).toUpperCase()+eventType.slice(1);var body=cell.events[key]||cell.events[eventType];if(!body||!String(body).trim())return;var cacheKey=eventType+':'+body;var fn=this._eventFnCache[cacheKey];if(!fn){try{fn=new Function('value','fm','extra','rawEvent',body);}catch(e){console.error('[事件编译失败]',id,eventType,e);return;}this._eventFnCache[cacheKey]=fn;}try{fn.call(this,value,this.fm,{cell:cell,cellMap:this.cellMap},rawEvent);}catch(e){console.error('[事件执行失败]',id,eventType,e);}},
+    validateField:function(id){var self=this;this.\$nextTick(function(){if(self.\$refs.mainForm&&self.formRules&&self.formRules[id])self.\$refs.mainForm.validateField(id);});},
     handleLinkage:function(id){var cell=this.cellMap[id];if(!cell||!cell.linkage)return;var val=String(this.fm[id]);var self=this;cell.linkage.forEach(function(rule){if(String(rule.trigger)===val)rule.actions.forEach(function(a){self.applyAction(a);});});},
     applyAction:function(a){var self=this,t=a.target;if(t){if(a.type==='show')this.\$set(this.hiddenState,t,false);else if(a.type==='hide')this.\$set(this.hiddenState,t,true);else if(a.type==='enable')this.\$set(this.disabledState,t,false);else if(a.type==='disable')this.\$set(this.disabledState,t,true);else if(a.type==='clear')this.doClear(t);else if(a.type==='setValue')this.\$set(this.fm,t,a.value||'');return;}var targets=a.rowTargets;if(!targets)return;targets.forEach(function(rt){rt.cols.forEach(function(cid){if(a.type==='rowEnable')self.\$set(self.disabledState,cid,false);else if(a.type==='rowDisable')self.\$set(self.disabledState,cid,true);else if(a.type==='rowClear')self.doClear(cid);});});},
     doClear:function(id){if(!this.fm.hasOwnProperty(id))return;var tc=this.cellMap[id];var empty=tc&&tc.type==='checkbox'?'[]':(tc&&tc.type==='number'?null:'');if(tc&&tc.type==='checkbox')empty=[];this.\$set(this.fm,id,empty);},
@@ -1848,7 +2002,7 @@ var app=new Vue({
   }
 });
 
-window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[]};var grid=buildGrid(app.config.cells);app.gridRows=grid.rows;app.cellMap=grid.cellMap;app.fm=buildFormModel(app.config.cells);app.applyVisibility();app.formulaResults={};app.\$nextTick(function(){app.recalc();if(app.\$refs.mainForm){app.\$refs.mainForm.resetFields();app.fieldMap={};(app.\$refs.mainForm.fields||[]).forEach(function(f){if(f.prop)app.fieldMap[f.prop]=f;});}});}catch(e){console.error('setPreviewData error',e);}};
+window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[]};var grid=buildGrid(app.config.cells);app.gridRows=grid.rows;app.cellMap=grid.cellMap;app.fm=buildFormModel(app.config.cells);app.applyVisibility();app.formulaResults={};app._eventFnCache={};app.\$nextTick(function(){app.recalc();if(app.\$refs.mainForm){app.\$refs.mainForm.resetFields();app.fieldMap={};(app.\$refs.mainForm.fields||[]).forEach(function(f){if(f.prop)app.fieldMap[f.prop]=f;});}});}catch(e){console.error('setPreviewData error',e);}};
 window.setPreviewMode=function(mode){app.previewMode=mode||'portal';app.applyVisibility();};
 
 window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-preview'){window.setPreviewData(e.data.data);}});
@@ -2000,7 +2154,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           expandedSet: Object
         },
         data: function () {
-          return { types: TYPE_LIST, advancedRules: false };
+          return { types: TYPE_LIST, advancedRules: false, advancedEvents: false };
         },
         computed: {
           isExpanded: function () {
@@ -2035,6 +2189,9 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           hasLinkage: function () {
             return ['select', 'radio'].indexOf(this.cell.type) >= 0;
           },
+          hasEvents: function () {
+            return ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(this.cell.type) >= 0;
+          },
           idChips: function () {
             return (this.allCells || [])
               .filter(function (c) { return c.id; })
@@ -2057,6 +2214,12 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             }
             if (this.cell.type === 'formula' && !this.cell.calculationFormula) {
               this.$set(this.cell, 'calculationFormula', '');
+            }
+            // 切换离开 input 时清理 onBlur/onInput（只 input 触发）
+            if (this.cell.type !== 'input' && this.cell.events) {
+              if (this.cell.events.onBlur) this.$delete(this.cell.events, 'onBlur');
+              if (this.cell.events.onInput) this.$delete(this.cell.events, 'onInput');
+              if (!Object.keys(this.cell.events).length) this.$delete(this.cell, 'events');
             }
             this.$emit('change');
           },
@@ -2093,6 +2256,17 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               if (typeof r.required !== 'string') this.$set(r, 'required', '');
             } else {
               if (typeof r.required === 'string' || r.required == null) this.$set(r, 'required', true);
+            }
+            this.$emit('change');
+          },
+          setEvent: function (eventType, body) {
+            // 按需创建 cell.events，按需剔除空函数体
+            if (!this.cell.events) this.$set(this.cell, 'events', {});
+            var v = (body == null ? '' : String(body)).trim();
+            if (v) {
+              this.$set(this.cell.events, eventType, v);
+            } else if (this.cell.events.hasOwnProperty(eventType)) {
+              this.$delete(this.cell.events, eventType);
             }
             this.$emit('change');
           },
@@ -2283,7 +2457,8 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             colWidths: state.computedColWidths,
             hiddenCols: state.hiddenCols,
             extraContext: {},
-            formulaResults: {}
+            formulaResults: {},
+            _eventFnCache: {}
           };
         },
         computed: {
@@ -2380,6 +2555,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             this.hiddenCols = s.hiddenCols;
             this.formulaResults = {};
             this.extraContext = {};
+            this._eventFnCache = {};
             var self = this;
             this.$nextTick(function () {
               self.recalc();
@@ -2537,16 +2713,42 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (v.pattern) rules.push({ pattern: new RegExp(v.pattern), message: v.message || '格式不正确', trigger: trigger });
             return rules;
           },
-          onChange: function (id) {
+          onChange: function (id, rawEvent) {
             this.handleLinkage(id);
             this.recalc();
             this.validateField(id);
+            this.runCellEvent('change', id, this.fm[id], rawEvent);
           },
-          onBlur: function (id) { this.validateField(id); },
+          onBlur: function (id, rawEvent) {
+            this.validateField(id);
+            this.runCellEvent('blur', id, this.fm[id], rawEvent);
+          },
+          onInput: function (id, rawEvent) {
+            this.runCellEvent('input', id, this.fm[id], rawEvent);
+          },
+          runCellEvent: function (eventType, id, value, rawEvent) {
+            var cell = this.cellMap[id];
+            if (!cell || !cell.events) return;
+            var key = 'on' + eventType.charAt(0).toUpperCase() + eventType.slice(1);
+            var body = cell.events[key] || cell.events[eventType];
+            if (!body || !String(body).trim()) return;
+            var cacheKey = eventType + ':' + body;
+            var fn = this._eventFnCache[cacheKey];
+            if (!fn) {
+              try { fn = new Function('value', 'fm', 'extra', 'rawEvent', body); }
+              catch (e) { console.error('[事件编译失败]', id, eventType, e); return; }
+              this._eventFnCache[cacheKey] = fn;
+            }
+            try {
+              fn.call(this, value, this.fm, { cell: cell, cellMap: this.cellMap }, rawEvent);
+            } catch (e) {
+              console.error('[事件执行失败]', id, eventType, e);
+            }
+          },
           validateField: function (id) {
             var self = this;
             this.$nextTick(function () {
-              if (self.$refs.mainForm) self.$refs.mainForm.validateField(id);
+              if (self.$refs.mainForm && self.formRules && self.formRules[id]) self.$refs.mainForm.validateField(id);
             });
           },
           handleLinkage: function (id) {
@@ -3102,6 +3304,13 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                       actions: lk.actions.filter(function (a) { return a.kind; }).map(serializeAction)
                     };
                   });
+                }
+                if (c.events) {
+                  var ev = {};
+                  ['onChange', 'onBlur', 'onInput'].forEach(function (k) {
+                    if (c.events[k] && String(c.events[k]).trim()) ev[k] = String(c.events[k]).trim();
+                  });
+                  if (Object.keys(ev).length) out.events = ev;
                 }
                 return out;
               })
