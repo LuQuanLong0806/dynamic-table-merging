@@ -816,7 +816,7 @@
       }
       .preview-renderer .cell-edit-icon {
         position: absolute;
-        top: 2px;
+        bottom: 2px;
         right: 2px;
         width: 18px;
         height: 18px;
@@ -1642,7 +1642,7 @@ events: {
                 <template v-for="(entry, ci) in row">
                   <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
                       :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci">
-                    <span class="cell-id-badge label-badge" @click.stop="copyId(entry.cell.id)" title="点击复制 ID">{{entry.cell.id}}</span>
+                    <span class="cell-id-badge label-badge" @click.stop="copyId(entry.cell.id)" :title="entry.cell.id + '（点击复制）'">{{entry.cell.id}}</span>
                     <span class="cell-edit-icon" @click.stop="onIdClick(entry.cell.id)" title="编辑此单元格"><Icon type="md-create" size="11" color="#fff" /></span>
                     <div v-if="entry.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(entry.cell.clampLines)" v-html="entry.cell.content"></div>
                     <div v-else v-html="entry.cell.content"></div>
@@ -1650,7 +1650,7 @@ events: {
                   <td v-else-if="!entry.skip && entry.cell && !isHidden(entry.cell.id)"
                       :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
                       :class="entry.cls">
-                    <span class="cell-id-badge" @click.stop="copyId(entry.cell.id)" title="点击复制 ID">{{entry.cell.id}}</span>
+                    <span class="cell-id-badge" @click.stop="copyId(entry.cell.id)" :title="entry.cell.id + '（点击复制）'">{{entry.cell.id}}</span>
                     <span class="cell-edit-icon" @click.stop="onIdClick(entry.cell.id)" title="编辑此单元格"><Icon type="md-create" size="11" color="#fff" /></span>
                     <div v-for="item in getItems(entry)" :key="item.cell.id"
                          :data-cell-id="item.cell.id"
@@ -1844,7 +1844,7 @@ events: {
           <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
               :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
               :class="'cell-id-' + entry.cell.id">
-            <span class="cell-id-badge" @click.stop="clickId(entry.cell.id)" title="点击打开此单元格的配置">{{entry.cell.id}}</span>
+            <span class="cell-id-badge" @click.stop="clickId(entry.cell.id)" :title="entry.cell.id">{{entry.cell.id}}</span>
             <tooltip placement="top" transfer :delay="200">
               <div v-if="entry.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(entry.cell.clampLines)" v-html="entry.cell.content"></div>
               <div v-else v-html="entry.cell.content"></div>
@@ -1854,7 +1854,7 @@ events: {
           <td v-else-if="!entry.skip && entry.cell && !isHidden(entry.cell.id)"
               :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
               :class="[entry.cls, 'cell-id-' + entry.cell.id]">
-            <span class="cell-id-badge" @click.stop="clickId(entry.cell.id)" title="点击打开此单元格的配置">{{entry.cell.id}}</span>
+            <span class="cell-id-badge" @click.stop="clickId(entry.cell.id)" :title="entry.cell.id">{{entry.cell.id}}</span>
             <div v-for="item in getItems(entry)" :key="item.cell.id" class="alt-item">
               <tooltip v-if="item.isText && item.cell.clampLines > 0" placement="top" transfer :delay="200">
                 <div class="cell-clamp" :style="clampStyle(item.cell.clampLines)" v-html="item.cell.content || ''" v-once></div>
@@ -2972,9 +2972,28 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           },
           copyId: function (id) {
             if (!id) return;
+            var self = this;
+            var done = function () {
+              self.$Message.success('已复制 ID: ' + id);
+              self.$emit('copy-id', id);
+            };
+            var fail = function () { self.$Message.error('复制失败'); };
             try {
               if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(id);
+                navigator.clipboard.writeText(id).then(done, function () {
+                  // clipboard API 被拒（非 HTTPS），降级 execCommand
+                  try {
+                    var ta = document.createElement('textarea');
+                    ta.value = id;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    done();
+                  } catch (e2) { fail(); }
+                });
               } else {
                 var ta = document.createElement('textarea');
                 ta.value = id;
@@ -2984,10 +3003,11 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                 ta.select();
                 document.execCommand('copy');
                 document.body.removeChild(ta);
+                done();
               }
-              this.$emit('copy-id', id);
             } catch (e) {
               console.error('复制失败', e);
+              fail();
             }
           },
           handleSubmit: function () {
@@ -3220,6 +3240,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             this.config.cells.push(c);
             this.$set(this.expandedSet, c.__uid, true);
             this.schedulePreview();
+            this.$Message.success('已新增单元格 ' + c.id);
           },
           removeCell: function (i) {
             this.config.cells.splice(i, 1);
@@ -3294,6 +3315,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               Object.keys(draft).forEach(function (k) { this.$set(cur, k, JSON.parse(JSON.stringify(draft[k]))); }, this);
               this.editDrawerLastSaved = new Date();
               this.schedulePreview();
+              this.$Message.success('已保存单元格配置');
             }
             this.closeEditDrawer();
           },
@@ -3314,13 +3336,16 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             this.showTemplateModal = false;
             this.schedulePreview();
             this.openEditDrawer(c.__uid);
+            this.$Message.success('已从模板新增 ' + c.id);
           },
           onEditRemove: function () {
             var i = this.editDrawerIndex;
             if (i < 0) return;
+            var removedId = this.config.cells[i].id;
             this.editDrawerUid = null;
             this.config.cells.splice(i, 1);
             this.schedulePreview();
+            this.$Message.success('已删除单元格 ' + (removedId || '(无 ID)'));
           },
           onEditMove: function (delta) {
             var i = this.editDrawerIndex;
@@ -3343,6 +3368,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             this.config.cells.splice(i + 1, 0, copy);
             this.openEditDrawer(copy.__uid);
             this.schedulePreview();
+            this.$Message.success('已复制单元格，新 ID: ' + copy.id);
           },
           toggleAll: function (expand) {
             var self = this;
@@ -3366,6 +3392,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                 self.config = { title: self.config.title, cells: [] };
                 self.expandedSet = {};
                 self.schedulePreview();
+                self.$Message.success('已清空所有单元格');
               }
             });
           },
@@ -3440,6 +3467,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            this.$Message.success('已下载 ' + title + '.json');
           },
           doImport: function () {
             this.importError = '';
