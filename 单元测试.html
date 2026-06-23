@@ -515,8 +515,11 @@ test('evalEvent 语法错误 → 静默吞错', function () {
   catch (e) { threw = true; }
   assertFail(threw);
 });
-test('evalEvent 返回表达式的值（return(...)）', function () {
-  assertEqual(DT.evalEvent('Number(value) + 1', 10, {}, {}), 11);
+test('evalEvent 用户写 return 才能拿到返回值（函数体不会自动包 return）', function () {
+  // 裸表达式当语句执行，无返回值（区别于 evalMath 自动包 return(...)）
+  assertEqual(DT.evalEvent('Number(value) + 1', 10, {}, {}), undefined);
+  // 用户显式 return 才能拿到
+  assertEqual(DT.evalEvent('return Number(value) + 1', 10, {}, {}), 11);
 });
 
 // ---- G. genUniqueId / idExists / checkOverlap ----
