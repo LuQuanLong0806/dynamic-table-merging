@@ -76,6 +76,16 @@
         display: flex;
         gap: 6px;
         margin-left: auto;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .app-header .actions .action-divider {
+        width: 1px;
+        height: 18px;
+        background: #d9d9d9;
+        margin: 0 2px;
+        flex-shrink: 0;
       }
 
       /* ===== 主体 ===== */
@@ -928,6 +938,14 @@
             <i-button type="primary" @click="openExport">导出 JSON</i-button>
             <i-button @click="copyJSON">复制 JSON</i-button>
             <i-button @click="confirmClear">清空</i-button>
+            <span class="action-divider"></span>
+            <i-button size="small" @click="showInsertColModal = true">⟳ 插入列</i-button>
+            <i-button size="small" @click="showInsertRowModal = true">⟳ 插入行</i-button>
+            <i-button size="small" @click="showDeleteColModal = true">✕ 删除列</i-button>
+            <i-button size="small" @click="showDeleteRowModal = true">✕ 删除行</i-button>
+            <span class="action-divider"></span>
+            <i-button size="small" :disabled="!canUndo()" @click="undo">↶ 撤销</i-button>
+            <i-button size="small" :disabled="!canRedo()" @click="redo">↷ 重做</i-button>
           </div>
         </header>
 
@@ -1200,6 +1218,61 @@ events: {
               <li>填值 → 提交，控制台查看输出 JSON</li>
               <li>导出 JSON 给后端</li>
             </ol>
+          </div>
+        </modal>
+
+        <!-- 批量操作：插入/删除列行 -->
+        <modal v-model="showInsertColModal" title="插入列" width="420"
+               ok-text="插入" cancel-text="取消" @on-ok="confirmInsertCol">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>在第</span>
+            <input-number v-model="insertColAt" :min="1" :max="maxX + 1" :step="1" size="small" style="width:90px;" />
+            <span>列前插入</span>
+            <input-number v-model="insertColCount" :min="1" :max="20" :step="1" size="small" style="width:80px;" />
+            <span>列</span>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:#888;">
+            坐标平移规则：插入点后的单元格整体右移；跨越插入点的合并单元格扩展范围（colspan +N）。<br>
+            支持 Ctrl+Z 撤销。
+          </div>
+        </modal>
+
+        <modal v-model="showInsertRowModal" title="插入行" width="420"
+               ok-text="插入" cancel-text="取消" @on-ok="confirmInsertRow">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>在第</span>
+            <input-number v-model="insertRowAt" :min="1" :max="maxY + 1" :step="1" size="small" style="width:90px;" />
+            <span>行前插入</span>
+            <input-number v-model="insertRowCount" :min="1" :max="20" :step="1" size="small" style="width:80px;" />
+            <span>行</span>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:#888;">
+            同插入列规则（行方向）。支持 Ctrl+Z 撤销。
+          </div>
+        </modal>
+
+        <modal v-model="showDeleteColModal" title="删除列" width="420"
+               ok-text="删除" cancel-text="取消" @on-ok="confirmDeleteCol">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>删除第</span>
+            <input-number v-model="deleteColAt" :min="1" :max="maxX" :step="1" size="small" style="width:90px;" />
+            <span>列</span>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:#ed4014;">
+            ⚠ 独占该列的单元格会被移除；跨越该列的合并单元格范围缩 1；该列后的单元格左移。<br>
+            建议 Ctrl+Z 撤销。
+          </div>
+        </modal>
+
+        <modal v-model="showDeleteRowModal" title="删除行" width="420"
+               ok-text="删除" cancel-text="取消" @on-ok="confirmDeleteRow">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>删除第</span>
+            <input-number v-model="deleteRowAt" :min="1" :max="maxY" :step="1" size="small" style="width:90px;" />
+            <span>行</span>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:#ed4014;">
+            ⚠ 同删除列规则（行方向）。建议 Ctrl+Z 撤销。
           </div>
         </modal>
 
@@ -3251,7 +3324,19 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             previewMode: 'all',
             showTemplateModal: false,
             showHelpModal: false,
-            cellTemplates: CELL_TEMPLATES
+            cellTemplates: CELL_TEMPLATES,
+            undoStack: [],
+            redoStack: [],
+            showInsertColModal: false,
+            showInsertRowModal: false,
+            showDeleteColModal: false,
+            showDeleteRowModal: false,
+            insertColAt: 1,
+            insertColCount: 1,
+            insertRowAt: 1,
+            insertRowCount: 1,
+            deleteColAt: 1,
+            deleteRowAt: 1
           };
         },
         computed: {
@@ -3319,6 +3404,10 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
         mounted: function () {
           this.previewConfig = this._stripInternal();
           this._watchStorage();
+          window.addEventListener('keydown', this._onKey);
+        },
+        beforeDestroy: function () {
+          window.removeEventListener('keydown', this._onKey);
         },
         methods: {
           _loadInit: function () {
@@ -3369,6 +3458,115 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                 return out;
               })
             };
+          },
+          // ---- 撤销栈（最近 10 步）----
+          _deepSnap: function () {
+            var s = this._stripInternal();
+            return {
+              title: s.title,
+              freezeRows: s.freezeRows,
+              cells: JSON.parse(JSON.stringify(s.cells))
+            };
+          },
+          _pushUndo: function () {
+            this.undoStack.push(this._deepSnap());
+            if (this.undoStack.length > 10) this.undoStack.shift();
+            this.redoStack = [];
+          },
+          _restoreSnap: function (snap) {
+            // 保留 __uid（通过 makeCell 重新生成会丢失展开状态等）
+            // 简化做法：直接覆盖 config，__uid 会重新生成在下次 buildGrid 时
+            this.config = {
+              title: snap.title,
+              freezeRows: snap.freezeRows > 0 ? Number(snap.freezeRows) : 0,
+              cells: JSON.parse(JSON.stringify(snap.cells)).map(makeCell)
+            };
+            this.expandedSet = {};
+          },
+          canUndo: function () { return this.undoStack.length > 0; },
+          _onKey: function (e) {
+            var tag = (e.target && e.target.tagName || '').toUpperCase();
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;   // 不抢输入框
+            var ctrl = e.ctrlKey || e.metaKey;
+            if (!ctrl) return;
+            var k = (e.key || '').toLowerCase();
+            if (k === 'z' && !e.shiftKey) { e.preventDefault(); this.undo(); }
+            else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); this.redo(); }
+          },
+          canRedo: function () { return this.redoStack.length > 0; },
+          undo: function () {
+            if (!this.undoStack.length) return;
+            this.redoStack.push(this._deepSnap());
+            this._restoreSnap(this.undoStack.pop());
+            this.schedulePreview();
+            this.$Message.info('已撤销');
+          },
+          redo: function () {
+            if (!this.redoStack.length) return;
+            this.undoStack.push(this._deepSnap());
+            this._restoreSnap(this.redoStack.pop());
+            this.schedulePreview();
+            this.$Message.info('已重做');
+          },
+          // ---- 批量操作（先压栈，再调 utils）----
+          insertColumnAt: function (beforeCol, count) {
+            if (!beforeCol || beforeCol < 1 || !count || count < 1) return;
+            this._pushUndo();
+            window.DTUtils.insertColumns(this.config.cells, beforeCol, count);
+            this.schedulePreview();
+            this.$Message.success('已在第 ' + beforeCol + ' 列前插入 ' + count + ' 列');
+          },
+          insertRowAt: function (beforeRow, count) {
+            if (!beforeRow || beforeRow < 1 || !count || count < 1) return;
+            this._pushUndo();
+            window.DTUtils.insertRows(this.config.cells, beforeRow, count);
+            this.schedulePreview();
+            this.$Message.success('已在第 ' + beforeRow + ' 行前插入 ' + count + ' 行');
+          },
+          deleteColumn: function (col) {
+            if (!col || col < 1) return;
+            this._pushUndo();
+            var removed = window.DTUtils.removeColumn(this.config.cells, col);
+            this.schedulePreview();
+            this.$Message.success('已删除第 ' + col + ' 列' + (removed ? '（含 ' + removed + ' 个独占单元格）' : ''));
+          },
+          deleteRow: function (row) {
+            if (!row || row < 1) return;
+            this._pushUndo();
+            var removed = window.DTUtils.removeRow(this.config.cells, row);
+            this.schedulePreview();
+            this.$Message.success('已删除第 ' + row + ' 行' + (removed ? '（含 ' + removed + ' 个独占单元格）' : ''));
+          },
+          appendColumnsOp: function (count) {
+            if (!count || count < 1) return;
+            this._pushUndo();
+            window.DTUtils.appendColumns(this.config.cells, count);
+            this.schedulePreview();
+            this.$Message.success('已末尾追加 ' + count + ' 列');
+          },
+          appendRowsOp: function (count) {
+            if (!count || count < 1) return;
+            this._pushUndo();
+            window.DTUtils.appendRows(this.config.cells, count);
+            this.schedulePreview();
+            this.$Message.success('已末尾追加 ' + count + ' 行');
+          },
+          // 弹窗确认 methods
+          confirmInsertCol: function () {
+            this.insertColumnAt(this.insertColAt, this.insertColCount);
+            this.showInsertColModal = false;
+          },
+          confirmInsertRow: function () {
+            this.insertRowAt(this.insertRowAt, this.insertRowCount);
+            this.showInsertRowModal = false;
+          },
+          confirmDeleteCol: function () {
+            this.deleteColumn(this.deleteColAt);
+            this.showDeleteColModal = false;
+          },
+          confirmDeleteRow: function () {
+            this.deleteRow(this.deleteRowAt);
+            this.showDeleteRowModal = false;
           },
           schedulePreview: function () {
             var self = this;
