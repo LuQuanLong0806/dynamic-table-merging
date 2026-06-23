@@ -943,6 +943,7 @@
             <i-button size="small" @click="showInsertRowModal = true">⟳ 插入行</i-button>
             <i-button size="small" @click="showDeleteColModal = true">✕ 删除列</i-button>
             <i-button size="small" @click="showDeleteRowModal = true">✕ 删除行</i-button>
+            <i-button size="small" @click="openColVisModal">👁 列可见性</i-button>
             <span class="action-divider"></span>
             <i-button size="small" :disabled="!canUndo()" @click="undo">↶ 撤销</i-button>
             <i-button size="small" :disabled="!canRedo()" @click="redo">↷ 重做</i-button>
@@ -975,7 +976,7 @@
               </tooltip>
               <span class="stat-chip stat-warn" v-if="emptyIdCount">缺ID {{emptyIdCount}}</span>
               <i-button size="small" @click="refreshPreview">刷新预览</i-button>
-              <i-button size="small" @click="openInNewWindow">新窗口</i-button>
+              <i-button size="small" v-if="false" @click="openInNewWindow">新窗口</i-button>
               <i-button size="small" @click="exportFile">下载 JSON</i-button>
             </div>
             <div class="preview-frame-wrap">
@@ -1275,6 +1276,35 @@ events: {
             ⚠ 独占该行的单元格会被移除；跨越该行的合并单元格范围缩 1；该行后的单元格上移。<br>
             联动规则中的行号会自动同步调整。建议 Ctrl+Z 撤销。
           </div>
+        </modal>
+
+        <!-- 批量列可见性弹窗 -->
+        <modal v-model="showColVisModal" title="批量设置列可见性" width="520"
+               ok-text="应用" cancel-text="取消" @on-ok="confirmColVis">
+          <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>选择列：</span>
+            <i-select v-model="colVisCol" size="small" style="width:220px;">
+              <i-option v-for="col in colList" :key="col.num" :value="col.num">
+                第 {{col.num}} 列（{{col.count}} 个单元格）
+              </i-option>
+            </i-select>
+          </div>
+          <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>设置为：</span>
+            <radio-group v-model="colVisAction" size="small">
+              <radio label="visible"><span>双端可见</span></radio>
+              <radio label="portalHide"><span>门户隐藏</span></radio>
+              <radio label="platformHide"><span>管理端隐藏</span></radio>
+            </radio-group>
+          </div>
+          <div v-if="colVisCol" style="font-size:12px;color:#888;line-height:1.6;">
+            当前第 {{colVisCol}} 列状态（按起始列归类，跨列合并单元格归到起始列）：<br>
+            <span v-for="c in colVisCells" :key="c.__uid" style="margin-right:8px;">
+              <span :style="{color: c.portalHide ? '#ed4014' : c.platformHide ? '#ff9900' : '#19be6b'}">{{c.id || '(未命名)'}}</span>
+              <span style="color:#aaa;">{{c.portalHide ? '[门户隐藏]' : c.platformHide ? '[管理端隐藏]' : '[可见]'}}</span>
+            </span>
+          </div>
+          <div style="margin-top:8px;font-size:12px;color:#888;">支持 Ctrl+Z 撤销。</div>
         </modal>
 
         <!-- 导出弹窗 -->
@@ -3614,7 +3644,10 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             insertRowAt: 1,
             insertRowCount: 1,
             deleteColAt: 1,
-            deleteRowAt: 1
+            deleteRowAt: 1,
+            showColVisModal: false,
+            colVisCol: null,
+            colVisAction: 'portalHide'
           };
         },
         computed: {
@@ -3639,6 +3672,26 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               parts.forEach(function (p) { var n = parseInt(p, 10); if (!isNaN(n) && n > m) m = n; });
             });
             return m;
+          },
+          colList: function () {
+            var map = {};
+            this.config.cells.forEach(function (c) {
+              if (!c || !c.x) return;
+              var parts = String(c.x).split(',').map(Number);
+              var col = Math.min.apply(null, parts);
+              if (!map[col]) map[col] = [];
+              map[col].push(c);
+            });
+            return Object.keys(map).sort(function(a,b){return Number(a)-Number(b)}).map(function(k) {
+              return { num: Number(k), count: map[k].length, cells: map[k] };
+            });
+          },
+          // 当前选中列的 cell 列表（供 Modal 预览直接 v-for，避免模板里 v-for+v-if 反模式）
+          colVisCells: function () {
+            var col = this.colVisCol;
+            if (!col) return [];
+            var target = this.colList.find(function (c) { return c.num === col; });
+            return target ? target.cells : [];
           },
           duplicateIds: function () {
             var seen = {}, dup = {};
@@ -3834,6 +3887,39 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           confirmDeleteRow: function () {
             this.deleteRow(this.deleteRowAt);
             this.showDeleteRowModal = false;
+          },
+          openColVisModal: function () {
+            if (!this.colList.length) { this.$Message.warning('没有列数据'); return; }
+            this.colVisCol = this.colList[0].num;
+            this.colVisAction = 'portalHide';
+            this.showColVisModal = true;
+          },
+          confirmColVis: function () {
+            var self = this;
+            var col = this.colVisCol;
+            var action = this.colVisAction;
+            if (!col) return;
+            var target = this.colList.find(function(c){ return c.num === col; });
+            if (!target) return;
+            this._pushUndo();
+            var count = 0;
+            target.cells.forEach(function(c) {
+              if (action === 'visible') {
+                self.$set(c, 'portalHide', false);
+                self.$set(c, 'platformHide', false);
+              } else if (action === 'portalHide') {
+                self.$set(c, 'portalHide', true);
+                self.$set(c, 'platformHide', false);
+              } else if (action === 'platformHide') {
+                self.$set(c, 'portalHide', false);
+                self.$set(c, 'platformHide', true);
+              }
+              count++;
+            });
+            this.showColVisModal = false;
+            this.schedulePreview();
+            var label = action === 'visible' ? '双端可见' : action === 'portalHide' ? '门户隐藏' : '管理端隐藏';
+            this.$Message.success('已将第 ' + col + ' 列的 ' + count + ' 个单元格设为「' + label + '」');
           },
           schedulePreview: function () {
             var self = this;
