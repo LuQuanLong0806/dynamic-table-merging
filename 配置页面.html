@@ -61,6 +61,17 @@
       .app-header .title-input {
         width: 280px;
       }
+      .app-header .freeze-rows-field {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #515a6e;
+        white-space: nowrap;
+      }
+      .app-header .freeze-rows-field .ivu-input-number {
+        width: 84px;
+      }
       .app-header .actions {
         display: flex;
         gap: 6px;
@@ -687,6 +698,18 @@
         top: 0;
         z-index: 2;
       }
+      .preview-renderer .row-freeze {
+        position: sticky;
+        top: 30px;            /* 让位给 axis-row-top（行号头高度约 30px） */
+        z-index: 1;            /* 低于 axis，不破坏调试坐标轴 */
+        background: #fff;
+        border-bottom: 2px solid #515a6e;
+      }
+      .preview-renderer .row-freeze > td,
+      .preview-renderer .row-freeze > th {
+        background: #f8f8f9;
+        border-bottom: 2px solid #515a6e;
+      }
       .preview-renderer .axis-row-head {
         position: sticky;
         left: 0;
@@ -893,6 +916,18 @@
             class="title-input"
             @on-change="schedulePreview"
           />
+          <div class="freeze-rows-field">
+            <span>表头固定</span>
+            <i-input-number
+              v-model="config.freezeRows"
+              :min="0"
+              :max="maxY"
+              :step="1"
+              size="small"
+              @on-change="schedulePreview"
+            />
+            <span>行</span>
+          </div>
           <div class="actions">
             <i-button type="primary" @click="showTemplateModal = true">+ 添加单元格</i-button>
             <i-button @click="showHelpModal = true">📖 使用说明</i-button>
@@ -1660,7 +1695,8 @@ events: {
                 <th class="axis-corner"></th>
                 <th v-for="c in colCount" :key="'ax-c-'+c" class="axis-col-head">{{c}}</th>
               </tr>
-              <tr v-for="(row, ri) in gridRows" v-if="isRowVisible(ri)" :key="ri">
+              <tr v-for="(row, ri) in gridRows" v-if="isRowVisible(ri)" :key="ri"
+                  :class="{ 'row-freeze': config.freezeRows > 0 && ri < config.freezeRows }">
                 <td class="axis-row-head">{{ri+1}}</td>
                 <template v-for="(entry, ci) in row">
                   <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
@@ -2017,6 +2053,8 @@ events: {
   }
   .axis-corner { background:#ebeef5 !important; }
   .axis-row-top { position:sticky; top:0; z-index:2; }
+  .row-freeze { position:sticky; top:30px; z-index:1; background:#fff; border-bottom:2px solid #515a6e; }
+  .row-freeze > td, .row-freeze > th { background:#f8f8f9; border-bottom:2px solid #515a6e; }
   .cell-id-badge {
     position:absolute; top:1px; left:2px;
     font-size:10px; line-height:1; padding:1px 4px;
@@ -2043,7 +2081,8 @@ events: {
         <th class="axis-corner"></th>
         <th v-for="c in colCount" :key="'ax-c-'+c" class="axis-col-head">{{c}}</th>
       </tr>
-      <tr v-for="(row,ri) in gridRows" v-if="isRowVisible(ri)" :key="ri">
+      <tr v-for="(row,ri) in gridRows" v-if="isRowVisible(ri)" :key="ri"
+          :class="{ 'row-freeze': config.freezeRows > 0 && ri < config.freezeRows }">
         <td class="axis-row-head">{{ri+1}}</td>
         <template v-for="(entry,ci) in row">
           <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
@@ -2113,7 +2152,7 @@ ${utilsSrc}
 
 var app=new Vue({
   el:'#app',template:'#prev-tpl',
-  data:function(){return{config:{title:'',cells:[]},gridRows:[],cellMap:{},fm:{},disabledState:{},hiddenState:{},extraContext:{},formulaResults:{},previewMode:'portal',fieldMap:{},_eventFnCache:{}};},
+  data:function(){return{config:{title:'',cells:[],freezeRows:0},gridRows:[],cellMap:{},fm:{},disabledState:{},hiddenState:{},extraContext:{},formulaResults:{},previewMode:'portal',fieldMap:{},_eventFnCache:{}};},
   computed:{
     formRules:function(){var R={},self=this;(this.config.cells||[]).forEach(function(c){if(c.validation&&!self.isHidden(c.id)&&!self.isDisabled(c.id))R[c.id]=self.buildRules(c);});return R;},
     colCount:function(){return this.gridRows.length?this.gridRows[0].length:0;},
@@ -2248,7 +2287,7 @@ var app=new Vue({
   }
 });
 
-window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[]};app.rebuildAll();}catch(e){console.error('setPreviewData error',e);}};
+window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[],freezeRows:data.freezeRows||0};app.rebuildAll();}catch(e){console.error('setPreviewData error',e);}};
 window.setPreviewMode=function(mode){app.previewMode=mode||'portal';app.rebuildAll();};
 
 window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-preview'){window.setPreviewData(e.data.data);}});
@@ -2630,7 +2669,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
       Vue.component('preview-renderer', {
         template: '#preview-renderer-tpl',
         props: {
-          config: { type: Object, default: function () { return { title: '', cells: [] }; } },
+          config: { type: Object, default: function () { return { title: '', cells: [], freezeRows: 0 }; } },
           mode: { type: String, default: 'portal' }
         },
         data: function () {
@@ -3210,7 +3249,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             showExportModal: false,
             minifyExport: false,
             previewTimer: null,
-            previewConfig: { title: '', cells: [] },
+            previewConfig: { title: '', cells: [], freezeRows: 0 },
             editDrawerUid: null,
             editDrawerDraft: null,
             editDrawerSnapshot: null,
@@ -3318,6 +3357,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           _stripInternal: function () {
             return {
               title: this.config.title,
+              freezeRows: this.config.freezeRows > 0 ? Number(this.config.freezeRows) : 0,
               cells: this.config.cells.map(function (c) {
                 var out = {};
                 for (var k in c) {
@@ -3588,7 +3628,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               title: '确认清空',
               content: '将清空所有单元格配置，确定继续？',
               onOk: function () {
-                self.config = { title: self.config.title, cells: [] };
+                self.config = { title: self.config.title, cells: [], freezeRows: 0 };
                 self.expandedSet = {};
                 self.schedulePreview();
                 self.$Message.success('已清空所有单元格');
@@ -3600,6 +3640,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             // 清理空字段，避免导出垃圾
             var cleaned = {
               title: data.title || '',
+              freezeRows: data.freezeRows > 0 ? Number(data.freezeRows) : undefined,
               cells: data.cells.map(function (c) {
                 var out = { id: c.id, x: String(c.x), y: String(c.y), type: c.type };
                 if (c.content) out.content = c.content;
@@ -3756,7 +3797,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                 var summary = Object.keys(typeCounts)
                   .map(function (k) { return k + ':' + typeCounts[k]; })
                   .join('、');
-                self.config = { title: data.title || '', cells: data.cells };
+                self.config = { title: data.title || '', cells: data.cells, freezeRows: data.freezeRows || 0 };
                 self.expandedSet = {};
                 self.showImportModal = false;
                 self.importText = '';
