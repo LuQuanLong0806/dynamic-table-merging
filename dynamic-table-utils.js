@@ -197,6 +197,117 @@
     return 1 / Math.pow(10, cell.precision);
   }
 
+  // ---- 列/行批量操作（坐标平移）----
+  // 坐标系：cell.x / cell.y 是字符串，单格 "3"，合并范围 "1,3"
+  // parseRange("1,3") → { start:1, end:3, span:3 }
+  // 所有函数就地修改 cells 数组并返回 cells（链式）
+
+  function _fmtRange(start, end) {
+    return start === end ? String(start) : start + ',' + end;
+  }
+
+  // 在 beforeCol 列前插入 count 列（beforeCol 从 1 开始）
+  // 三种分支：
+  //   xr.start >= beforeCol → 整 cell 在插入点后，整体右移
+  //   xr.end >= beforeCol   → cell 跨越插入点，扩展范围
+  //   其他                  → 完全在插入点前，不动
+  function insertColumns(cells, beforeCol, count) {
+    if (!Array.isArray(cells) || !beforeCol || !count || count < 1) return cells;
+    cells.forEach(function (c) {
+      if (!c || !c.x) return;
+      var xr = parseRange(c.x);
+      var ns, ne;
+      if (xr.start >= beforeCol) {
+        ns = xr.start + count; ne = xr.end + count;
+      } else if (xr.end >= beforeCol) {
+        ns = xr.start; ne = xr.end + count;
+      } else { return; }
+      c.x = _fmtRange(ns, ne);
+    });
+    return cells;
+  }
+
+  function insertRows(cells, beforeRow, count) {
+    if (!Array.isArray(cells) || !beforeRow || !count || count < 1) return cells;
+    cells.forEach(function (c) {
+      if (!c || !c.y) return;
+      var yr = parseRange(c.y);
+      var ns, ne;
+      if (yr.start >= beforeRow) {
+        ns = yr.start + count; ne = yr.end + count;
+      } else if (yr.end >= beforeRow) {
+        ns = yr.start; ne = yr.end + count;
+      } else { return; }
+      c.y = _fmtRange(ns, ne);
+    });
+    return cells;
+  }
+
+  // 删除第 col 列（col 从 1 开始），返回被完全移除的 cell 数（用于提示）
+  // 三种分支：
+  //   xr.start === col && xr.end === col → 独占该列，移除整个 cell
+  //   xr.start <= col && xr.end >= col   → 合并 cell 跨越该列，范围缩 1
+  //   xr.start > col                     → 完全在删除点后，整体左移
+  //   其他（完全在前）                    → 不动
+  function removeColumn(cells, col) {
+    if (!Array.isArray(cells) || !col) return 0;
+    var removed = 0;
+    for (var i = cells.length - 1; i >= 0; i--) {
+      var c = cells[i];
+      if (!c || !c.x) continue;
+      var xr = parseRange(c.x);
+      if (xr.start === col && xr.end === col) {
+        cells.splice(i, 1); removed++;
+      } else if (xr.start <= col && xr.end >= col) {
+        c.x = _fmtRange(xr.start, xr.end - 1);
+      } else if (xr.start > col) {
+        c.x = _fmtRange(xr.start - 1, xr.end - 1);
+      }
+    }
+    return removed;
+  }
+
+  function removeRow(cells, row) {
+    if (!Array.isArray(cells) || !row) return 0;
+    var removed = 0;
+    for (var i = cells.length - 1; i >= 0; i--) {
+      var c = cells[i];
+      if (!c || !c.y) continue;
+      var yr = parseRange(c.y);
+      if (yr.start === row && yr.end === row) {
+        cells.splice(i, 1); removed++;
+      } else if (yr.start <= row && yr.end >= row) {
+        c.y = _fmtRange(yr.start, yr.end - 1);
+      } else if (yr.start > row) {
+        c.y = _fmtRange(yr.start - 1, yr.end - 1);
+      }
+    }
+    return removed;
+  }
+
+  // 末尾追加 count 列（基于当前最大列号）
+  function appendColumns(cells, count) {
+    if (!Array.isArray(cells) || !count || count < 1) return cells;
+    var maxC = 0;
+    cells.forEach(function (c) {
+      if (!c || !c.x) return;
+      var xr = parseRange(c.x);
+      if (xr.end > maxC) maxC = xr.end;
+    });
+    return insertColumns(cells, maxC + 1, count);
+  }
+
+  function appendRows(cells, count) {
+    if (!Array.isArray(cells) || !count || count < 1) return cells;
+    var maxR = 0;
+    cells.forEach(function (c) {
+      if (!c || !c.y) return;
+      var yr = parseRange(c.y);
+      if (yr.end > maxR) maxR = yr.end;
+    });
+    return insertRows(cells, maxR + 1, count);
+  }
+
   return {
     parseRange: parseRange,
     buildFormModel: buildFormModel,
@@ -206,6 +317,12 @@
     evalMath: evalMath,
     evalEvent: evalEvent,
     getStep: getStep,
+    insertColumns: insertColumns,
+    insertRows: insertRows,
+    removeColumn: removeColumn,
+    removeRow: removeRow,
+    appendColumns: appendColumns,
+    appendRows: appendRows,
     _clearCache: function () { _exprCache = {}; }
   };
 });
