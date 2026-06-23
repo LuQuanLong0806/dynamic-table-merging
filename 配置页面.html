@@ -703,10 +703,6 @@
         top: 20px;            /* 让位给 axis-row-top（行号头高度约 20px） */
         z-index: 1;            /* 低于 axis，不破坏调试坐标轴 */
       }
-      .preview-renderer .row-freeze > td,
-      .preview-renderer .row-freeze > th {
-        background: #fff;      /* sticky 行必须有不透明背景，否则滚动时透出底层 */
-      }
       .preview-renderer .axis-row-head {
         position: sticky;
         left: 0;
@@ -2051,7 +2047,6 @@ events: {
   .axis-corner { background:#ebeef5 !important; }
   .axis-row-top { position:sticky; top:0; z-index:2; }
   .row-freeze { position:sticky; top:20px; z-index:1; }
-  .row-freeze > td, .row-freeze > th { background:#fff; }
   .cell-id-badge {
     position:absolute; top:1px; left:2px;
     font-size:10px; line-height:1; padding:1px 4px;
