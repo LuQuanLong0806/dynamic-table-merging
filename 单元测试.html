@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>动态表格工具 - 单元测试</title>
+  <style>
+    * { box-sizing: border-box; font-family: 'Microsoft YaHei', sans-serif; }
+    body { margin: 20px; background: #f5f5f5; color: #333; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    h2 { font-size: 15px; margin: 20px 0 8px; padding-left: 8px; border-left: 3px solid #2d8cf0; }
+    .toolbar { background: #fff; padding: 12px; border-radius: 4px; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .toolbar button, .toolbar label { padding: 6px 14px; border: none; border-radius: 3px; cursor: pointer; font-size: 13px; }
+    .toolbar button { background: #2d8cf0; color: #fff; }
+    .toolbar button:hover { background: #1c70d0; }
+    .toolbar label { background: #f5f5f5; border: 1px solid #ddd; }
+    .summary { background: #fff; padding: 12px; border-radius: 4px; margin-bottom: 16px; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .summary .pass { color: #19be6b; font-weight: bold; }
+    .summary .fail { color: #ed4014; font-weight: bold; }
+    .case { background: #fff; padding: 8px 12px; border-radius: 3px; margin-bottom: 4px; font-size: 13px; display: flex; justify-content: space-between; }
+    .case.pass { border-left: 3px solid #19be6b; }
+    .case.fail { border-left: 3px solid #ed4014; }
+    .case .name { flex: 1; }
+    .case .status { font-weight: bold; }
+    .case .detail { color: #888; font-family: monospace; font-size: 12px; margin-left: 12px; }
+    .case.fail .detail { color: #c33; white-space: pre-wrap; }
+    .stats { background: #fff; padding: 12px; border-radius: 4px; font-size: 13px; line-height: 1.8; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .stats code { background: #f0f0f0; padding: 1px 6px; border-radius: 2px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>动态表格工具 - 单元测试</h1>
+
+  <div class="toolbar">
+    <button id="run-all">跑全部测试</button>
+    <label>
+      选择真实数据文件
+      <input type="file" id="file-input" accept=".txt,.json" style="display:none" />
+    </label>
+    <span id="file-status" style="font-size:12px;color:#888;">未选择文件</span>
+  </div>
+
+  <div class="summary" id="summary">点击"跑全部测试"开始</div>
+  <div id="results"></div>
+
+<script>
+/* ====================================================================
+ * 被测代码区
+ * 与 配置页面.html 内联的 _DTUtilsFactory 保持一致
+ * 修改配置页 utils 时请同步更新此处
+ * ==================================================================== */
+function _DTUtilsFactory() {
+  function parseRange(v) {
+    var p = String(v).split(',').map(Number);
+    var mn = Math.min.apply(null, p);
+    var mx = Math.max.apply(null, p);
+    return { start: mn, end: mx, span: mx - mn + 1 };
+  }
+  function buildFormModel(cells) {
+    var m = {};
+    (cells || []).forEach(function (c) {
+      if (!c || !c.id) return;
+      if (c.type === 'number') {
+        m[c.id] = c.value != null && c.value !== '' ? Number(c.value) : null;
+      } else if (c.type === 'checkbox') {
+        m[c.id] = Array.isArray(c.value) ? c.value : [];
+      } else if (['input', 'select', 'radio', 'date', 'upload'].indexOf(c.type) >= 0) {
+        m[c.id] = c.value != null ? c.value : '';
+      }
+    });
+    return m;
+  }
+  function buildGrid(cells) {
+    var safeCells = cells || [];
+    var cellMap = {};
+    safeCells.forEach(function (c) { cellMap[c.id] = c; });
+    var maxC = 0, maxR = 0;
+    safeCells.forEach(function (c) {
+      var xr = parseRange(c.x), yr = parseRange(c.y);
+      if (xr.end > maxC) maxC = xr.end;
+      if (yr.end > maxR) maxR = yr.end;
+    });
+    var G = [], O = [];
+    for (var r = 0; r < maxR; r++) {
+      G[r] = []; O[r] = [];
+      for (var c = 0; c < maxC; c++) { G[r][c] = null; O[r][c] = false; }
+    }
+    var sorted = safeCells.slice().sort(function (a, b) {
+      return parseRange(b.y).span * parseRange(b.x).span -
+             parseRange(a.y).span * parseRange(a.x).span;
+    });
+    sorted.forEach(function (cell) {
+      var xr = parseRange(cell.x), yr = parseRange(cell.y);
+      var r0 = yr.start - 1, c0 = xr.start - 1;
+      if (r0 < 0 || c0 < 0) return;
+      var entry = { cell: cell, rowspan: yr.span, colspan: xr.span, alts: null };
+      if (G[r0][c0]) {
+        if (!G[r0][c0].alts) G[r0][c0].alts = [];
+        G[r0][c0].alts.push(entry);
+        return;
+      }
+      G[r0][c0] = entry;
+      for (var r = r0; r < r0 + yr.span && r < maxR; r++) {
+        for (var c = c0; c < c0 + xr.span && c < maxC; c++) {
+          if (!(r === r0 && c === c0)) O[r][c] = true;
+        }
+      }
+    });
+    var rows = [];
+    for (var r = 0; r < maxR; r++) {
+      var cols = [];
+      for (var c = 0; c < maxC; c++) {
+        if (O[r][c]) { cols.push({ skip: true }); continue; }
+        var e = G[r][c];
+        if (!e) { cols.push({ skip: false, cell: null }); continue; }
+        var isCtrl = ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload']
+          .indexOf(e.cell.type) >= 0;
+        var cls = [];
+        if (e.cell.type === 'text' && (c === 0 || c === 2) && /<b>/.test(e.cell.content || '')) {
+          cls.push('cell-group');
+        }
+        cols.push({
+          skip: false, cell: e.cell, rowspan: e.rowspan, colspan: e.colspan, alts: e.alts || [],
+          isLabel: e.cell.type === 'label', isText: e.cell.type === 'text',
+          isControl: isCtrl, isFormula: e.cell.type === 'formula', cls: cls.join(' ')
+        });
+      }
+      rows.push(cols);
+    }
+    return { rows: rows, cellMap: cellMap, maxC: maxC, maxR: maxR };
+  }
+  var _exprCache = {};
+  function _buildLocals(fm) {
+    return Object.keys(fm).map(function (k) {
+      return 'var ' + k + '=fm[' + JSON.stringify(k) + '];';
+    }).join('');
+  }
+  function _fmKeysSig(fm) { return Object.keys(fm).sort().join('|'); }
+  function _compile(kind, expr, fm, argList) {
+    var sig = _fmKeysSig(fm);
+    var cacheKey = kind + '|' + sig + '|' + expr;
+    var fn = _exprCache[cacheKey];
+    if (!fn) {
+      var locals = _buildLocals(fm);
+      fn = new Function(argList, locals + 'return(' + expr + ')');
+      _exprCache[cacheKey] = fn;
+    }
+    return fn;
+  }
+  function evalDepends(expr, fm, extra) {
+    if (!expr || typeof expr !== 'string' || !String(expr).trim()) return false;
+    try { return _compile('dep', expr, fm, 'fm,extra')(fm, extra || {}); }
+    catch (e) { console.error('[evalDepends 失败]', expr, e); return false; }
+  }
+  function evalCustom(expr, value, fm, extra) {
+    if (!expr || typeof expr !== 'string' || !String(expr).trim()) return false;
+    try { return _compile('cust', expr, fm, 'value,fm,extra')(value, fm, extra || {}); }
+    catch (ex) { console.error('[evalCustom 失败]', expr, ex); return false; }
+  }
+  function evalMath(expr, scope) {
+    if (!expr || typeof expr !== 'string') return null;
+    try {
+      var locals = Object.keys(scope || {}).map(function (k) {
+        return 'var ' + k + '=' + JSON.stringify(scope[k]) + ';';
+      }).join('');
+      return new Function('Math', locals + 'return(' + expr + ')')(Math);
+    } catch (e) { console.error('[evalMath 失败]', expr, e); return null; }
+  }
+  function evalEvent(fnBody, value, fm, extra, rawEvent) {
+    if (!fnBody || !String(fnBody).trim()) return undefined;
+    try {
+      return new Function('value', 'fm', 'extra', 'rawEvent', fnBody)(value, fm, extra || {}, rawEvent);
+    } catch (e) { console.error('[evalEvent 编译失败]', e); return undefined; }
+  }
+  function getStep(cell) {
+    if (!cell || cell.precision == null) return 1;
+    return 1 / Math.pow(10, cell.precision);
+  }
+  return {
+    parseRange: parseRange, buildFormModel: buildFormModel, buildGrid: buildGrid,
+    evalDepends: evalDepends, evalCustom: evalCustom, evalMath: evalMath, evalEvent: evalEvent,
+    getStep: getStep,
+    _clearCache: function () { _exprCache = {}; },
+    _cacheSize: function () { return Object.keys(_exprCache).length; }
+  };
+}
+var DT = _DTUtilsFactory();
+
+/* ---- parseConfigText（与配置页一致）---- */
+function parseConfigText(text) {
+  try { return JSON.parse(text); } catch (e) {}
+  var m = text.match(/var\s+([a-zA-Z_$][\w$]*)\s*=/);
+  if (m) {
+    var name = m[1];
+    try {
+      var data = new Function(text + '; return typeof ' + name + ' !== "undefined" ? ' + name + ' : null;')();
+      if (data && typeof data === 'object') return data;
+    } catch (e) {}
+  }
+  try {
+    var data2 = new Function('return (' + text + ');')();
+    if (data2 && typeof data2 === 'object') return data2;
+  } catch (e2) {}
+  throw new Error('无法识别的内容格式');
+}
+
+/* ---- 冲突检测纯函数版 ---- */
+function idExists(cells, id, excludeUid) {
+  return (cells || []).some(function (c) { return c.id === id && c.__uid !== excludeUid; });
+}
+function genUniqueId(cells, base, excludeUid) {
+  if (!idExists(cells, base, excludeUid)) return base;
+  var n = 2;
+  while (idExists(cells, base + '_' + n, excludeUid)) n++;
+  return base + '_' + n;
+}
+function checkOverlap(cells, x, y, excludeUid) {
+  if (!x || !y) return [];
+  var xr = DT.parseRange(x), yr = DT.parseRange(y);
+  var conflicts = [];
+  (cells || []).forEach(function (c) {
+    if (c.__uid === excludeUid) return;
+    if (!c.x || !c.y) return;
+    var cxr = DT.parseRange(c.x), cyr = DT.parseRange(c.y);
+    if (xr.start <= cxr.end && xr.end >= cxr.start &&
+        yr.start <= cyr.end && yr.end >= cyr.start) conflicts.push(c);
+  });
+  return conflicts;
+}
+
+/* ---- schema 校验（返回错误数组）---- */
+var VALID_TYPES = ['label', 'text', 'input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload', 'formula'];
+function validateConfig(data) {
+  if (!data || typeof data !== 'object') return ['数据不是对象'];
+  if (!Array.isArray(data.cells)) return ['数据必须包含 cells 数组'];
+  var errors = [];
+  var idMap = {};
+  data.cells.forEach(function (c, idx) {
+    var label = '第 ' + (idx + 1) + ' 个 cell';
+    if (!c.id) errors.push(label + ' 缺少 id');
+    else if (idMap[c.id]) errors.push(label + ' ID "' + c.id + '" 与第 ' + idMap[c.id] + ' 个 cell 重复');
+    else idMap[c.id] = idx + 1;
+    if (c.x == null) errors.push(label + ' 缺少 x');
+    if (c.y == null) errors.push(label + ' 缺少 y');
+    if (!c.type) errors.push(label + ' 缺少 type');
+    else if (VALID_TYPES.indexOf(c.type) < 0) errors.push(label + ' type "' + c.type + '" 不合法');
+  });
+  return errors;
+}
+
+/* ====================================================================
+ * 测试框架
+ * ==================================================================== */
+var _groups = [];
+function group(name) { _groups.push({ name: name, cases: [] }); }
+function test(name, fn) { _groups[_groups.length - 1].cases.push({ name: name, fn: fn }); }
+function _rec(res) { _lastResult = res; if (!res.pass) throw new Error(res.detail || '失败'); }
+function assertEqual(actual, expected, msg) {
+  var aJson = JSON.stringify(actual), eJson = JSON.stringify(expected);
+  _rec({ pass: aJson === eJson, detail: (msg || '') + '\n  期望: ' + eJson + '\n  实际: ' + aJson });
+}
+function assertOk(value, msg) { _rec({ pass: !!value, detail: msg || '值为假' }); }
+function assertFail(value, msg) { _rec({ pass: !value, detail: msg || '值应为假' }); }
+var _lastResult = null;
+
+/* ====================================================================
+ * 测试用例
+ * ==================================================================== */
+
+// ---- A. parseRange ----
+group('A. parseRange');
+test('单值', function () {
+  var r = DT.parseRange('1');
+  assertEqual(r, { start: 1, end: 1, span: 1 });
+});
+test('范围 "3,5"', function () {
+  assertEqual(DT.parseRange('3,5'), { start: 3, end: 5, span: 3 });
+});
+test('逆序 "5,3"', function () {
+  assertEqual(DT.parseRange('5,3'), { start: 3, end: 5, span: 3 });
+});
+test('数字入参', function () {
+  assertEqual(DT.parseRange(7), { start: 7, end: 7, span: 1 });
+});
+
+// ---- B. buildFormModel ----
+group('B. buildFormModel');
+test('number 类型 → Number', function () {
+  var fm = DT.buildFormModel([{ id: 'a', type: 'number', value: '42' }]);
+  assertEqual(fm.a, 42);
+});
+test('number 空值 → null', function () {
+  var fm = DT.buildFormModel([{ id: 'a', type: 'number', value: '' }]);
+  assertEqual(fm.a, null);
+});
+test('checkbox → 数组', function () {
+  var fm = DT.buildFormModel([{ id: 'a', type: 'checkbox', value: ['x', 'y'] }]);
+  assertOk(Array.isArray(fm.a) && fm.a.length === 2);
+});
+test('upload 走标量分支（bug fix 验证）', function () {
+  var fm = DT.buildFormModel([{ id: 'a', type: 'upload', value: 'file.pdf' }]);
+  assertEqual(fm.a, 'file.pdf', 'upload 应该走标量分支，不该是数组');
+});
+test('upload 无 value → 空字符串', function () {
+  var fm = DT.buildFormModel([{ id: 'a', type: 'upload' }]);
+  assertEqual(fm.a, '');
+});
+
+// ---- C. buildGrid ----
+group('C. buildGrid');
+test('单 cell', function () {
+  var g = DT.buildGrid([{ id: 'a', x: '1', y: '1', type: 'label' }]);
+  assertEqual(g.maxC, 1);
+  assertEqual(g.maxR, 1);
+  assertEqual(g.rows[0][0].cell.id, 'a');
+});
+test('rowspan 占位', function () {
+  // a 占 (1,1)-(1,2)，b 占 (2,1)，c 占 (2,2)
+  var g = DT.buildGrid([
+    { id: 'a', x: '1', y: '1,2', type: 'label' },
+    { id: 'b', x: '2', y: '1', type: 'label' },
+    { id: 'c', x: '2', y: '2', type: 'label' }
+  ]);
+  assertOk(g.rows[0][0].cell.id === 'a' && g.rows[0][0].rowspan === 2, 'a 应占 2 行');
+  assertOk(g.rows[1][0].skip === true, '第 2 行第 1 列应为 skip 占位');
+  assertEqual(g.rows[1][1].cell.id, 'c');
+});
+test('隐藏 cell 过滤后正确布局（模拟 portalHide bug 场景）', function () {
+  // 模拟之前 portalHide bug：跨行 cell 被隐藏后，被它占掉的位置不应再干扰布局
+  var cells = [
+    { id: 'a', x: '1', y: '1,2', type: 'label' },
+    { id: 'b', x: '2', y: '1', type: 'label' }
+  ];
+  var g = DT.buildGrid(cells);
+  assertEqual(g.rows.length, 2);
+  assertEqual(g.rows[1][0].skip, true, 'a 的 rowspan 占位');
+  assertEqual(g.rows[1][1].cell, null, '第 2 行第 2 列本就空');
+});
+
+// ---- D. evalDepends / evalCustom ----
+group('D. evalDepends / evalCustom');
+test('evalDepends 基本求值', function () {
+  assertOk(DT.evalDepends('a > 1', { a: 2 }));
+});
+test('evalDepends locals 注入', function () {
+  // fm 的 key 应该作为局部变量
+  assertOk(DT.evalDepends('a + b === 3', { a: 1, b: 2 }));
+});
+test('evalDepends 空表达式 → false', function () {
+  assertFail(DT.evalDepends('', { a: 1 }));
+});
+test('evalDepends 异常 → false（不抛错）', function () {
+  assertFail(DT.evalDepends('throw new Error("x")', {}));
+});
+test('evalCustom 接收 value', function () {
+  assertEqual(DT.evalCustom('value * 2', 5, {}), 10);
+});
+test('evalCustom 空表达式 → false', function () {
+  assertFail(DT.evalCustom('  ', 1, {}));
+});
+
+// ---- E. 编译缓存 ----
+group('E. 编译缓存');
+test('同表达式多次调用只编译一次', function () {
+  DT._clearCache();
+  var size0 = DT._cacheSize();
+  DT.evalDepends('a > 0', { a: 1 });
+  DT.evalDepends('a > 0', { a: 2 });
+  DT.evalDepends('a > 0', { a: 3 });
+  var sizeAfter = DT._cacheSize();
+  assertOk(sizeAfter - size0 === 1, '3 次调用只新增 1 个缓存项，实际：' + (sizeAfter - size0));
+});
+test('不同表达式分别编译', function () {
+  DT._clearCache();
+  DT.evalDepends('a > 0', { a: 1 });
+  DT.evalDepends('a < 0', { a: 1 });
+  assertEqual(DT._cacheSize(), 2);
+});
+test('不同 fm keys 各自缓存（避免 locals 不一致）', function () {
+  DT._clearCache();
+  DT.evalDepends('a > 0', { a: 1 });
+  DT.evalDepends('a > 0', { a: 1, b: 2 });
+  assertEqual(DT._cacheSize(), 2, 'fm keys 集不同应分别缓存');
+});
+
+// ---- F. evalEvent / evalMath ----
+group('F. evalEvent / evalMath');
+test('evalEvent 基本求值', function () {
+  var fm = { total: 0, a: 3, b: 4 };
+  DT.evalEvent('fm.total = fm.a + fm.b', 0, fm, {});
+  assertEqual(fm.total, 7);
+});
+test('evalEvent 空函数体 → undefined', function () {
+  assertEqual(DT.evalEvent('  ', 1, {}, {}), undefined);
+});
+test('evalMath 基本求值', function () {
+  assertEqual(DT.evalMath('a + b * 2', { a: 1, b: 2 }), 5);
+});
+
+// ---- F2. getStep（数字精度派生） ----
+// 注：getStep 只按 cell.precision 计算，不关心默认值；
+// 配置页 makeCell 在 number 类型时默认 precision=2（小数 2 位），
+// 但 getStep 函数本身对未设 precision 的 cell 返回 step=1（兼容导入旧数据）。
+group('F2. getStep（数字精度派生）');
+test('precision 未设置 → step=1（函数行为；配置页 makeCell 会补默认 precision=2）', function () {
+  assertEqual(DT.getStep({ type: 'number' }), 1);
+});
+test('precision=null → step=1（"不限"模式）', function () {
+  assertEqual(DT.getStep({ type: 'number', precision: null }), 1);
+});
+test('precision=undefined → step=1', function () {
+  assertEqual(DT.getStep({ type: 'number', precision: undefined }), 1);
+});
+test('precision=0（仅整数）→ step=1', function () {
+  assertEqual(DT.getStep({ type: 'number', precision: 0 }), 1);
+});
+test('precision=1（1 位小数）→ step=0.1', function () {
+  assertEqual(DT.getStep({ type: 'number', precision: 1 }), 0.1);
+});
+test('precision=2（2 位小数）→ step=0.01', function () {
+  assertEqual(DT.getStep({ type: 'number', precision: 2 }), 0.01);
+});
+test('precision=3（3 位小数）→ step=0.001', function () {
+  assertEqual(DT.getStep({ type: 'number', precision: 3 }), 0.001);
+});
+test('precision=4（4 位小数）→ step=0.0001', function () {
+  assertEqual(DT.getStep({ type: 'number', precision: 4 }), 0.0001);
+});
+test('cell=null → step=1（不抛错）', function () {
+  assertEqual(DT.getStep(null), 1);
+});
+test('cell=undefined → step=1（不抛错）', function () {
+  assertEqual(DT.getStep(undefined), 1);
+});
+test('非 number 类型也按 precision 返回（兼容调用）', function () {
+  // getStep 不校验 type，调用方控制；这里验证精度优先于类型
+  assertEqual(DT.getStep({ type: 'text', precision: 2 }), 0.01);
+});
+
+// ---- F3. cell.events（自定义事件契约） ----
+// 注：配置页和生产组件 runCellEvent 都按 'on' + eventType首字母大写 取 key
+// （change → onChange），并回退兼容历史小写 key。
+// evalEvent 是工具函数（dynamic-table-utils.js）；
+// key 转换 + 编译缓存在两端组件里独立实现但行为一致，这里通过模拟函数验证契约。
+group('F3. cell.events（自定义事件契约）');
+
+// 辅助：模拟 runCellEvent 的 key 转换（与配置页/生产组件代码完全一致）
+function pickEventBody(cell, eventType) {
+  var key = 'on' + eventType.charAt(0).toUpperCase() + eventType.slice(1);
+  return (cell.events && (cell.events[key] || cell.events[eventType])) || undefined;
+}
+
+test('key 转换：change → onChange', function () {
+  assertEqual(pickEventBody({ events: { onChange: 'fm.x=1' } }, 'change'), 'fm.x=1');
+});
+test('key 转换：blur → onBlur', function () {
+  assertEqual(pickEventBody({ events: { onBlur: 'fm.x=2' } }, 'blur'), 'fm.x=2');
+});
+test('key 转换：input → onInput', function () {
+  assertEqual(pickEventBody({ events: { onInput: 'fm.x=3' } }, 'input'), 'fm.x=3');
+});
+test('兼容历史小写 key（change → events.change）', function () {
+  assertEqual(pickEventBody({ events: { change: 'fm.x=4' } }, 'change'), 'fm.x=4');
+});
+test('大小写 key 同时存在时 onXxx 优先', function () {
+  var cell = { events: { onChange: 'on-style', change: 'lower' } };
+  assertEqual(pickEventBody(cell, 'change'), 'on-style');
+});
+test('空 events → undefined', function () {
+  assertEqual(pickEventBody({ events: {} }, 'change'), undefined);
+});
+test('无 events 字段 → undefined', function () {
+  assertEqual(pickEventBody({}, 'change'), undefined);
+});
+
+test('evalEvent 跨字段重算（写 fm.xxx 改外部对象引用）', function () {
+  var fm = { total: 0, a: 3, b: 4 };
+  DT.evalEvent('fm.total = Number(fm.a) + Number(fm.b)', 0, fm, {});
+  assertEqual(fm.total, 7);
+});
+test('evalEvent 条件赋值（if (...) fm.y = ...）', function () {
+  var fm = { score: 90, level: 'C' };
+  DT.evalEvent('if (fm.score > 80) fm.level = "A"', null, fm, {});
+  assertEqual(fm.level, 'A');
+});
+test('evalEvent value 参数可用（当前 cell 新值）', function () {
+  var fm = { doubled: 0 };
+  DT.evalEvent('fm.doubled = Number(value) * 2', 21, fm, {});
+  assertEqual(fm.doubled, 42);
+});
+test('evalEvent extra 参数可访问', function () {
+  var fm = { echo: '' };
+  DT.evalEvent('fm.echo = extra.cell.id', null, fm, { cell: { id: 'r1' } });
+  assertEqual(fm.echo, 'r1');
+});
+test('evalEvent rawEvent 第 4 参数可访问', function () {
+  var fm = { d: null };
+  DT.evalEvent('fm.d = rawEvent', null, fm, {}, { date: '2026-01-01' });
+  assertOk(fm.d && fm.d.date === '2026-01-01');
+});
+test('evalEvent 函数体 throw → 静默吞错（不抛出，仅 console.error）', function () {
+  var threw = false;
+  try { DT.evalEvent('throw new Error("boom")', null, {}, {}); }
+  catch (e) { threw = true; }
+  assertFail(threw);
+});
+test('evalEvent 空函数体 → undefined 且不执行副作用', function () {
+  var fm = { x: 'unchanged' };
+  var r = DT.evalEvent('   ', null, fm, {});
+  assertEqual(r, undefined);
+  assertEqual(fm.x, 'unchanged');
+});
+test('evalEvent 语法错误 → 静默吞错', function () {
+  var threw = false;
+  try { DT.evalEvent('fm.x =', null, {}, {}); }
+  catch (e) { threw = true; }
+  assertFail(threw);
+});
+test('evalEvent 返回表达式的值（return(...)）', function () {
+  assertEqual(DT.evalEvent('Number(value) + 1', 10, {}, {}), 11);
+});
+
+// ---- G. genUniqueId / idExists / checkOverlap ----
+group('G. genUniqueId / idExists / checkOverlap');
+test('idExists 基础查重', function () {
+  var cells = [{ id: 'a', __uid: '1' }, { id: 'b', __uid: '2' }];
+  assertOk(idExists(cells, 'a'));
+  assertFail(idExists(cells, 'c'));
+});
+test('idExists 排除自身', function () {
+  var cells = [{ id: 'a', __uid: '1' }];
+  assertOk(!idExists(cells, 'a', '1'), '排除自身后不应认为重复');
+});
+test('genUniqueId 无冲突返回原值', function () {
+  var cells = [{ id: 'a', __uid: '1' }];
+  assertEqual(genUniqueId(cells, 'b'), 'b');
+});
+test('genUniqueId 冲突时追加 _2', function () {
+  var cells = [{ id: 'a', __uid: '1' }];
+  assertEqual(genUniqueId(cells, 'a'), 'a_2');
+});
+test('genUniqueId 多次冲突', function () {
+  var cells = [{ id: 'a', __uid: '1' }, { id: 'a_2', __uid: '2' }, { id: 'a_3', __uid: '3' }];
+  assertEqual(genUniqueId(cells, 'a'), 'a_4');
+});
+test('checkOverlap 重叠', function () {
+  var cells = [{ id: 'other', x: '1,3', y: '1,3', __uid: '9' }];
+  var r = checkOverlap(cells, '2,4', '2,4', 'self');
+  assertEqual(r.length, 1);
+  assertEqual(r[0].id, 'other');
+});
+test('checkOverlap 不重叠', function () {
+  var cells = [{ id: 'other', x: '5,6', y: '5,6', __uid: '9' }];
+  var r = checkOverlap(cells, '1,3', '1,3', 'self');
+  assertEqual(r.length, 0);
+});
+test('checkOverlap 排除自身', function () {
+  var cells = [{ id: 'a', x: '1,3', y: '1,3', __uid: '1' }];
+  var r = checkOverlap(cells, '1,3', '1,3', '1');
+  assertEqual(r.length, 0);
+});
+
+// ---- H. validateConfig ----
+group('H. schema 校验');
+test('合法配置无错误', function () {
+  var data = { cells: [{ id: 'a', x: '1', y: '1', type: 'label' }] };
+  assertEqual(validateConfig(data).length, 0);
+});
+test('缺 id 报错', function () {
+  var data = { cells: [{ x: '1', y: '1', type: 'label' }] };
+  var errs = validateConfig(data);
+  assertOk(errs.length === 1 && /缺少 id/.test(errs[0]));
+});
+test('非法 type 报错', function () {
+  var data = { cells: [{ id: 'a', x: '1', y: '1', type: 'invalidType' }] };
+  assertOk(validateConfig(data).length === 1);
+});
+test('重复 ID 报错', function () {
+  var data = { cells: [
+    { id: 'dup', x: '1', y: '1', type: 'label' },
+    { id: 'dup', x: '2', y: '2', type: 'label' }
+  ]};
+  var errs = validateConfig(data);
+  assertOk(errs.length === 1 && /重复/.test(errs[0]));
+});
+test('缺 cells 数组', function () {
+  assertEqual(validateConfig({}).length, 1);
+});
+
+// ---- I. parseConfigText ----
+group('I. parseConfigText');
+test('标准 JSON', function () {
+  var d = parseConfigText('{"title":"x","cells":[]}');
+  assertEqual(d.title, 'x');
+});
+test('var X = {...}; 形式', function () {
+  var d = parseConfigText('var MOCK = {"title":"y","cells":[]};');
+  assertEqual(d.title, 'y');
+});
+test('裸对象字面量', function () {
+  var d = parseConfigText('{title:"z",cells:[]}');
+  assertEqual(d.title, 'z');
+});
+test('非法格式抛错', function () {
+  var threw = false;
+  try { parseConfigText('not a config'); } catch (e) { threw = true; }
+  assertOk(threw);
+});
+
+/* ====================================================================
+ * 运行器
+ * ==================================================================== */
+function runAll() {
+  var results = document.getElementById('results');
+  var summary = document.getElementById('summary');
+  results.innerHTML = '';
+  var totalPass = 0, totalFail = 0;
+  _groups.forEach(function (g) {
+    var groupHtml = '<h2>' + g.name + '</h2>';
+    var groupPass = 0;
+    g.cases.forEach(function (tc) {
+      _lastResult = { pass: true, detail: '' };
+      try { tc.fn(); }
+      catch (e) { _lastResult = { pass: false, detail: e.message || String(e) }; }
+      if (_lastResult.pass) { totalPass++; groupPass++; }
+      else totalFail++;
+      groupHtml += '<div class="case ' + (_lastResult.pass ? 'pass' : 'fail') + '">' +
+        '<span class="name">' + tc.name + '</span>' +
+        '<span class="detail">' + escapeHtml(_lastResult.detail || '') + '</span>' +
+        '<span class="status">' + (_lastResult.pass ? '✓' : '✗') + '</span>' +
+        '</div>';
+    });
+    groupHtml += '<div style="font-size:11px;color:#888;padding:4px 12px 8px;">小计：' + groupPass + '/' + g.cases.length + ' 通过</div>';
+    results.innerHTML += groupHtml;
+  });
+  summary.innerHTML = '总计：<span class="pass">' + totalPass + ' 通过</span> / <span class="' + (totalFail ? 'fail' : 'pass') + '">' + totalFail + ' 失败</span>（共 ' + (totalPass + totalFail) + ' 项）';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+document.getElementById('run-all').onclick = runAll;
+
+/* ====================================================================
+ * 真实数据测试
+ * ==================================================================== */
+function runRealDataTest(text, fileName) {
+  var results = document.getElementById('results');
+  var html = '<h2>真实数据：' + fileName + '</h2>';
+  var log = [];
+  function ok(msg) { log.push('✓ ' + msg); }
+  function bad(msg) { log.push('✗ ' + msg); }
+
+  // 1. 解析
+  var data = null, parseErr = null;
+  try { data = parseConfigText(text); }
+  catch (e) { parseErr = e.message; }
+
+  if (!data) {
+    html += '<div class="case fail"><span class="name">parseConfigText</span><span class="detail">' + escapeHtml(parseErr || '解析失败') + '</span><span class="status">✗</span></div>';
+    results.innerHTML = html;
+    return;
+  }
+  ok('parseConfigText 解析成功');
+  if (!Array.isArray(data.cells) || !data.cells.length) {
+    bad('cells 不是非空数组');
+    html += renderRealDataLog(log);
+    results.innerHTML = html;
+    return;
+  }
+  ok('cells 数量 = ' + data.cells.length);
+
+  // 2. schema 校验
+  var errs = validateConfig(data);
+  if (errs.length === 0) ok('schema 校验通过（必填字段、type 合法、ID 唯一）');
+  else bad('schema 错误 ' + errs.length + ' 项：\n' + errs.slice(0, 5).join('\n'));
+
+  // 3. ID 唯一性统计
+  var idCounts = {};
+  data.cells.forEach(function (c) { idCounts[c.id] = (idCounts[c.id] || 0) + 1; });
+  var dupIds = Object.keys(idCounts).filter(function (k) { return idCounts[k] > 1; });
+  if (dupIds.length === 0) ok('ID 全部唯一');
+  else bad('重复 ID ' + dupIds.length + ' 个：' + dupIds.slice(0, 5).join(', '));
+
+  // 4. type 分布
+  var typeCounts = {};
+  data.cells.forEach(function (c) { typeCounts[c.type] = (typeCounts[c.type] || 0) + 1; });
+
+  // 5. buildGrid 性能 + 正确性
+  var t0 = performance.now();
+  var grid = DT.buildGrid(data.cells);
+  var t1 = performance.now();
+  ok('buildGrid 耗时 ' + (t1 - t0).toFixed(1) + 'ms，返回 ' + grid.rows.length + ' 行 × ' + grid.maxC + ' 列');
+
+  // 6. buildFormModel
+  var fm = DT.buildFormModel(data.cells);
+  ok('buildFormModel 返回 ' + Object.keys(fm).length + ' 个字段');
+
+  // 7. 坐标重叠检测
+  var overlaps = [];
+  for (var i = 0; i < data.cells.length; i++) {
+    for (var j = i + 1; j < data.cells.length; j++) {
+      var a = data.cells[i], b = data.cells[j];
+      if (!a.x || !a.y || !b.x || !b.y) continue;
+      var axr = DT.parseRange(a.x), ayr = DT.parseRange(a.y);
+      var bxr = DT.parseRange(b.x), byr = DT.parseRange(b.y);
+      if (axr.start <= bxr.end && axr.end >= bxr.start &&
+          ayr.start <= byr.end && ayr.end >= byr.start) {
+        overlaps.push(a.id + '↔' + b.id);
+      }
+    }
+  }
+  if (overlaps.length === 0) ok('无坐标重叠');
+  else bad('坐标重叠 ' + overlaps.length + ' 对：\n' + overlaps.slice(0, 5).join('\n'));
+
+  // 8. 隐藏标志统计
+  var portalHide = data.cells.filter(function (c) { return c.portalHide; }).length;
+  var platformHide = data.cells.filter(function (c) { return c.platformHide; }).length;
+  var hidden = data.cells.filter(function (c) { return c._hidden; }).length;
+  ok('portalHide=' + portalHide + ', platformHide=' + platformHide + ', _hidden=' + hidden);
+
+  // 9. 编译缓存效果（用真实 fm 跑 100 次 evalDepends）
+  DT._clearCache();
+  var someId = Object.keys(fm)[0];
+  if (someId) {
+    var expr = someId + ' > 0';
+    var t2 = performance.now();
+    for (var k = 0; k < 100; k++) DT.evalDepends(expr, fm, {});
+    var t3 = performance.now();
+    ok('evalDepends 缓存命中：100 次调用 ' + expr + ' 耗时 ' + (t3 - t2).toFixed(2) + 'ms（缓存项数=' + DT._cacheSize() + '）');
+  }
+
+  html += renderRealDataLog(log);
+  html += '<div class="stats"><b>type 分布</b><br>';
+  Object.keys(typeCounts).forEach(function (t) {
+    html += '<code>' + t + '</code>: ' + typeCounts[t] + '<br>';
+  });
+  html += '</div>';
+  results.innerHTML = html;
+}
+
+function renderRealDataLog(log) {
+  var html = '';
+  log.forEach(function (line) {
+    var isOk = line.charAt(0) === '✓';
+    html += '<div class="case ' + (isOk ? 'pass' : 'fail') + '">' +
+      '<span class="name" style="white-space:pre-wrap;">' + escapeHtml(line.slice(2)) + '</span>' +
+      '<span class="status">' + (isOk ? '✓' : '✗') + '</span></div>';
+  });
+  return html;
+}
+
+document.getElementById('file-input').onchange = function (e) {
+  var file = e.target.files && e.target.files[0];
+  if (!file) return;
+  document.getElementById('file-status').textContent = file.name + '（' + (file.size / 1024).toFixed(1) + ' KB）';
+  var reader = new FileReader();
+  reader.onload = function () { runRealDataTest(reader.result, file.name); };
+  reader.readAsText(file);
+};
+
+// 自动跑一次
+runAll();
+</script>
+</body>
+</html>

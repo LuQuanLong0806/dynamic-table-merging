@@ -200,6 +200,14 @@
         15%  { box-shadow: 0 0 0 6px rgba(25,190,107,0.55); border-color:#19be6b; }
         100% { box-shadow: 0 0 0 0 rgba(25,190,107,0.0); border-color:#2a5db0; }
       }
+      .demo-spin-icon-load {
+        animation: ani-demo-spin 1s linear infinite;
+      }
+      @keyframes ani-demo-spin {
+        from { transform: rotate(0deg); }
+        50%  { transform: rotate(180deg); }
+        to   { transform: rotate(360deg); }
+      }
       /* 抽屉里的卡片：去除折叠头部动画，body 总展开 */
       .edit-drawer .cell-card { margin-bottom: 0; }
       .edit-drawer .cell-card .cell-toggle { display: none; }
@@ -1039,6 +1047,7 @@
           title="导入 JSON"
           width="700"
           :mask-closable="false"
+          :loading="importing"
           ok-text="导入"
           cancel-text="取消"
           @on-ok="doImport"
@@ -1268,6 +1277,18 @@ events: {
             <div class="full" v-if="hasPlaceholder">
               <label class="field-label">占位提示 placeholder</label>
               <i-input v-model="cell.placeholder" size="small" placeholder="输入框/数字框的占位提示" />
+            </div>
+            <div class="full" v-if="cell.type === 'number'">
+              <label class="field-label">数字精度 precision</label>
+              <i-select v-model="cell.precision" size="small" style="width:100%">
+                <i-option :value="null">不限（可整数可小数）</i-option>
+                <i-option :value="0">仅整数</i-option>
+                <i-option :value="1">小数 1 位</i-option>
+                <i-option :value="2">小数 2 位</i-option>
+                <i-option :value="3">小数 3 位</i-option>
+                <i-option :value="4">小数 4 位</i-option>
+              </i-select>
+              <div style="font-size:11px;color:#888;padding-top:2px;">控制输入框是否允许小数及小数位数。仅整数：禁止小数；小数 N 位：自动 round 到 N 位</div>
             </div>
             <div v-if="cell.type === 'label' || cell.type === 'text'">
               <label class="field-label">溢出隐藏 clampLines</label>
@@ -1673,6 +1694,8 @@ events: {
                           :placeholder="item.cell.placeholder || ''"
                           :min="getNum(item.cell, 'min')"
                           :max="getNum(item.cell, 'max')"
+                          :step="getStep(item.cell)"
+                          :precision="item.cell.precision != null ? item.cell.precision : undefined"
                           :disabled="isDisabled(item.cell.id)"
                           style="width:100%" />
                         <i-select v-if="item.cell.type==='select'"
@@ -1746,10 +1769,188 @@ events: {
     </script>
     <script>
       /* ====================================================================
+       * 动态表格工具函数 —— 单文件分发，内联于此
+       * 与生产组件 dynamic-eval-table.vue / 单文件 dynamic-table-utils.js 保持逻辑一致
+       * 修改本块时请同步更新另两处（或仅更新 dynamic-table-utils.js 再粘贴回来）
+       * ==================================================================== */
+      function _DTUtilsFactory() {
+        function parseRange(v) {
+          var p = String(v).split(',').map(Number);
+          var mn = Math.min.apply(null, p);
+          var mx = Math.max.apply(null, p);
+          return { start: mn, end: mx, span: mx - mn + 1 };
+        }
+        function buildFormModel(cells) {
+          var m = {};
+          (cells || []).forEach(function (c) {
+            if (!c || !c.id) return;
+            if (c.type === 'number') {
+              m[c.id] = c.value != null && c.value !== '' ? Number(c.value) : null;
+            } else if (c.type === 'checkbox') {
+              m[c.id] = Array.isArray(c.value) ? c.value : [];
+            } else if (['input', 'select', 'radio', 'date', 'upload'].indexOf(c.type) >= 0) {
+              m[c.id] = c.value != null ? c.value : '';
+            }
+          });
+          return m;
+        }
+        function buildGrid(cells) {
+          var safeCells = cells || [];
+          var cellMap = {};
+          safeCells.forEach(function (c) { cellMap[c.id] = c; });
+          var maxC = 0, maxR = 0;
+          safeCells.forEach(function (c) {
+            var xr = parseRange(c.x), yr = parseRange(c.y);
+            if (xr.end > maxC) maxC = xr.end;
+            if (yr.end > maxR) maxR = yr.end;
+          });
+          var G = [], O = [];
+          for (var r = 0; r < maxR; r++) {
+            G[r] = []; O[r] = [];
+            for (var c = 0; c < maxC; c++) { G[r][c] = null; O[r][c] = false; }
+          }
+          var sorted = safeCells.slice().sort(function (a, b) {
+            return parseRange(b.y).span * parseRange(b.x).span -
+                   parseRange(a.y).span * parseRange(a.x).span;
+          });
+          sorted.forEach(function (cell) {
+            var xr = parseRange(cell.x), yr = parseRange(cell.y);
+            var r0 = yr.start - 1, c0 = xr.start - 1;
+            if (r0 < 0 || c0 < 0) return;
+            var entry = { cell: cell, rowspan: yr.span, colspan: xr.span, alts: null };
+            if (G[r0][c0]) {
+              if (!G[r0][c0].alts) G[r0][c0].alts = [];
+              G[r0][c0].alts.push(entry);
+              return;
+            }
+            G[r0][c0] = entry;
+            for (var r = r0; r < r0 + yr.span && r < maxR; r++) {
+              for (var c = c0; c < c0 + xr.span && c < maxC; c++) {
+                if (!(r === r0 && c === c0)) O[r][c] = true;
+              }
+            }
+          });
+          var rows = [];
+          for (var r = 0; r < maxR; r++) {
+            var cols = [];
+            for (var c = 0; c < maxC; c++) {
+              if (O[r][c]) { cols.push({ skip: true }); continue; }
+              var e = G[r][c];
+              if (!e) { cols.push({ skip: false, cell: null }); continue; }
+              var isCtrl = ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload']
+                .indexOf(e.cell.type) >= 0;
+              var cls = [];
+              if (e.cell.type === 'text' && (c === 0 || c === 2) && /<b>/.test(e.cell.content || '')) {
+                cls.push('cell-group');
+              }
+              cols.push({
+                skip: false, cell: e.cell, rowspan: e.rowspan, colspan: e.colspan, alts: e.alts || [],
+                isLabel: e.cell.type === 'label', isText: e.cell.type === 'text',
+                isControl: isCtrl, isFormula: e.cell.type === 'formula', cls: cls.join(' ')
+              });
+            }
+            rows.push(cols);
+          }
+          return { rows: rows, cellMap: cellMap, maxC: maxC, maxR: maxR };
+        }
+        // 表达式编译缓存：cacheKey = kind + fmKeysSig + expr
+        var _exprCache = {};
+        function _buildLocals(fm) {
+          return Object.keys(fm).map(function (k) {
+            return 'var ' + k + '=fm[' + JSON.stringify(k) + '];';
+          }).join('');
+        }
+        function _fmKeysSig(fm) {
+          return Object.keys(fm).sort().join('|');
+        }
+        function _compile(kind, expr, fm, argList) {
+          var sig = _fmKeysSig(fm);
+          var cacheKey = kind + '|' + sig + '|' + expr;
+          var fn = _exprCache[cacheKey];
+          if (!fn) {
+            var locals = _buildLocals(fm);
+            fn = new Function(argList, locals + 'return(' + expr + ')');
+            _exprCache[cacheKey] = fn;
+          }
+          return fn;
+        }
+        function evalDepends(expr, fm, extra) {
+          if (!expr || typeof expr !== 'string' || !String(expr).trim()) return false;
+          try {
+            var fn = _compile('dep', expr, fm, 'fm,extra');
+            return fn(fm, extra || {});
+          } catch (e) {
+            console.error('[evalDepends 失败]', expr, e);
+            return false;
+          }
+        }
+        function evalCustom(expr, value, fm, extra) {
+          if (!expr || typeof expr !== 'string' || !String(expr).trim()) return false;
+          try {
+            var fn = _compile('cust', expr, fm, 'value,fm,extra');
+            return fn(value, fm, extra || {});
+          } catch (ex) {
+            console.error('[evalCustom 失败]', expr, ex);
+            return false;
+          }
+        }
+        function evalMath(expr, scope) {
+          if (!expr || typeof expr !== 'string') return null;
+          try {
+            var locals = Object.keys(scope || {}).map(function (k) {
+              return 'var ' + k + '=' + JSON.stringify(scope[k]) + ';';
+            }).join('');
+            var fn = new Function('Math', locals + 'return(' + expr + ')');
+            return fn(Math);
+          } catch (e) {
+            console.error('[evalMath 失败]', expr, e);
+            return null;
+          }
+        }
+        function evalEvent(fnBody, value, fm, extra, rawEvent) {
+          if (!fnBody || !String(fnBody).trim()) return undefined;
+          try {
+            var fn = new Function('value', 'fm', 'extra', 'rawEvent', fnBody);
+            return fn(value, fm, extra || {}, rawEvent);
+          } catch (e) {
+            console.error('[evalEvent 编译失败]', e);
+            return undefined;
+          }
+        }
+        function getStep(cell) {
+          if (!cell || cell.precision == null) return 1;
+          return 1 / Math.pow(10, cell.precision);
+        }
+        return {
+          parseRange: parseRange,
+          buildFormModel: buildFormModel,
+          buildGrid: buildGrid,
+          evalDepends: evalDepends,
+          evalCustom: evalCustom,
+          evalMath: evalMath,
+          evalEvent: evalEvent,
+          getStep: getStep,
+          _clearCache: function () { _exprCache = {}; }
+        };
+      }
+      window.DTUtils = _DTUtilsFactory();
+    </script>
+    <script>
+      /* ====================================================================
        * 预览引擎模板（基于 动态合并表格.html 抽取核心渲染逻辑）
        * 通过 Blob URL 注入 iframe，对外暴露 window.setPreviewData(data)
        * ==================================================================== */
       function previewEngineHTML() {
+        // 注入同一份 utils（避免在字符串里重复定义函数）
+        var utilsSrc = _DTUtilsFactory.toString() +
+          ';window.DTUtils=_DTUtilsFactory();' +
+          'var parseRange=window.DTUtils.parseRange,' +
+          'buildFormModel=window.DTUtils.buildFormModel,' +
+          'buildGrid=window.DTUtils.buildGrid,' +
+          'evalDepends=window.DTUtils.evalDepends,' +
+          'evalCustom=window.DTUtils.evalCustom,' +
+          'evalMath=window.DTUtils.evalMath,' +
+          'evalEvent=window.DTUtils.evalEvent;';
         return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -1868,7 +2069,7 @@ events: {
               <span v-else-if="item.isFormula" class="formula-val">{{formulaResults[item.cell.id]}}</span>
               <form-item v-else-if="item.isControl" :prop="formRules[item.cell.id] ? item.cell.id : ''">
                 <i-input v-if="item.cell.type==='input'" :value="fm[item.cell.id]" @input="function(v){setVal(item.cell.id,v);onInput(item.cell.id,v);}" :placeholder="item.cell.placeholder||item.cell.content||''" :disabled="isDisabled(item.cell.id)" @on-blur="function(e){onBlur(item.cell.id,e);}"/>
-                <input-number v-if="item.cell.type==='number'" :value="fm[item.cell.id]" @on-change="function(v){setVal(item.cell.id,v);onChange(item.cell.id,v);}" :placeholder="item.cell.placeholder||''" :min="getNum(item.cell,'min')" :max="getNum(item.cell,'max')" :disabled="isDisabled(item.cell.id)" style="width:100%"/>
+                <input-number v-if="item.cell.type==='number'" :value="fm[item.cell.id]" @on-change="function(v){setVal(item.cell.id,v);onChange(item.cell.id,v);}" :placeholder="item.cell.placeholder||''" :min="getNum(item.cell,'min')" :max="getNum(item.cell,'max')" :step="getStep(item.cell)" :precision="item.cell.precision!=null?item.cell.precision:undefined" :disabled="isDisabled(item.cell.id)" style="width:100%"/>
                 <i-select v-if="item.cell.type==='select'" :value="fm[item.cell.id]" @on-change="function(v){setVal(item.cell.id,v);onChange(item.cell.id,v);}" :placeholder="item.cell.content||'请选择'" :disabled="isDisabled(item.cell.id)" clearable>
                   <i-option v-for="opt in (item.cell.options||[])" :value="opt.value" :key="opt.value">{{opt.label}}</i-option>
                 </i-select>
@@ -1907,11 +2108,8 @@ events: {
 <script src="https://cdn.jsdelivr.net/npm/view-design@4.7.0/dist/iview.min.js"><\/` + `script>
 <script>if(!window.iview)document.write('<script src="https://unpkg.com/view-design@4.7.0/dist/iview.min.js"><\\/script>');<\/` + `script>
 <script>
-function parseRange(v){var p=String(v).split(',').map(Number);return{start:Math.min.apply(null,p),end:Math.max.apply(null,p),span:Math.max.apply(null,p)-Math.min.apply(null,p)+1};}
-function buildFormModel(cells){var m={};cells.forEach(function(c){if(c.type==='number')m[c.id]=c.value!=null&&c.value!==''?Number(c.value):null;else if(c.type==='checkbox')m[c.id]=Array.isArray(c.value)?c.value:[];else if(['input','select','radio','date','upload'].indexOf(c.type)>=0)m[c.id]=c.value!=null?c.value:'';});return m;}
-function buildGrid(cells){var cellMap={};cells.forEach(function(c){cellMap[c.id]=c;});var maxC=0,maxR=0;cells.forEach(function(c){var xr=parseRange(c.x),yr=parseRange(c.y);if(xr.end>maxC)maxC=xr.end;if(yr.end>maxR)maxR=yr.end;});var G=[],O=[];for(var r=0;r<maxR;r++){G[r]=[];O[r]=[];for(var c=0;c<maxC;c++){G[r][c]=null;O[r][c]=false;}}var sorted=cells.slice().sort(function(a,b){return parseRange(b.y).span*parseRange(b.x).span-parseRange(a.y).span*parseRange(a.x).span;});sorted.forEach(function(cell){var xr=parseRange(cell.x),yr=parseRange(cell.y);var r0=yr.start-1,c0=xr.start-1;var entry={cell:cell,rowspan:yr.span,colspan:xr.span,alts:null};if(G[r0][c0]){if(!G[r0][c0].alts)G[r0][c0].alts=[];G[r0][c0].alts.push(entry);return;}G[r0][c0]=entry;for(var r=r0;r<r0+yr.span&&r<maxR;r++)for(var c=c0;c<c0+xr.span&&c<maxC;c++)if(!(r===r0&&c===c0))O[r][c]=true;});var rows=[];for(var r=0;r<maxR;r++){var cols=[];for(var c=0;c<maxC;c++){if(O[r][c]){cols.push({skip:true});continue;}var e=G[r][c];if(!e){cols.push({skip:false,cell:null});continue;}var isCtrl=['input','number','select','radio','checkbox','date','upload'].indexOf(e.cell.type)>=0;var cls=[];if(e.cell.type==='text'&&(c===0||c===2)&&/<b>/.test(e.cell.content||''))cls.push('cell-group');cols.push({skip:false,cell:e.cell,rowspan:e.rowspan,colspan:e.colspan,alts:e.alts||[],isLabel:e.cell.type==='label',isText:e.cell.type==='text',isControl:isCtrl,isFormula:e.cell.type==='formula',cls:cls.join(' ')});}rows.push(cols);}return{rows:rows,cellMap:cellMap,maxC:maxC,maxR:maxR};}
-function evalDepends(expr,fm,extra){try{var locals=Object.keys(fm).map(function(k){return'var '+k+'=fm['+JSON.stringify(k)+'];';}).join('');return new Function('fm','extra',locals+'return('+expr+')')(fm,extra||{});}catch(e){return false;}}
-function evalCustom(expr,value,fm,extra){try{var locals=Object.keys(fm).map(function(k){return'var '+k+'=fm['+JSON.stringify(k)+'];';}).join('');return new Function('value','fm','extra',locals+'return('+expr+')')(value,fm,extra||{});}catch(ex){return false;}}
+${utilsSrc}
+
 
 var app=new Vue({
   el:'#app',template:'#prev-tpl',
@@ -2028,6 +2226,7 @@ var app=new Vue({
     applyVisibility:function(){var ds={},hs={},mode=this.previewMode;this.config.cells.forEach(function(c){if(c.disabled)ds[c.id]=true;});this.config.cells.forEach(function(c){if(c._hidden)hs[c.id]=true;if(mode==='portal'&&c.portalHide)hs[c.id]=true;if(mode==='platform'&&c.platformHide)hs[c.id]=true;});this.disabledState=ds;this.hiddenState=hs;},
     isDisabled:function(id){return!!this.disabledState[id];},
     getNum:function(c,k){var v=c.validation;if(!v)return undefined;var r;if(v.rules)v.rules.forEach(function(x){if(x[k]!=null)r=x[k];});if(r==null&&v[k]!=null)r=v[k];return r;},
+    getStep:function(cell){return window.DTUtils.getStep(cell);},
     onChange:function(id,rawEvent){this.handleLinkage(id);this.recalc();this.validateField(id);this.runCellEvent('change',id,this.fm[id],rawEvent);},
     onBlur:function(id,rawEvent){this.validateField(id);this.runCellEvent('blur',id,this.fm[id],rawEvent);},
     onInput:function(id,rawEvent){this.runCellEvent('input',id,this.fm[id],rawEvent);},
@@ -2122,6 +2321,9 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           },
           partial || {}
         );
+        if (cell.type === 'number' && cell.precision == null) {
+          cell.precision = 2;
+        }
         if (cell.validation && cell.validation.rules) {
           cell.validation.rules.forEach(inferRuleKind);
         }
@@ -2417,83 +2619,13 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
       });
 
       // ==================== 预览渲染子组件（替代 iframe）====================
-      // 工具函数 —— 与动态合并表格.html 对齐，加 pr_ 前缀避免和外层冲突
-      function pr_parseRange(v) {
-        var p = String(v).split(',').map(Number);
-        return { start: Math.min.apply(null, p), end: Math.max.apply(null, p), span: Math.max.apply(null, p) - Math.min.apply(null, p) + 1 };
-      }
-      function pr_buildFormModel(cells) {
-        var m = {};
-        cells.forEach(function (c) {
-          if (c.type === 'number') m[c.id] = c.value != null && c.value !== '' ? Number(c.value) : null;
-          else if (c.type === 'checkbox' || c.type === 'upload') m[c.id] = Array.isArray(c.value) ? c.value : [];
-          else if (['input', 'select', 'radio', 'date'].indexOf(c.type) >= 0) m[c.id] = c.value != null ? c.value : '';
-        });
-        return m;
-      }
-      function pr_buildGrid(cells) {
-        var cellMap = {};
-        cells.forEach(function (c) { cellMap[c.id] = c; });
-        var maxC = 0, maxR = 0;
-        cells.forEach(function (c) {
-          var xr = pr_parseRange(c.x), yr = pr_parseRange(c.y);
-          if (xr.end > maxC) maxC = xr.end;
-          if (yr.end > maxR) maxR = yr.end;
-        });
-        var G = [], O = [];
-        for (var r = 0; r < maxR; r++) {
-          G[r] = []; O[r] = [];
-          for (var c = 0; c < maxC; c++) { G[r][c] = null; O[r][c] = false; }
-        }
-        var sorted = cells.slice().sort(function (a, b) {
-          return pr_parseRange(b.y).span * pr_parseRange(b.x).span - pr_parseRange(a.y).span * pr_parseRange(a.x).span;
-        });
-        sorted.forEach(function (cell) {
-          var xr = pr_parseRange(cell.x), yr = pr_parseRange(cell.y);
-          var r0 = yr.start - 1, c0 = xr.start - 1;
-          var entry = { cell: cell, rowspan: yr.span, colspan: xr.span, alts: null };
-          if (G[r0][c0]) {
-            if (!G[r0][c0].alts) G[r0][c0].alts = [];
-            G[r0][c0].alts.push(entry);
-            return;
-          }
-          G[r0][c0] = entry;
-          for (var r = r0; r < r0 + yr.span && r < maxR; r++)
-            for (var c = c0; c < c0 + xr.span && c < maxC; c++)
-              if (!(r === r0 && c === c0)) O[r][c] = true;
-        });
-        var rows = [];
-        for (var r = 0; r < maxR; r++) {
-          var cols = [];
-          for (var c = 0; c < maxC; c++) {
-            if (O[r][c]) { cols.push({ skip: true }); continue; }
-            var e = G[r][c];
-            if (!e) { cols.push({ skip: false, cell: null }); continue; }
-            var isCtrl = ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(e.cell.type) >= 0;
-            var cls = [];
-            if (e.cell.type === 'text' && (c === 0 || c === 2) && /<b>/.test(e.cell.content || '')) cls.push('cell-group');
-            cols.push({
-              skip: false, cell: e.cell, rowspan: e.rowspan, colspan: e.colspan, alts: e.alts || [],
-              isLabel: e.cell.type === 'label', isText: e.cell.type === 'text',
-              isControl: isCtrl, isFormula: e.cell.type === 'formula', cls: cls.join(' ')
-            });
-          }
-          rows.push(cols);
-        }
-        return { rows: rows, cellMap: cellMap, maxC: maxC, maxR: maxR };
-      }
-      function pr_evalDepends(expr, fm, extra) {
-        try {
-          var locals = Object.keys(fm).map(function (k) { return 'var ' + k + '=fm[' + JSON.stringify(k) + '];'; }).join('');
-          return new Function('fm', 'extra', locals + 'return(' + expr + ')')(fm, extra || {});
-        } catch (e) { return false; }
-      }
-      function pr_evalCustom(expr, value, fm, extra) {
-        try {
-          var locals = Object.keys(fm).map(function (k) { return 'var ' + k + '=fm[' + JSON.stringify(k) + '];'; }).join('');
-          return new Function('value', 'fm', 'extra', locals + 'return(' + expr + ')')(value, fm, extra || {});
-        } catch (ex) { return false; }
-      }
+      // 工具函数统一来自 window.DTUtils（见 dynamic-table-utils.js）
+      // 这里仅做 pr_ 别名，保持原调用点不变
+      var pr_parseRange = window.DTUtils.parseRange;
+      var pr_buildFormModel = window.DTUtils.buildFormModel;
+      var pr_buildGrid = window.DTUtils.buildGrid;
+      var pr_evalDepends = window.DTUtils.evalDepends;
+      var pr_evalCustom = window.DTUtils.evalCustom;
 
       Vue.component('preview-renderer', {
         template: '#preview-renderer-tpl',
@@ -2701,6 +2833,9 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (v.rules) v.rules.forEach(function (x) { if (x[k] != null) r = x[k]; });
             if (r == null && v[k] != null) r = v[k];
             return r;
+          },
+          getStep: function (cell) {
+            return window.DTUtils.getStep(cell);
           },
           buildRules: function (cell) {
             var self = this;
@@ -3071,6 +3206,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             showImportModal: false,
             importText: '',
             importError: '',
+            importing: false,
             showExportModal: false,
             minifyExport: false,
             previewTimer: null,
@@ -3243,8 +3379,41 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             var url = URL.createObjectURL(blob);
             window.open(url, '_blank');
           },
+          // 生成唯一 ID：若 base 冲突则追加 _2、_3 后缀
+          genUniqueId: function (base, excludeUid) {
+            if (!this.idExists(base, excludeUid)) return base;
+            var n = 2;
+            while (this.idExists(base + '_' + n, excludeUid)) n++;
+            return base + '_' + n;
+          },
+          idExists: function (id, excludeUid) {
+            return this.config.cells.some(function (c) {
+              return c.id === id && c.__uid !== excludeUid;
+            });
+          },
+          // 检查 x/y 范围是否与其他 cell 重叠，返回冲突 cell 数组（不含 excludeUid）
+          checkOverlap: function (x, y, excludeUid) {
+            if (!x || !y) return [];
+            var xr, yr;
+            try {
+              xr = window.DTUtils.parseRange(x);
+              yr = window.DTUtils.parseRange(y);
+            } catch (e) { return []; }
+            var conflicts = [];
+            this.config.cells.forEach(function (c) {
+              if (c.__uid === excludeUid) return;
+              if (!c.x || !c.y) return;
+              var cxr = window.DTUtils.parseRange(c.x);
+              var cyr = window.DTUtils.parseRange(c.y);
+              if (xr.start <= cxr.end && xr.end >= cxr.start &&
+                  yr.start <= cyr.end && yr.end >= cyr.start) {
+                conflicts.push(c);
+              }
+            });
+            return conflicts;
+          },
           addCell: function () {
-            var c = makeCell({ id: 'cell_' + (this.config.cells.length + 1), x: '1', y: String(this.maxY + 1 || 2), type: 'text', content: '' });
+            var c = makeCell({ id: this.genUniqueId('cell_' + (this.config.cells.length + 1)), x: '1', y: String(this.maxY + 1 || 2), type: 'text', content: '' });
             this.config.cells.push(c);
             this.$set(this.expandedSet, c.__uid, true);
             this.schedulePreview();
@@ -3274,7 +3443,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             var src = this.config.cells[i];
             var copy = JSON.parse(JSON.stringify(src));
             copy.__uid = newUid();
-            copy.id = (src.id || 'cell') + '_copy';
+            copy.id = this.genUniqueId((src.id || 'cell') + '_copy');
             this.config.cells.splice(i + 1, 0, copy);
             this.$set(this.expandedSet, copy.__uid, true);
             this.schedulePreview();
@@ -3318,6 +3487,18 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (i >= 0 && this.editDrawerDraft) {
               var draft = this.editDrawerDraft;
               var cur = this.config.cells[i];
+              var uid = cur.__uid;
+              // 冲突检测 1：ID 不能与其他 cell 重复
+              if (this.idExists(draft.id, uid)) {
+                this.$Message.error('ID "' + draft.id + '" 已被其他单元格占用，请改用其他 ID');
+                return;
+              }
+              // 冲突检测 2：x/y 范围不能与其他 cell 重叠
+              var overlaps = this.checkOverlap(draft.x, draft.y, uid);
+              if (overlaps.length) {
+                this.$Message.error('坐标范围与单元格 ' + overlaps.map(function (c) { return c.id; }).join(', ') + ' 重叠');
+                return;
+              }
               // 把 draft 全量写回原 cell（同键覆盖、多余键删除、新键新增）
               Object.keys(cur).forEach(function (k) { if (!(k in draft)) delete cur[k]; });
               Object.keys(draft).forEach(function (k) { this.$set(cur, k, JSON.parse(JSON.stringify(draft[k]))); }, this);
@@ -3335,7 +3516,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             this.showTemplateModal = true;
           },
           addFromTemplate: function (tpl) {
-            var id = tpl.key + '_' + (this.config.cells.length + 1);
+            var id = this.genUniqueId(tpl.key + '_' + (this.config.cells.length + 1));
             var x = '1';
             var y = String((this.maxY || 1) + 1);
             var partial = tpl.build(id, x, y);
@@ -3347,14 +3528,9 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             this.$Message.success('已从模板新增 ' + c.id);
           },
           onAddCellAt: function (x, y) {
-            // 根据 x/y 生成默认 ID（若冲突则追加 _2、_3）
+            // 根据 x/y 生成默认 ID（若冲突则 genUniqueId 追加 _2、_3）
             var baseId = 'cell_r' + y + '_c' + x;
-            var id = baseId;
-            var n = 2;
-            while (this.config.cells.some(function (c) { return c.id === id; })) {
-              id = baseId + '_' + n;
-              n++;
-            }
+            var id = this.genUniqueId(baseId);
             var c = makeCell({ id: id, x: String(x), y: String(y), type: 'text', content: '' });
             this.config.cells.push(c);
             this.openEditDrawer(c.__uid);
@@ -3439,6 +3615,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                 if (c.platformHide) out.platformHide = true;
                 if (c.clampLines != null && c.clampLines > 0) out.clampLines = Number(c.clampLines);
                 if (c.width != null && !isNaN(Number(c.width)) && Number(c.width) > 0) out.width = Number(c.width);
+                if (c.type === 'number' && c.precision != null) out.precision = Number(c.precision);
                 // validation：把 rule 上的 kind 字段去掉，按 kind 写入正式字段
                 if (c.validation && c.validation.rules && c.validation.rules.length) {
                   out.validation = { rules: c.validation.rules.map(serializeRule).filter(function (r) { return Object.keys(r).length > 0; }) };
@@ -3499,33 +3676,109 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               this.importError = '请粘贴 JSON 内容';
               return;
             }
-            try {
-              var data = parseConfigText(text);
-              if (!data || typeof data !== 'object' || !Array.isArray(data.cells)) {
-                this.importError = '数据必须包含 cells 数组';
-                return;
+            var self = this;
+            this.importing = true;
+            this.$Spin.show({
+              render: function (h) {
+                return h('div', { style: 'padding:20px;text-align:center;' }, [
+                  h('Icon', {
+                    class: 'demo-spin-icon-load',
+                    props: { type: 'ios-loading', size: 28 }
+                  }),
+                  h('div', { style: 'font-size:13px;margin-top:12px;color:#515a6e;' }, '正在解析与校验配置…')
+                ]);
               }
-              // 规范化：补 __uid、规范化 validation/linkage 的 kind 字段
-              data.cells.forEach(function (c) {
-                c.__uid = newUid();
-                if (c.validation && c.validation.rules) {
-                  c.validation.rules.forEach(inferRuleKind);
+            });
+            setTimeout(function () {
+              try {
+                var data = parseConfigText(text);
+                if (!data || typeof data !== 'object' || !Array.isArray(data.cells)) {
+                  self.importError = '数据必须包含 cells 数组';
+                  self.importing = false;
+                  self.$Spin.hide();
+                  return;
                 }
-                if (c.linkage) {
-                  c.linkage.forEach(function (lk) {
-                    (lk.actions || []).forEach(inferActionKind);
+                // schema 校验：必填字段 + 类型枚举 + ID/坐标冲突
+                var validTypes = ['label', 'text', 'input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload', 'formula'];
+                var errors = [];
+                var idMap = {};
+                var overlapWarns = [];
+                data.cells.forEach(function (c, idx) {
+                  var label = '第 ' + (idx + 1) + ' 个 cell';
+                  if (!c.id) errors.push(label + ' 缺少 id');
+                  else if (idMap[c.id]) errors.push(label + ' ID "' + c.id + '" 与第 ' + idMap[c.id] + ' 个 cell 重复');
+                  else idMap[c.id] = idx + 1;
+                  if (c.x == null) errors.push(label + ' 缺少 x');
+                  if (c.y == null) errors.push(label + ' 缺少 y');
+                  if (!c.type) errors.push(label + ' 缺少 type');
+                  else if (validTypes.indexOf(c.type) < 0) errors.push(label + ' type "' + c.type + '" 不合法（应为 ' + validTypes.join('/') + '）');
+                });
+                if (errors.length) {
+                  self.importError = '配置校验未通过（共 ' + errors.length + ' 项）：\n' + errors.slice(0, 10).join('\n') + (errors.length > 10 ? '\n...（其余 ' + (errors.length - 10) + ' 项已省略）' : '');
+                  self.importing = false;
+                  self.$Spin.hide();
+                  return;
+                }
+                // 规范化：补 __uid、规范化 validation/linkage 的 kind 字段
+                data.cells.forEach(function (c) {
+                  c.__uid = newUid();
+                  if (c.validation && c.validation.rules) {
+                    c.validation.rules.forEach(inferRuleKind);
+                  }
+                  if (c.linkage) {
+                    c.linkage.forEach(function (lk) {
+                      (lk.actions || []).forEach(inferActionKind);
+                    });
+                  }
+                });
+                // 软警告：坐标重叠（不阻塞导入，仅提示）
+                for (var i = 0; i < data.cells.length; i++) {
+                  for (var j = i + 1; j < data.cells.length; j++) {
+                    var a = data.cells[i], b = data.cells[j];
+                    if (!a.x || !a.y || !b.x || !b.y) continue;
+                    var axr = window.DTUtils.parseRange(a.x), ayr = window.DTUtils.parseRange(a.y);
+                    var bxr = window.DTUtils.parseRange(b.x), byr = window.DTUtils.parseRange(b.y);
+                    if (axr.start <= bxr.end && axr.end >= bxr.start &&
+                        ayr.start <= byr.end && ayr.end >= byr.start) {
+                      overlapWarns.push(a.id + ' 与 ' + b.id);
+                    }
+                  }
+                }
+                // 统计：最大列/行 + 类型分布
+                var typeCounts = {};
+                var maxCol = 0, maxRow = 0;
+                data.cells.forEach(function (c) {
+                  typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
+                  var xr = window.DTUtils.parseRange(c.x), yr = window.DTUtils.parseRange(c.y);
+                  if (xr.end > maxCol) maxCol = xr.end;
+                  if (yr.end > maxRow) maxRow = yr.end;
+                });
+                var summary = Object.keys(typeCounts)
+                  .map(function (k) { return k + ':' + typeCounts[k]; })
+                  .join('、');
+                self.config = { title: data.title || '', cells: data.cells };
+                self.expandedSet = {};
+                self.showImportModal = false;
+                self.importText = '';
+                self.schedulePreview();
+                self.importing = false;
+                self.$Spin.hide();
+                self.$Message.success({
+                  content: '已导入 ' + data.cells.length + ' 个单元格（' + maxCol + ' 列 × ' + maxRow + ' 行；' + summary + '）',
+                  duration: 4
+                });
+                if (overlapWarns.length) {
+                  self.$Message.warning({
+                    content: '检测到 ' + overlapWarns.length + ' 对坐标重叠：' + overlapWarns.slice(0, 3).join('、') + (overlapWarns.length > 3 ? '...' : ''),
+                    duration: 6
                   });
                 }
-              });
-              this.config = { title: data.title || '', cells: data.cells };
-              this.expandedSet = {};
-              this.showImportModal = false;
-              this.importText = '';
-              this.schedulePreview();
-              this.$Message.success('已导入 ' + data.cells.length + ' 个单元格');
-            } catch (e) {
-              this.importError = 'JSON 解析失败：' + e.message;
-            }
+              } catch (e) {
+                self.importError = 'JSON 解析失败：' + e.message;
+                self.importing = false;
+                self.$Spin.hide();
+              }
+            }, 50);
           },
           _copyText: function (text) {
             return new Promise(function (resolve, reject) {
