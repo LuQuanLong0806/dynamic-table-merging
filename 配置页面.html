@@ -2279,7 +2279,7 @@ var app=new Vue({
   }
 });
 
-window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[],freezeRows:data.freezeRows||0};app.rebuildAll();}catch(e){console.error('setPreviewData error',e);}};
+window.setPreviewData=function(data){try{app.config={title:data.title||'',cells:data.cells||[],freezeRows:Math.max(0,parseInt(data.freezeRows,10)||0)};app.rebuildAll();}catch(e){console.error('setPreviewData error',e);}};
 window.setPreviewMode=function(mode){app.previewMode=mode||'portal';app.rebuildAll();};
 
 window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-preview'){window.setPreviewData(e.data.data);}});
@@ -3789,7 +3789,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                 var summary = Object.keys(typeCounts)
                   .map(function (k) { return k + ':' + typeCounts[k]; })
                   .join('、');
-                self.config = { title: data.title || '', cells: data.cells, freezeRows: data.freezeRows || 0 };
+                self.config = { title: data.title || '', cells: data.cells, freezeRows: Math.max(0, parseInt(data.freezeRows, 10) || 0) };
                 self.expandedSet = {};
                 self.showImportModal = false;
                 self.importText = '';
