@@ -3837,6 +3837,40 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           this.previewConfig = this._stripInternal();
         },
         methods: {
+          // 复制 cell.id 到剪贴板（cell-card「复制 ID」按钮触发）
+          copyId: function (id) {
+            if (!id) return;
+            var self = this;
+            var done = function () { self.$Message.success('已复制 ID: ' + id); };
+            var fail = function () { self.$Message.error('复制失败'); };
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(id).then(done, function () {
+                  try {
+                    var ta = document.createElement('textarea');
+                    ta.value = id;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    done();
+                  } catch (e) { fail(); }
+                });
+              } else {
+                var ta = document.createElement('textarea');
+                ta.value = id;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                done();
+              }
+            } catch (e) { fail(); }
+          },
           _loadInit: function () {
             // 优先 localStorage
             try {
