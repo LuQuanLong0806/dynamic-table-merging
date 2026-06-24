@@ -4277,7 +4277,9 @@ events: {
         var k = r.kind || 'required';
         if (r.message) out.message = r.message;
         if (k === 'required') {
-          out.required = true;
+          if (typeof r.required === 'string') out.required = r.required;
+          else if (r.required === true) out.required = true;
+          // false / null / undefined → 不输出 required（视为非必填）
         } else if (k === 'number') {
           out.type = 'number';
           if (r.min != null && r.min !== '') out.min = Number(r.min);
