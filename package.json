@@ -1,0 +1,11 @@
+{
+  "name": "dynamic-table-config",
+  "version": "1.0.0",
+  "description": "动态表格配置器 —— 构建配置页面.html 到 table-config/",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "clean": "node -e \"require('fs').rmSync('table-config',{recursive:true,force:true});console.log('已清理 table-config/')\"",
+    "serve": "node server.js"
+  }
+}

@@ -761,9 +761,11 @@
       .preview-renderer th {
         background: #d0d8e8;
         font-weight: bold;
+        white-space: pre-line;
       }
       .preview-renderer td {
         background: #fff;
+        white-space: pre-line;
       }
       .preview-renderer tr:hover td {
         background: #f0f5ff;
@@ -902,6 +904,25 @@
         text-align: center;
         color: #999;
       }
+      .preview-renderer .empty-cell-slot {
+        position: relative;
+        background: repeating-linear-gradient(
+          45deg,
+          #fafafa,
+          #fafafa 6px,
+          #f0f0f0 6px,
+          #f0f0f0 12px
+        );
+        min-width: 30px;
+        min-height: 24px;
+      }
+      .preview-renderer .empty-cell-slot .cell-edit-icon {
+        opacity: 1;
+        background: rgba(180, 180, 180, 0.7);
+      }
+      .preview-renderer .empty-cell-slot .cell-edit-icon:hover {
+        background: rgba(45, 140, 240, 1);
+      }
     </style>
   </head>
   <body>
@@ -941,6 +962,8 @@
             <span class="action-divider"></span>
             <i-button size="small" @click="showInsertColModal = true">⟳ 插入列</i-button>
             <i-button size="small" @click="showInsertRowModal = true">⟳ 插入行</i-button>
+            <i-button size="small" @click="showAppendColModal = true">➕ 追加列</i-button>
+            <i-button size="small" @click="showAppendRowModal = true">➕ 追加行</i-button>
             <i-button size="small" @click="showDeleteColModal = true">✕ 删除列</i-button>
             <i-button size="small" @click="showDeleteRowModal = true">✕ 删除行</i-button>
             <i-button size="small" @click="openColVisModal">👁 列可见性</i-button>
@@ -984,6 +1007,7 @@
                 v-if="previewConfig && previewConfig.cells && previewConfig.cells.length"
                 :config="previewConfig"
                 :mode="previewMode"
+                :grid-pad="gridPad"
                 @click-id="focusCellById"
                 @add-cell-at="onAddCellAt"
                 @submit="onPreviewSubmit"
@@ -1004,6 +1028,7 @@
           :width="520"
           :title="editDrawerTitle"
           :mask="true"
+          :mask-closable="false"
           :transfer="true"
           class-name="edit-drawer"
         >
@@ -1052,6 +1077,7 @@
           v-model="listDrawerOpen"
           :width="560"
           title="单元格列表"
+          :mask-closable="false"
           :transfer="true"
           class-name="list-drawer"
         >
@@ -1252,6 +1278,32 @@ events: {
           </div>
         </modal>
 
+        <modal v-model="showAppendColModal" title="追加列（末尾）" width="420"
+               ok-text="追加" cancel-text="取消" @on-ok="confirmAppendCol">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>在末尾追加</span>
+            <input-number v-model="appendColCount" :min="1" :max="20" :step="1" size="small" style="width:80px;" />
+            <span>列（当前共 {{ maxX }} 列）</span>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:#888;">
+            等同于在第 {{ maxX + 1 }} 列前插入。新列的每行会自动创建空白单元格。<br>
+            支持 Ctrl+Z 撤销。
+          </div>
+        </modal>
+
+        <modal v-model="showAppendRowModal" title="追加行（末尾）" width="420"
+               ok-text="追加" cancel-text="取消" @on-ok="confirmAppendRow">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>在末尾追加</span>
+            <input-number v-model="appendRowCount" :min="1" :max="50" :step="1" size="small" style="width:80px;" />
+            <span>行（当前共 {{ maxY }} 行）</span>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:#888;">
+            等同于在第 {{ maxY + 1 }} 行前插入。新行的每列会自动创建空白单元格。<br>
+            支持 Ctrl+Z 撤销。
+          </div>
+        </modal>
+
         <modal v-model="showDeleteColModal" title="删除列" width="420"
                ok-text="删除" cancel-text="取消" @on-ok="confirmDeleteCol">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -1295,13 +1347,14 @@ events: {
               <radio label="visible"><span>双端可见</span></radio>
               <radio label="portalHide"><span>门户隐藏</span></radio>
               <radio label="platformHide"><span>管理端隐藏</span></radio>
+              <radio label="allHide"><span>全部隐藏</span></radio>
             </radio-group>
           </div>
           <div v-if="colVisCol" style="font-size:12px;color:#888;line-height:1.6;">
             当前第 {{colVisCol}} 列状态（按起始列归类，跨列合并单元格归到起始列）：<br>
             <span v-for="c in colVisCells" :key="c.__uid" style="margin-right:8px;">
-              <span :style="{color: c.portalHide ? '#ed4014' : c.platformHide ? '#ff9900' : '#19be6b'}">{{c.id || '(未命名)'}}</span>
-              <span style="color:#aaa;">{{c.portalHide ? '[门户隐藏]' : c.platformHide ? '[管理端隐藏]' : '[可见]'}}</span>
+              <span :style="{color: c.portalHide && c.platformHide ? '#999' : c.portalHide ? '#ed4014' : c.platformHide ? '#ff9900' : '#19be6b'}">{{c.id || '(未命名)'}}</span>
+              <span style="color:#aaa;">{{c.portalHide && c.platformHide ? '[全部隐藏]' : c.portalHide ? '[门户隐藏]' : c.platformHide ? '[管理端隐藏]' : '[可见]'}}</span>
             </span>
           </div>
           <div style="margin-top:8px;font-size:12px;color:#888;">支持 Ctrl+Z 撤销。</div>
@@ -1447,6 +1500,7 @@ events: {
                 <div class="row-grow">
                   <i-input v-model="opt.label" size="small" placeholder="显示文字" />
                   <i-input v-model="opt.value" size="small" placeholder="值 value" style="max-width:140px;" />
+                  <input-number v-model="opt.score" size="small" placeholder="分值（选填）" :step="0.1" style="max-width:120px;" />
                 </div>
                 <i-button class="sub-remove" size="small" type="error" ghost @click="removeOption(i)">×</i-button>
               </div>
@@ -2079,6 +2133,60 @@ events: {
         function _fmtRange(start, end) {
           return start === end ? String(start) : start + ',' + end;
         }
+        // 通用辅助：扫描网格空位并填充空白 cell
+        // axis='col' → 扫描列方向（新增列），axis='row' → 扫描行方向（新增行）
+        // start/pos 定义新增的起始位置和数量
+        function _fillEmptySlots(cells, axis, start, count) {
+          // 收集所有唯一行范围和列范围
+          var rowRanges = [], colRanges = [];
+          cells.forEach(function (c) {
+            if (!c || !c.x || !c.y) return;
+            var xr = parseRange(c.x), yr = parseRange(c.y);
+            colRanges.push({ s: xr.start, e: xr.end });
+            rowRanges.push({ s: yr.start, e: yr.end });
+          });
+          // 扩展：新行/列的位置可能超出已有范围，需要确保覆盖
+          var maxR = 0, maxC = 0;
+          rowRanges.forEach(function (r) { if (r.e > maxR) maxR = r.e; });
+          colRanges.forEach(function (c) { if (c.e > maxC) maxC = c.e; });
+          if (axis === 'col') {
+            maxC = Math.max(maxC, start + count - 1);
+          } else {
+            maxR = Math.max(maxR, start + count - 1);
+          }
+          // 对每个目标位置（新行或新列的每一格），检查是否已被覆盖
+          var newCells = [];
+          for (var r = 1; r <= maxR; r++) {
+            for (var c = 1; c <= maxC; c++) {
+              var isNewSlot = (axis === 'col') ? (c >= start && c < start + count) : (r >= start && r < start + count);
+              if (!isNewSlot) continue;
+              // 检查是否已有 cell 覆盖此 (c, r) 位置
+              var covered = false;
+              for (var i = 0; i < cells.length; i++) {
+                var cell = cells[i];
+                if (!cell || !cell.x || !cell.y) continue;
+                var xr = parseRange(cell.x), yr = parseRange(cell.y);
+                if (xr.start <= c && xr.end >= c && yr.start <= r && yr.end >= r) {
+                  covered = true;
+                  break;
+                }
+              }
+              if (!covered) {
+                newCells.push(makeCell({
+                  id: '',
+                  x: String(c),
+                  y: String(r),
+                  type: 'input',
+                  content: '',
+                  placeholder: ''
+                }));
+              }
+            }
+          }
+          if (newCells.length) {
+            cells.push.apply(cells, newCells);
+          }
+        }
         function _shiftLinkageRows(cells, beforeRow, count) {
           cells.forEach(function (c) {
             if (!c || !c.linkage) return;
@@ -2107,6 +2215,8 @@ events: {
             } else { return; }
             c.x = _fmtRange(ns, ne);
           });
+          // 为新列的每个位置填充空白 cell（type=text）
+          _fillEmptySlots(cells, 'col', beforeCol, count);
           return cells;
         }
         function insertRows(cells, beforeRow, count) {
@@ -2122,6 +2232,8 @@ events: {
             } else { return; }
             c.y = _fmtRange(ns, ne);
           });
+          // 为新行的每个位置填充空白 cell（type=text）
+          _fillEmptySlots(cells, 'row', beforeRow, count);
           _shiftLinkageRows(cells, beforeRow, count);
           return cells;
         }
@@ -2767,7 +2879,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           },
           addOption: function () {
             if (!this.cell.options) this.$set(this.cell, 'options', []);
-            this.cell.options.push({ label: '', value: '' });
+            this.cell.options.push({ label: '', value: '', score: null });
             this.$emit('change');
           },
           removeOption: function (i) {
@@ -2953,7 +3065,8 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
         template: '#preview-renderer-tpl',
         props: {
           config: { type: Object, default: function () { return { title: '', cells: [], freezeRows: 0 }; } },
-          mode: { type: String, default: 'portal' }
+          mode: { type: String, default: 'portal' },
+          gridPad: { type: Object, default: function () { return { cols: 0, rows: 0 }; } }
         },
         data: function () {
           var state = this._buildState(this.config);
@@ -2999,14 +3112,30 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               var yr = pr_parseRange(c.y);
               for (var y = yr.start; y <= yr.end; y++) yVisible[y] = true;
             }
+            // 计算 cells 实际的 maxR（不含 gridPad 扩展）
+            var origMaxR = 0;
+            for (var j = 0; j < cells.length; j++) {
+              if (!cells[j] || !cells[j].y) continue;
+              var yrr = pr_parseRange(cells[j].y);
+              if (yrr.end > origMaxR) origMaxR = yrr.end;
+            }
             var out = [];
-            for (var ri = 0; ri < rows.length; ri++) out.push(!!yVisible[ri + 1]);
+            for (var ri = 0; ri < rows.length; ri++) {
+              if (yVisible[ri + 1]) { out.push(true); continue; }
+              // 扩展行（超出原 cells 的 maxR，由 gridPad 产生）→ 可见，让用户看到 + 编辑
+              // 原有行若全 hide 则仍不可见（保留 portalHide/platformHide 语义）
+              out.push(ri >= origMaxR);
+            }
             return out;
           }
         },
         watch: {
           config: 'rebuildFromConfig',
-          mode: 'rebuildFromConfig'
+          mode: 'rebuildFromConfig',
+          gridPad: {
+            handler: 'rebuildFromConfig',
+            deep: true
+          }
         },
         created: function () {
           this.recalc();
@@ -3027,6 +3156,30 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             var fm = pr_buildFormModel(cells);
             var maxC = 0;
             cells.forEach(function (c) { var xr = pr_parseRange(c.x); if (xr.end > maxC) maxC = xr.end; });
+            var origMaxR = 0;
+            cells.forEach(function (c) { if (c && c.y) { var yr = pr_parseRange(c.y); if (yr.end > origMaxR) origMaxR = yr.end; } });
+            // 应用虚拟边界（appendColumnsOp / appendRowsOp 设置）：
+            // 把网格扩展到 gridPad 尺寸，扩展部分填充 cell:null 空位（渲染为 empty-cell-slot）
+            // 这样 append 后能看到新列/新行（点 + 添加 cell），和 insert 行为对称
+            var padCols = (this.gridPad && this.gridPad.cols) || 0;
+            var padRows = (this.gridPad && this.gridPad.rows) || 0;
+            var targetC = Math.max(maxC, padCols);
+            var targetR = Math.max(origMaxR, padRows);
+            if (targetC > maxC || targetR > origMaxR) {
+              // 补齐行
+              while (grid.rows.length < targetR) {
+                var newRow = [];
+                for (var nc = 0; nc < targetC; nc++) newRow.push({ skip: false, cell: null });
+                grid.rows.push(newRow);
+              }
+              // 补齐每行列数
+              grid.rows.forEach(function (row) {
+                while (row.length < targetC) row.push({ skip: false, cell: null });
+              });
+              grid.maxC = targetC;
+              grid.maxR = targetR;
+            }
+            maxC = targetC;
             // 列宽规则（对齐生产 dynamic-eval-table.vue 的 FIXED_COL_RULES）
             var FIXED_COL_RULES = [
               { p: /^(序号|编号|No\.?)$/i, w: 4 },
@@ -3057,14 +3210,22 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                 }
               }
             });
-            var colHidden = {};
-            for (var ci = 0; ci < maxC; ci++) colHidden[ci] = true;
+            var colHasAnyCell = {};
+            var colHasVisibleCell = {};
             cells.forEach(function (c) {
-              if (!hs[c.id]) {
-                var xr = pr_parseRange(c.x);
-                for (var i = xr.start - 1; i < xr.end; i++) colHidden[i] = false;
+              if (!c || !c.x) return;
+              var xr = pr_parseRange(c.x);
+              for (var i = xr.start - 1; i < xr.end; i++) {
+                colHasAnyCell[i] = true;
+                if (!hs[c.id]) colHasVisibleCell[i] = true;
               }
             });
+            // 隐藏条件：列上有 cell 但全部被显式 hide（保留"批量列可见性"语义）
+            // 注意：列上完全没 cell 时（如插入的空列）不算 hidden，要显示出来
+            var colHidden = {};
+            for (var ci = 0; ci < maxC; ci++) {
+              colHidden[ci] = colHasAnyCell[ci] && !colHasVisibleCell[ci];
+            }
             // 计算列宽：固定权重列按权重，剩余列均分剩余空间
             var hiddenCount = 0, fixedTotal = 0, fixedCount = 0;
             for (var hi = 0; hi < maxC; hi++) {
@@ -3095,26 +3256,19 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               }
             }
             // 预计算每个 entry 的 items（避免 render 时反复调用 getItems 创建新数组）
+            // 重要：alts（左上角与其他 cell 重合的 cell）不加入 items，
+            // 避免一个 td 渲染出多个 cell 的内容（"一个单元格出现两个 id"问题）
+            // alts 数据仍保留在 entry.alts，配置抽屉/单元格列表里仍可见、可编辑、可导出
             var CTRL_TYPES = ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
             grid.rows.forEach(function (row) {
               row.forEach(function (entry) {
                 if (!entry || entry.skip || !entry.cell) return;
-                var list = [{
+                entry.items = [{
                   cell: entry.cell,
                   isText: entry.isText,
                   isControl: entry.isControl,
                   isFormula: entry.isFormula
                 }];
-                (entry.alts || []).forEach(function (a) {
-                  var t = a.cell && a.cell.type;
-                  list.push({
-                    cell: a.cell,
-                    isText: t === 'text',
-                    isControl: CTRL_TYPES.indexOf(t) >= 0,
-                    isFormula: t === 'formula'
-                  });
-                });
-                entry.items = list;
               });
             });
             return {
@@ -3623,6 +3777,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             minifyExport: false,
             previewTimer: null,
             previewConfig: { title: '', cells: [], freezeRows: 0 },
+            gridPad: { cols: 0, rows: 0 },
             editDrawerUid: null,
             editDrawerDraft: null,
             editDrawerSnapshot: null,
@@ -3639,6 +3794,10 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             showInsertRowModal: false,
             showDeleteColModal: false,
             showDeleteRowModal: false,
+            showAppendColModal: false,
+            showAppendRowModal: false,
+            appendColCount: 1,
+            appendRowCount: 1,
             insertColAt: 1,
             insertColCount: 1,
             insertRowAt: 1,
@@ -3785,7 +3944,8 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             return {
               title: s.title,
               freezeRows: s.freezeRows,
-              cells: JSON.parse(JSON.stringify(s.cells))
+              cells: JSON.parse(JSON.stringify(s.cells)),
+              gridPad: { cols: this.gridPad.cols || 0, rows: this.gridPad.rows || 0 }
             };
           },
           _pushUndo: function () {
@@ -3801,6 +3961,9 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               freezeRows: snap.freezeRows > 0 ? Number(snap.freezeRows) : 0,
               cells: JSON.parse(JSON.stringify(snap.cells)).map(makeCell)
             };
+            this.gridPad = snap.gridPad
+              ? { cols: snap.gridPad.cols || 0, rows: snap.gridPad.rows || 0 }
+              : { cols: 0, rows: 0 };
             this.expandedSet = {};
           },
           canUndo: function () { return this.undoStack.length > 0; },
@@ -3818,14 +3981,14 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (!this.undoStack.length) return;
             this.redoStack.push(this._deepSnap());
             this._restoreSnap(this.undoStack.pop());
-            this.schedulePreview();
+            this.forceRefreshPreview();
             this.$Message.info('已撤销');
           },
           redo: function () {
             if (!this.redoStack.length) return;
             this.undoStack.push(this._deepSnap());
             this._restoreSnap(this.redoStack.pop());
-            this.schedulePreview();
+            this.forceRefreshPreview();
             this.$Message.info('已重做');
           },
           // ---- 批量操作（先压栈，再调 utils）----
@@ -3833,43 +3996,47 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (!beforeCol || beforeCol < 1 || !count || count < 1) return;
             this._pushUndo();
             window.DTUtils.insertColumns(this.config.cells, beforeCol, count);
-            this.schedulePreview();
+            this.forceRefreshPreview();
             this.$Message.success('已在第 ' + beforeCol + ' 列前插入 ' + count + ' 列');
           },
           insertRowAt: function (beforeRow, count) {
             if (!beforeRow || beforeRow < 1 || !count || count < 1) return;
             this._pushUndo();
             window.DTUtils.insertRows(this.config.cells, beforeRow, count);
-            this.schedulePreview();
+            this.forceRefreshPreview();
             this.$Message.success('已在第 ' + beforeRow + ' 行前插入 ' + count + ' 行');
           },
           deleteColumn: function (col) {
             if (!col || col < 1) return;
             this._pushUndo();
             var removed = window.DTUtils.removeColumn(this.config.cells, col);
-            this.schedulePreview();
+            this.forceRefreshPreview();
             this.$Message.success('已删除第 ' + col + ' 列' + (removed ? '（含 ' + removed + ' 个独占单元格）' : ''));
           },
           deleteRow: function (row) {
             if (!row || row < 1) return;
             this._pushUndo();
             var removed = window.DTUtils.removeRow(this.config.cells, row);
-            this.schedulePreview();
+            this.forceRefreshPreview();
             this.$Message.success('已删除第 ' + row + ' 行' + (removed ? '（含 ' + removed + ' 个独占单元格）' : ''));
           },
           appendColumnsOp: function (count) {
             if (!count || count < 1) return;
             this._pushUndo();
-            window.DTUtils.appendColumns(this.config.cells, count);
-            this.schedulePreview();
-            this.$Message.success('已末尾追加 ' + count + ' 列');
+            // gridPad.cols 是"目标最小列数"，基于当前实际 maxC 累加
+            // 避免 max(gridPad, cells.maxC) 时被 cells.maxC 抵消导致不扩展
+            var currentMaxC = this.maxX;
+            this.gridPad.cols = Math.max(this.gridPad.cols || 0, currentMaxC) + count;
+            this.forceRefreshPreview();
+            this.$Message.success('已末尾追加 ' + count + ' 列（点击空位的 + 添加单元格）');
           },
           appendRowsOp: function (count) {
             if (!count || count < 1) return;
             this._pushUndo();
-            window.DTUtils.appendRows(this.config.cells, count);
-            this.schedulePreview();
-            this.$Message.success('已末尾追加 ' + count + ' 行');
+            var currentMaxR = this.maxY;
+            this.gridPad.rows = Math.max(this.gridPad.rows || 0, currentMaxR) + count;
+            this.forceRefreshPreview();
+            this.$Message.success('已末尾追加 ' + count + ' 行（点击空位的 + 添加单元格）');
           },
           // 弹窗确认 methods
           confirmInsertCol: function () {
@@ -3887,6 +4054,14 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           confirmDeleteRow: function () {
             this.deleteRow(this.deleteRowAt);
             this.showDeleteRowModal = false;
+          },
+          confirmAppendCol: function () {
+            this.appendColumnsOp(this.appendColCount);
+            this.showAppendColModal = false;
+          },
+          confirmAppendRow: function () {
+            this.appendRowsOp(this.appendRowCount);
+            this.showAppendRowModal = false;
           },
           openColVisModal: function () {
             if (!this.colList.length) { this.$Message.warning('没有列数据'); return; }
@@ -3913,12 +4088,15 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               } else if (action === 'platformHide') {
                 self.$set(c, 'portalHide', false);
                 self.$set(c, 'platformHide', true);
+              } else if (action === 'allHide') {
+                self.$set(c, 'portalHide', true);
+                self.$set(c, 'platformHide', true);
               }
               count++;
             });
             this.showColVisModal = false;
-            this.schedulePreview();
-            var label = action === 'visible' ? '双端可见' : action === 'portalHide' ? '门户隐藏' : '管理端隐藏';
+            this.forceRefreshPreview();
+            var label = action === 'visible' ? '双端可见' : action === 'portalHide' ? '门户隐藏' : action === 'platformHide' ? '管理端隐藏' : '全部隐藏';
             this.$Message.success('已将第 ' + col + ' 列的 ' + count + ' 个单元格设为「' + label + '」');
           },
           schedulePreview: function () {
@@ -3944,6 +4122,19 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           },
           refreshPreview: function () {
             this.previewConfig = this._stripInternal();
+          },
+          // 批量操作专用：立即同步刷新预览 + 保存 localStorage
+          // 理由：schedulePreview 有 400ms 防抖 + editDrawerOpen 短路两个延迟
+          // 用户点 modal "确认" 后期望立即看到变化，不能等
+          forceRefreshPreview: function () {
+            if (this.previewTimer) { clearTimeout(this.previewTimer); this.previewTimer = null; }
+            this.previewConfig = this._stripInternal();
+            // 同时防抖保存 localStorage，确保行列操作不丢失
+            var self = this;
+            if (this.saveTimer) clearTimeout(this.saveTimer);
+            this.saveTimer = setTimeout(function () {
+              try { localStorage.setItem(STORAGE_KEY, JSON.stringify(self._stripInternal())); } catch (e) {}
+            }, 500);
           },
           onPreviewSubmit: function (result) {
             // 详细数据已在 preview-renderer 内 JSON.stringify 输出：表格 JSON（config）+ 表格数据（fm）+ 过滤后结果
@@ -4180,6 +4371,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
               content: '将清空所有单元格配置，确定继续？',
               onOk: function () {
                 self.config = { title: self.config.title, cells: [], freezeRows: 0 };
+                self.gridPad = { cols: 0, rows: 0 };
                 self.expandedSet = {};
                 self.schedulePreview();
                 self.$Message.success('已清空所有单元格');
@@ -4384,6 +4576,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (!d) return;
             this._pushUndo();
             this.config = { title: d.title, cells: d.cells, freezeRows: d.freezeRows };
+            this.gridPad = { cols: 0, rows: 0 };
             this.expandedSet = {};
             this.showImportModal = false;
             this.importText = '';

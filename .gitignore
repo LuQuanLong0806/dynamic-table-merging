@@ -1,1 +1,18 @@
+# 构建产物
+table-config/
+
+# 临时/测试文件（下划线前缀）
+_*.js
+_*.html
+_*.tmp
+
+# Node
+node_modules/
+npm-debug.log*
+
+# 压缩包
 *.zip
+
+# 系统文件
+.DS_Store
+Thumbs.db
