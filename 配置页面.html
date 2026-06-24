@@ -3039,34 +3039,32 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
           colCount: function () {
             return this.gridRows.length ? this.gridRows[0].length : 0;
           },
-          // 预计算每行可见性，避免 render 里 v-if="isRowVisible(ri)" 每行 O(M) 遍历 cells
-          // 仅依赖 gridRows / hiddenState / config.cells，输入值变化不会触发它重算。
+          // 预计算每行可见性：
+          //   - 行有可见 cell（非 hide） → 显示
+          //   - 行有 cell 但全部 hide   → 不显示（模拟生产 portalHide/platformHide）
+          //   - 行完全没 cell（gridPad 扩展 / 插入产生的空行 / rowspan 占位） → 显示（渲染为 empty-cell-slot 或被 rowspan 占据）
           visibleRows: function () {
             var self = this;
             var rows = this.gridRows;
             var cells = this.config.cells || [];
             if (!rows.length) return [];
-            // 先收集每个 y 坐标是否有可见 cell
-            var yVisible = {};
-            for (var i = 0; i < cells.length; i++) {
-              var c = cells[i];
-              if (this.isHidden(c.id)) continue;
+            // 收集每个 y 的状态：'visible' | 'hidden' | undefined（无 cell）
+            var yStatus = {};
+            cells.forEach(function (c) {
+              if (!c || !c.y) return;
               var yr = pr_parseRange(c.y);
-              for (var y = yr.start; y <= yr.end; y++) yVisible[y] = true;
-            }
-            // 计算 cells 实际的 maxR（不含 gridPad 扩展）
-            var origMaxR = 0;
-            for (var j = 0; j < cells.length; j++) {
-              if (!cells[j] || !cells[j].y) continue;
-              var yrr = pr_parseRange(cells[j].y);
-              if (yrr.end > origMaxR) origMaxR = yrr.end;
-            }
+              for (var y = yr.start; y <= yr.end; y++) {
+                if (yStatus[y] === 'visible') continue;
+                if (self.isHidden(c.id)) {
+                  if (yStatus[y] !== 'visible') yStatus[y] = 'hidden';
+                } else {
+                  yStatus[y] = 'visible';
+                }
+              }
+            });
             var out = [];
             for (var ri = 0; ri < rows.length; ri++) {
-              if (yVisible[ri + 1]) { out.push(true); continue; }
-              // 扩展行（超出原 cells 的 maxR，由 gridPad 产生）→ 可见，让用户看到 + 编辑
-              // 原有行若全 hide 则仍不可见（保留 portalHide/platformHide 语义）
-              out.push(ri >= origMaxR);
+              out.push(yStatus[ri + 1] !== 'hidden');
             }
             return out;
           }
