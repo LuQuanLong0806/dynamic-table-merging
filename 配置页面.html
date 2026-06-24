@@ -3938,6 +3938,8 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (!beforeCol || beforeCol < 1 || !count || count < 1) return;
             this._pushUndo();
             window.DTUtils.insertColumns(this.config.cells, beforeCol, count);
+            // gridPad 同步：若处于虚拟扩展状态（之前追加过列），插入列也要让末尾虚拟列右移
+            if (this.gridPad.cols > 0) this.gridPad.cols += count;
             this.forceRefreshPreview();
             this.$Message.success('已在第 ' + beforeCol + ' 列前插入 ' + count + ' 列');
           },
@@ -3945,6 +3947,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (!beforeRow || beforeRow < 1 || !count || count < 1) return;
             this._pushUndo();
             window.DTUtils.insertRows(this.config.cells, beforeRow, count);
+            if (this.gridPad.rows > 0) this.gridPad.rows += count;
             this.forceRefreshPreview();
             this.$Message.success('已在第 ' + beforeRow + ' 行前插入 ' + count + ' 行');
           },
@@ -3952,6 +3955,8 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (!col || col < 1) return;
             this._pushUndo();
             var removed = window.DTUtils.removeColumn(this.config.cells, col);
+            // gridPad 同步：删除列后总列数 -1，虚拟边界也跟着缩
+            if (this.gridPad.cols > 0) this.gridPad.cols = Math.max(0, this.gridPad.cols - 1);
             this.forceRefreshPreview();
             this.$Message.success('已删除第 ' + col + ' 列' + (removed ? '（含 ' + removed + ' 个独占单元格）' : ''));
           },
@@ -3959,6 +3964,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (!row || row < 1) return;
             this._pushUndo();
             var removed = window.DTUtils.removeRow(this.config.cells, row);
+            if (this.gridPad.rows > 0) this.gridPad.rows = Math.max(0, this.gridPad.rows - 1);
             this.forceRefreshPreview();
             this.$Message.success('已删除第 ' + row + ' 行' + (removed ? '（含 ' + removed + ' 个独占单元格）' : ''));
           },
