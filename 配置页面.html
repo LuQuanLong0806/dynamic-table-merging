@@ -2568,11 +2568,12 @@ var app=new Vue({
     isDisabled:function(id){return!!this.disabledState[id];},
     getNum:function(c,k){var v=c.validation;if(!v)return undefined;var r;if(v.rules)v.rules.forEach(function(x){if(x[k]!=null)r=x[k];});if(r==null&&v[k]!=null)r=v[k];return r;},
     getStep:function(cell){return window.DTUtils.getStep(cell);},
-    onChange:function(id,rawEvent){this.handleLinkage(id);this.recalc();this.validateField(id);this.runCellEvent('change',id,this.fm[id],rawEvent);},
-    onBlur:function(id,rawEvent){this.validateField(id);this.runCellEvent('blur',id,this.fm[id],rawEvent);},
+    onChange:function(id,rawEvent){this.handleLinkage(id);this.recalc();this.validateField(id);this.validateDependents(id);this.runCellEvent('change',id,this.fm[id],rawEvent);},
+    onBlur:function(id,rawEvent){this.validateField(id);this.validateDependents(id);this.runCellEvent('blur',id,this.fm[id],rawEvent);},
     onInput:function(id,rawEvent){this.runCellEvent('input',id,this.fm[id],rawEvent);},
     runCellEvent:function(eventType,id,value,rawEvent){var cell=this.cellMap[id];if(!cell||!cell.events)return;var key='on'+eventType.charAt(0).toUpperCase()+eventType.slice(1);var body=cell.events[key]||cell.events[eventType];if(!body||!String(body).trim())return;var cacheKey=eventType+':'+body;var fn=this.eventFnCache[cacheKey];if(!fn){try{fn=new Function('value','fm','extra','rawEvent',body);}catch(e){console.error('[事件编译失败]',id,eventType,e);return;}this.eventFnCache[cacheKey]=fn;}try{fn.call(this,value,this.fm,{cell:cell,cellMap:this.cellMap},rawEvent);}catch(e){console.error('[事件执行失败]',id,eventType,e);}},
     validateField:function(id){var self=this;this.\$nextTick(function(){if(self.\$refs.mainForm&&self.formRules&&self.formRules[id])self.\$refs.mainForm.validateField(id);});},
+    validateDependents:function(changedId){var self=this;this.\$nextTick(function(){if(!self.\$refs.mainForm)return;var cells=self.config.cells||[];for(var i=0;i<cells.length;i++){var c=cells[i];if(c.id===changedId)continue;if(!c.validation||!c.validation.rules)continue;var hasDyn=false;for(var j=0;j<c.validation.rules.length;j++){var r=c.validation.rules[j];if(typeof r.required==='string'||r.depends||r.custom||r.validator){hasDyn=true;break;}}if(!hasDyn)continue;if(!self.formRules||!self.formRules[c.id])continue;self.\$refs.mainForm.validateField(c.id);}});},
     handleLinkage:function(id){var cell=this.cellMap[id];if(!cell||!cell.linkage)return;var val=String(this.fm[id]);var self=this;cell.linkage.forEach(function(rule){if(String(rule.trigger)===val)rule.actions.forEach(function(a){self.applyAction(a);});});},
     applyAction:function(a){var self=this,t=a.target;if(t){if(a.type==='show')this.\$set(this.hiddenState,t,false);else if(a.type==='hide')this.\$set(this.hiddenState,t,true);else if(a.type==='enable')this.\$set(this.disabledState,t,false);else if(a.type==='disable')this.\$set(this.disabledState,t,true);else if(a.type==='clear')this.doClear(t);else if(a.type==='setValue')this.\$set(this.fm,t,a.value||'');return;}var targets=a.rowTargets;if(!targets)return;targets.forEach(function(rt){rt.cols.forEach(function(cid){if(a.type==='rowEnable')self.\$set(self.disabledState,cid,false);else if(a.type==='rowDisable')self.\$set(self.disabledState,cid,true);else if(a.type==='rowClear')self.doClear(cid);});});},
     doClear:function(id){if(!this.fm.hasOwnProperty(id))return;var tc=this.cellMap[id];var empty=tc&&tc.type==='checkbox'?'[]':(tc&&tc.type==='number'?null:'');if(tc&&tc.type==='checkbox')empty=[];this.\$set(this.fm,id,empty);},
@@ -3411,10 +3412,12 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             this.handleLinkage(id);
             this.recalc();
             this.validateField(id);
+            this.validateDependents(id);
             this.runCellEvent('change', id, this.fm[id], rawEvent);
           },
           onBlur: function (id, rawEvent) {
             this.validateField(id);
+            this.validateDependents(id);
             this.runCellEvent('blur', id, this.fm[id], rawEvent);
           },
           onInput: function (id, rawEvent) {
@@ -3443,6 +3446,26 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             var self = this;
             this.$nextTick(function () {
               if (self.$refs.mainForm && self.formRules && self.formRules[id]) self.$refs.mainForm.validateField(id);
+            });
+          },
+          validateDependents: function (changedId) {
+            var self = this;
+            this.$nextTick(function () {
+              if (!self.$refs.mainForm) return;
+              var cells = self.config.cells || [];
+              for (var i = 0; i < cells.length; i++) {
+                var c = cells[i];
+                if (c.id === changedId) continue;
+                if (!c.validation || !c.validation.rules) continue;
+                var hasDyn = false;
+                for (var j = 0; j < c.validation.rules.length; j++) {
+                  var r = c.validation.rules[j];
+                  if (typeof r.required === 'string' || r.depends || r.custom || r.validator) { hasDyn = true; break; }
+                }
+                if (!hasDyn) continue;
+                if (!self.formRules || !self.formRules[c.id]) continue;
+                self.$refs.mainForm.validateField(c.id);
+              }
             });
           },
           handleLinkage: function (id) {
