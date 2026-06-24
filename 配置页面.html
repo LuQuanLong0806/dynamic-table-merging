@@ -1065,6 +1065,7 @@
                   :class="{ disabled: !editDrawerDirty }"
                   @click="editDrawerDirty && revertEditDrawer()"
                 >放弃修改</a>
+                <i-button size="small" @click="applyToColumn" title="把当前 cell 的 type/precision/placeholder/options/accept/maxSize/clampLines/validation 复制到同列所有未配置过的单元格(已配置过的不动)">应用到整列</i-button>
                 <i-button type="primary" size="small" @click="commitEditDrawer">确定</i-button>
               </div>
             </div>
@@ -3984,6 +3985,134 @@ events: {
           revertEditDrawer: function () {
             // 草稿直接丢弃即可（原 cell 从未被修改）
             this.closeEditDrawer();
+          },
+          // 「应用到整列」: 把当前 draft 的 type/precision/placeholder/options/accept/maxSize/clampLines/validation
+          // 应用到同列所有网格位置: 已有未配置 cell 被修改,空位自动创建新 cell
+          // 跳过: 已配置过的 cell、合并 cell(跨多行/多列的标签)、被合并 cell 覆盖的位置
+          applyToColumn: function () {
+            var i = this.editDrawerIndex;
+            if (i < 0 || !this.editDrawerDraft) {
+              this.$Message.warning('没有可应用的单元格配置');
+              return;
+            }
+            var draft = this.editDrawerDraft;
+            var cur = this.config.cells[i];
+            var uid = cur.__uid;
+            // ID 冲突检测(同 commitEditDrawer)
+            if (this.idExists(draft.id, uid)) {
+              this.$Message.error('ID "' + draft.id + '" 已被其他单元格占用，请改用其他 ID');
+              return;
+            }
+            var self = this;
+            var pr = window.DTUtils.parseRange;
+            var draftRange = pr(draft.x);
+            var dStart = draftRange.start, dEnd = draftRange.end;
+            var draftRowRange = pr(draft.y);
+            var draftRowStart = draftRowRange.start, draftRowEnd = draftRowRange.end;
+            // 表格总行数:取 cells 的 maxY、gridPad 扩展、draft 自身 y 范围三者较大值
+            // 含 draftRowEnd 保证:用户在抽屉里把 draft.y 改大时,扫描仍能覆盖 draft 占据的整段
+            var maxRow = Math.max(this.maxY || 0, (this.gridPad && this.gridPad.rows) || 0, draftRowEnd || 0);
+            var CTRL_TYPES = ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
+            function isUnconfigured(c) {
+              if (CTRL_TYPES.indexOf(c.type) >= 0) return false;  // 控件类型 = 已配置
+              if (c.validation && c.validation.rules && c.validation.rules.length > 0) return false;  // 有 rules = 已配置
+              if (c.content && String(c.content).trim()) return false;  // label/text 有内容(表头/标签) = 已配置
+              return true;  // 仅当 type 是 label/text 且 content 为空(新建占位) 才视为未配置
+            }
+            // 找左上角在 (col,row) 的 cell
+            function findCellAt(col, row) {
+              for (var k = 0; k < self.config.cells.length; k++) {
+                var cc = self.config.cells[k];
+                if (pr(cc.x).start === col && pr(cc.y).start === row) return cc;
+              }
+              return null;
+            }
+            // 该位置是否被任何 cell(含合并) 覆盖
+            // 注意:draft 即将 commit,它占据的位置(可能用户改过坐标)也算已覆盖,避免创建重叠 cell
+            function isCovered(col, row) {
+              for (var k = 0; k < self.config.cells.length; k++) {
+                var cc = self.config.cells[k];
+                var cxr = pr(cc.x), cyr = pr(cc.y);
+                if (cxr.start <= col && col <= cxr.end && cyr.start <= row && row <= cyr.end) return true;
+              }
+              if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) return true;
+              return false;
+            }
+            var targets = [];      // 已有未配置 cell,待修改
+            var newPositions = []; // 空位,待创建
+            for (var col = dStart; col <= dEnd; col++) {
+              for (var row = 1; row <= maxRow; row++) {
+                // 跳过 draft 即将占据的位置(整矩形,不只是左上角)
+                if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) continue;
+                var cAt = findCellAt(col, row);
+                if (cAt) {
+                  var cxr = pr(cAt.x), cyr = pr(cAt.y);
+                  if (cxr.start !== cxr.end || cyr.start !== cyr.end) continue;  // 合并 cell 跳过
+                  if (!isUnconfigured(cAt)) continue;
+                  if (cAt === cur) continue;
+                  targets.push(cAt);
+                } else if (!isCovered(col, row)) {
+                  newPositions.push({ col: col, row: row });
+                }
+              }
+            }
+            if (targets.length === 0 && newPositions.length === 0) {
+              this.$Message.info('没有可应用的位置（同列都已配置过或被合并 cell 占用）');
+              return;
+            }
+            // 二次确认(批量操作不可逆,虽然有撤销栈仍提示)
+            // 不复制 width(首行列宽,每列只 1 个)、calculationFormula(绑定具体 cell id,复制会错)、
+            // content(标签/提示文字,每行不同)、value(初始值,通常与 id 绑定)
+            var COPY_KEYS = ['type', 'placeholder', 'precision', 'options', 'validation', 'accept', 'maxSize', 'clampLines'];
+            var rangeDesc = dStart === dEnd
+              ? '第 ' + dStart + ' 列'
+              : '第 ' + dStart + '-' + dEnd + ' 列（跨多列）';
+            var summaryLines = [];
+            if (targets.length > 0) summaryLines.push('修改 <b>' + targets.length + '</b> 个已有未配置单元格');
+            if (newPositions.length > 0) summaryLines.push('在空位创建 <b>' + newPositions.length + '</b> 个新单元格（默认 id 为 cell_rY_cX）');
+            this.$Modal.confirm({
+              title: '确认应用到整列',
+              content: '将把当前单元格的 <b>type / precision / placeholder / options / accept / maxSize / clampLines / validation</b> 应用到<b>' + rangeDesc + '</b>:<br><br>• ' + summaryLines.join('<br>• ') + '<br><br>已配置过的不动。可用 Ctrl+Z 撤销。',
+              okText: '应用',
+              cancelText: '取消',
+              onOk: function () {
+                self._pushUndo();
+                // 先把 draft 写回当前 cell(同 commitEditDrawer)
+                Object.keys(cur).forEach(function (k) { if (!(k in draft)) delete cur[k]; });
+                Object.keys(draft).forEach(function (k) { self.$set(cur, k, JSON.parse(JSON.stringify(draft[k]))); });
+                // 修改已有 targets
+                targets.forEach(function (c) {
+                  COPY_KEYS.forEach(function (k) {
+                    if (draft[k] != null) {
+                      self.$set(c, k, JSON.parse(JSON.stringify(draft[k])));
+                    } else if (k in c) {
+                      self.$delete(c, k);
+                    }
+                  });
+                });
+                // 在空位创建新 cell
+                newPositions.forEach(function (p) {
+                  var partial = {
+                    id: self.genUniqueId('cell_r' + p.row + '_c' + p.col),
+                    x: String(p.col),
+                    y: String(p.row),
+                    content: ''
+                  };
+                  COPY_KEYS.forEach(function (k) {
+                    if (draft[k] != null) partial[k] = JSON.parse(JSON.stringify(draft[k]));
+                  });
+                  self.config.cells.push(makeCell(partial));
+                });
+                self.editDrawerLastSaved = new Date();
+                self.closeEditDrawer();
+                self.forceRefreshPreview();
+                var total = targets.length + newPositions.length;
+                var parts = [];
+                if (targets.length > 0) parts.push('修改 ' + targets.length + ' 个');
+                if (newPositions.length > 0) parts.push('创建 ' + newPositions.length + ' 个');
+                self.$Message.success('已应用 ' + total + ' 个位置（' + parts.join('、') + '）');
+              }
+            });
           },
           addCellAndEdit: function () {
             this.showTemplateModal = true;
