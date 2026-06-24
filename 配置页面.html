@@ -2903,11 +2903,21 @@ events: {
           rebuildFromConfig: function () {
             var s = this._buildState(this.config);
             // 保留用户已填的值：同 id 字段从旧 fm 迁移过来（避免编辑配置时清空预览输入）
+            // 必须按目标 cell 类型规范化,否则改 type 后旧字符串会污染 number cell,
+            // 触发 <InputNumber> formatterValue 的 currentValue.toFixed is not a function
             var oldFm = this.fm || {};
             var newFm = s.fm;
+            var newCellMap = s.cellMap;
             Object.keys(newFm).forEach(function (id) {
               var old = oldFm[id];
-              if (old !== undefined && old !== null && old !== '') {
+              if (old === undefined || old === null || old === '') return;
+              var nt = newCellMap[id] && newCellMap[id].type;
+              if (nt === 'number') {
+                var n = Number(old);
+                newFm[id] = isNaN(n) ? null : n;
+              } else if (nt === 'checkbox' || nt === 'upload') {
+                newFm[id] = Array.isArray(old) ? old : [];
+              } else {
                 newFm[id] = old;
               }
             });
@@ -3161,7 +3171,20 @@ events: {
               else if (a.type === 'enable') this.$set(this.disabledState, t, false);
               else if (a.type === 'disable') this.$set(this.disabledState, t, true);
               else if (a.type === 'clear') this.doClear(t);
-              else if (a.type === 'setValue') this.$set(this.fm, t, a.value || '');
+              else if (a.type === 'setValue') {
+                var tc = this.cellMap[t];
+                var tt = tc && tc.type;
+                var av = a.value;
+                var nv;
+                if (tt === 'number') {
+                  nv = av === '' || av == null || isNaN(Number(av)) ? null : Number(av);
+                } else if (tt === 'checkbox' || tt === 'upload') {
+                  nv = Array.isArray(av) ? av : [];
+                } else {
+                  nv = av == null ? '' : av;
+                }
+                this.$set(this.fm, t, nv);
+              }
               return;
             }
             var targets = a.rowTargets;
