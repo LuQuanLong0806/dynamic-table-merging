@@ -1615,9 +1615,14 @@ events: {
                   </radio-group>
                 </div>
                 <div class="row-grow" v-if="r.kind === 'required' && getRequiredMode(r) === 'bool'">
-                  <i-checkbox :value="r.required === true" @on-change="v => setRequiredBool(r, v)">
-                    <span style="font-size:12px;color:#888;">勾选后此字段为必填（生产默认勾选）</span>
-                  </i-checkbox>
+                  <radio-group
+                    :value="r.required === true ? 'required' : 'optional'"
+                    @on-change="v => setRequiredBool(r, v === 'required')"
+                    size="small"
+                    type="button">
+                    <radio label="required"><span>必填 required:true</span></radio>
+                    <radio label="optional"><span>非必填 required:false</span></radio>
+                  </radio-group>
                 </div>
                 <div class="sub-item-vertical" v-if="r.kind === 'required' && getRequiredMode(r) === 'expr'">
                   <div class="row-grow">
@@ -1913,11 +1918,11 @@ events: {
         <input-number v-if="cell.type==='number'"
           :value="fm[cell.id]"
           @on-change="val => { $emit('set-val', cell.id, val); $emit('on-change', cell.id, val); }"
+          @on-blur="onNumberBlur"
           :placeholder="cell.placeholder || ''"
           :min="numMin"
           :max="numMax"
           :step="numStep"
-          :precision="cell.precision != null ? cell.precision : undefined"
           :disabled="disabled"
           style="width:100%" />
         <i-select v-if="cell.type==='select'"
@@ -2999,6 +3004,17 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (v.rules) v.rules.forEach(function (x) { if (x[k] != null) r = x[k]; });
             if (r == null && v[k] != null) r = v[k];
             return r;
+          },
+          onNumberBlur: function () {
+            var p = this.cell.precision;
+            var v = this.fm[this.cell.id];
+            if (p == null || v == null || v === '' || isNaN(v)) {
+              this.$emit('on-blur', this.cell.id, {});
+              return;
+            }
+            var rounded = Number(Number(v).toFixed(p));
+            if (rounded !== Number(v)) this.$emit('set-val', this.cell.id, rounded);
+            this.$emit('on-blur', this.cell.id, {});
           }
         }
       });
