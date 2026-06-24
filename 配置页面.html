@@ -1268,7 +1268,7 @@ events: {
                ok-text="插入" cancel-text="取消" @on-ok="confirmInsertRow">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <span>在第</span>
-            <input-number v-model="insertRowAt" :min="1" :max="maxY + 1" :step="1" size="small" style="width:90px;" />
+            <input-number v-model="insertRowAtPos" :min="1" :max="maxY + 1" :step="1" size="small" style="width:90px;" />
             <span>行前插入</span>
             <input-number v-model="insertRowCount" :min="1" :max="20" :step="1" size="small" style="width:80px;" />
             <span>行</span>
@@ -3742,7 +3742,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             appendRowCount: 1,
             insertColAt: 1,
             insertColCount: 1,
-            insertRowAt: 1,
+            insertRowAtPos: 1,
             insertRowCount: 1,
             deleteColAt: 1,
             deleteRowAt: 1,
@@ -4026,7 +4026,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             this.showInsertColModal = false;
           },
           confirmInsertRow: function () {
-            this.insertRowAt(this.insertRowAt, this.insertRowCount);
+            this.insertRowAt(this.insertRowAtPos, this.insertRowCount);
             this.showInsertRowModal = false;
           },
           confirmDeleteCol: function () {
