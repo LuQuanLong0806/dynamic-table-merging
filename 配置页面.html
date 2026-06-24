@@ -1221,7 +1221,7 @@ events: {
 
             <h3>⑦ 公式（formula.calculationFormula）</h3>
             <ul>
-              <li><code>SUM(c6, e5, f5)</code>：求和（text 类型取 content 数字）</li>
+              <li><code>SUM(c6, e5, f5)</code>：求和（text 类型取 content 数字；默认保留 2 位小数）</li>
               <li><code>AVG(c6, e5)</code>：平均（保留 2 位小数）</li>
               <li><code>MIN(c6, e5)</code>：最小值</li>
               <li><code>CALC_SCORE</code>：所有 number cell 求和</li>
@@ -1918,7 +1918,8 @@ events: {
         <input-number v-if="cell.type==='number'"
           :value="fm[cell.id]"
           @on-change="val => { $emit('set-val', cell.id, val); $emit('on-change', cell.id, val); }"
-          @on-blur="onNumberBlur"
+          :active-change="false"
+          :precision="cell.precision != null ? cell.precision : undefined"
           :placeholder="cell.placeholder || ''"
           :min="numMin"
           :max="numMax"
@@ -3004,17 +3005,6 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
             if (v.rules) v.rules.forEach(function (x) { if (x[k] != null) r = x[k]; });
             if (r == null && v[k] != null) r = v[k];
             return r;
-          },
-          onNumberBlur: function () {
-            var p = this.cell.precision;
-            var v = this.fm[this.cell.id];
-            if (p == null || v == null || v === '' || isNaN(v)) {
-              this.$emit('on-blur', this.cell.id, {});
-              return;
-            }
-            var rounded = Number(Number(v).toFixed(p));
-            if (rounded !== Number(v)) this.$emit('set-val', this.cell.id, rounded);
-            this.$emit('on-blur', this.cell.id, {});
           }
         }
       });
@@ -3511,7 +3501,7 @@ window.addEventListener('message',function(e){if(e.data&&e.data.type==='set-prev
                   if (!isNaN(v)) s += v;
                 }
               });
-              return s;
+              return +s.toFixed(2);
             }
             m = f.match(/^AVG\((.+)\)$/i);
             if (m) {
