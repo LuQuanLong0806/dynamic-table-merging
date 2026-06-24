@@ -1260,7 +1260,7 @@ events: {
           </div>
           <div style="margin-top:12px;font-size:12px;color:#888;">
             坐标平移规则：插入点后的单元格整体右移；跨越插入点的合并单元格扩展范围（colspan +N）。<br>
-            支持 Ctrl+Z 撤销。
+            新列为空位（点击空位上的 + 添加单元格）。支持 Ctrl+Z 撤销。
           </div>
         </modal>
 
@@ -1274,7 +1274,7 @@ events: {
             <span>行</span>
           </div>
           <div style="margin-top:12px;font-size:12px;color:#888;">
-            同插入列规则（行方向）。支持 Ctrl+Z 撤销。
+            同插入列规则（行方向）。新行为空位（点击空位上的 + 添加单元格）。支持 Ctrl+Z 撤销。
           </div>
         </modal>
 
@@ -1286,7 +1286,7 @@ events: {
             <span>列（当前共 {{ maxX }} 列）</span>
           </div>
           <div style="margin-top:12px;font-size:12px;color:#888;">
-            等同于在第 {{ maxX + 1 }} 列前插入。新列的每行会自动创建空白单元格。<br>
+            在表格末尾追加空位列（点击空位上的 + 添加单元格）。与插入列行为一致。<br>
             支持 Ctrl+Z 撤销。
           </div>
         </modal>
@@ -1299,7 +1299,7 @@ events: {
             <span>行（当前共 {{ maxY }} 行）</span>
           </div>
           <div style="margin-top:12px;font-size:12px;color:#888;">
-            等同于在第 {{ maxY + 1 }} 行前插入。新行的每列会自动创建空白单元格。<br>
+            在表格末尾追加空位行（点击空位上的 + 添加单元格）。与插入行行为一致。<br>
             支持 Ctrl+Z 撤销。
           </div>
         </modal>
@@ -2133,60 +2133,6 @@ events: {
         function _fmtRange(start, end) {
           return start === end ? String(start) : start + ',' + end;
         }
-        // 通用辅助：扫描网格空位并填充空白 cell
-        // axis='col' → 扫描列方向（新增列），axis='row' → 扫描行方向（新增行）
-        // start/pos 定义新增的起始位置和数量
-        function _fillEmptySlots(cells, axis, start, count) {
-          // 收集所有唯一行范围和列范围
-          var rowRanges = [], colRanges = [];
-          cells.forEach(function (c) {
-            if (!c || !c.x || !c.y) return;
-            var xr = parseRange(c.x), yr = parseRange(c.y);
-            colRanges.push({ s: xr.start, e: xr.end });
-            rowRanges.push({ s: yr.start, e: yr.end });
-          });
-          // 扩展：新行/列的位置可能超出已有范围，需要确保覆盖
-          var maxR = 0, maxC = 0;
-          rowRanges.forEach(function (r) { if (r.e > maxR) maxR = r.e; });
-          colRanges.forEach(function (c) { if (c.e > maxC) maxC = c.e; });
-          if (axis === 'col') {
-            maxC = Math.max(maxC, start + count - 1);
-          } else {
-            maxR = Math.max(maxR, start + count - 1);
-          }
-          // 对每个目标位置（新行或新列的每一格），检查是否已被覆盖
-          var newCells = [];
-          for (var r = 1; r <= maxR; r++) {
-            for (var c = 1; c <= maxC; c++) {
-              var isNewSlot = (axis === 'col') ? (c >= start && c < start + count) : (r >= start && r < start + count);
-              if (!isNewSlot) continue;
-              // 检查是否已有 cell 覆盖此 (c, r) 位置
-              var covered = false;
-              for (var i = 0; i < cells.length; i++) {
-                var cell = cells[i];
-                if (!cell || !cell.x || !cell.y) continue;
-                var xr = parseRange(cell.x), yr = parseRange(cell.y);
-                if (xr.start <= c && xr.end >= c && yr.start <= r && yr.end >= r) {
-                  covered = true;
-                  break;
-                }
-              }
-              if (!covered) {
-                newCells.push(makeCell({
-                  id: '',
-                  x: String(c),
-                  y: String(r),
-                  type: 'input',
-                  content: '',
-                  placeholder: ''
-                }));
-              }
-            }
-          }
-          if (newCells.length) {
-            cells.push.apply(cells, newCells);
-          }
-        }
         function _shiftLinkageRows(cells, beforeRow, count) {
           cells.forEach(function (c) {
             if (!c || !c.linkage) return;
@@ -2215,8 +2161,6 @@ events: {
             } else { return; }
             c.x = _fmtRange(ns, ne);
           });
-          // 为新列的每个位置填充空白 cell（type=text）
-          _fillEmptySlots(cells, 'col', beforeCol, count);
           return cells;
         }
         function insertRows(cells, beforeRow, count) {
@@ -2232,8 +2176,6 @@ events: {
             } else { return; }
             c.y = _fmtRange(ns, ne);
           });
-          // 为新行的每个位置填充空白 cell（type=text）
-          _fillEmptySlots(cells, 'row', beforeRow, count);
           _shiftLinkageRows(cells, beforeRow, count);
           return cells;
         }
