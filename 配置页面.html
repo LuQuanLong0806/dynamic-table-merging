@@ -3125,6 +3125,13 @@ events: {
                   var minVal = rule.min, msg = rule.message || ('至少添加' + minVal + '条数据');
                   rule.validator = (function (min, m) {
                     return function (r, value, callback) {
+                      // 空值跳过 min：必填性由 required 规则控制
+                      // 否则"条件性必填 + 数量约束"场景下，条件 false 时会误报"最少 N 个"
+                      var isEmpty = false;
+                      if (Array.isArray(value)) isEmpty = value.length === 0;
+                      else if (typeof value === 'string') isEmpty = !value.trim();
+                      else if (value == null) isEmpty = true;
+                      if (isEmpty) { callback(); return; }
                       var ok = false;
                       if (Array.isArray(value)) ok = value.length >= min;
                       else if (typeof value === 'string') {
