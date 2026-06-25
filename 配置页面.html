@@ -3057,6 +3057,8 @@ events: {
             // O(1) 清校验状态（缓存字段映射表，避免每次 O(N) 遍历）
             var fi = this._fieldMap[id];
             if (fi) fi.validateState = '';
+            // 重算公式：让依赖此 cell 的 formula 自动更新（与生产对齐）
+            this.recalc();
           },
           getItems: function (e) {
             var list = [{
@@ -3296,6 +3298,8 @@ events: {
                   nv = av == null ? '' : av;
                 }
                 this.$set(this.fm, t, nv);
+                // 重算公式：让依赖此 cell 的 formula 自动更新（与生产对齐）
+                this.recalc();
               }
               return;
             }
