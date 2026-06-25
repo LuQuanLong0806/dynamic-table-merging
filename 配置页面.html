@@ -2043,7 +2043,8 @@ events: {
           sorted.forEach(function (cell) {
             var xr = parseRange(cell.x), yr = parseRange(cell.y);
             var r0 = yr.start - 1, c0 = xr.start - 1;
-            if (r0 < 0 || c0 < 0) return;
+            // 防御：x/y 非法（如 "24," 末尾逗号 → NaN）或越界 → 跳过该 cell
+            if (!isFinite(r0) || !isFinite(c0) || r0 < 0 || c0 < 0 || r0 >= maxR || c0 >= maxC) return;
             var entry = { cell: cell, rowspan: yr.span, colspan: xr.span, alts: null };
             if (G[r0][c0]) {
               if (!G[r0][c0].alts) G[r0][c0].alts = [];
