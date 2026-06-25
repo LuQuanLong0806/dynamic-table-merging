@@ -3189,11 +3189,14 @@ events: {
             return rules;
           },
           onChange: function (id, rawEvent) {
+            // 注意顺序：用户 events.onChange 和 linkage 可能改其他 cell 的值
+            // （典型场景：indval_r2 的 onChange 写 fm.cell_r2_c11，SUM 再读 cell_r2_c11）
+            // 必须先跑 events 和 linkage，再 recalc，否则 SUM 拿到的是上一轮的值
+            this.runCellEvent('change', id, this.fm[id], rawEvent);
             this.handleLinkage(id);
             this.recalc();
             this.validateField(id);
             this.validateDependents(id);
-            this.runCellEvent('change', id, this.fm[id], rawEvent);
           },
           onBlur: function (id, rawEvent) {
             this.validateField(id);
