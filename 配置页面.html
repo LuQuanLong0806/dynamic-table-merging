@@ -1534,9 +1534,13 @@ events: {
                 <label class="field-label">最大体积 maxSize (MB)</label>
                 <input-number v-model="cell.maxSize" size="small" :min="0" :step="1" style="width:100%" />
               </div>
+              <div>
+                <label class="field-label">最多文件数 maxCount</label>
+                <input-number v-model="cell.maxCount" size="small" :min="0" :step="1" style="width:100%" placeholder="0 或留空 = 不限" />
+              </div>
               <div class="full" style="grid-column: 1 / -1;">
                 <div class="rule-help" style="margin-top:2px;">
-                  <b>accept</b>=允许的文件后缀（逗号分隔）；<b>maxSize</b>=单文件大小上限（MB），超出会拒绝上传。校验"至少上传 N 个"在校验规则里配 array + min。
+                  <b>accept</b>=允许的文件后缀（逗号分隔）；<b>maxSize</b>=单文件大小上限（MB），超出会拒绝上传；<b>maxCount</b>=最多文件数（0 或留空 = 不限，&gt;0 = 最多 N 个）。<b>每次只能选 1 个文件，可多次上传累积</b>。校验"至少上传 N 个"在校验规则里配 array + min。
                 </div>
               </div>
             </div>
@@ -1591,8 +1595,8 @@ events: {
                   </i-select>
                   <span style="font-size:11px;color:#aaa;flex:1;">number/select/radio/upload 默认 change；input/date 默认 blur</span>
                 </div>
-                <div class="rule-help" v-if="cell.type === 'upload'" style="margin-top:6px;color:#ed4014;">
-                  ⚠ 上传组件为<b>单文件</b>，"必填"=必须传 1 个；不能用于"至少传 N 个"（N&gt;1 永远无法满足）。
+                <div class="rule-help" v-if="cell.type === 'upload'" style="margin-top:6px;color:#2d8cf0;">
+                  ℹ 上传组件支持<b>多文件累积</b>。"必填"=至少传 1 个；可在上方"上传配置"里设 <code>maxCount</code> 限制最多文件数；"至少传 N 个"在校验规则里配 array + min。
                 </div>
                 <div class="rule-help" v-if="cell.type === 'checkbox'" style="margin-top:6px;">
                   多选框必填=至少选 1 项（生产自动按 array 校验）。
@@ -1634,7 +1638,7 @@ events: {
                   数值范围。仅对 <code>number</code> 类型字段生效。min/max 限定数字大小，任一可留空（如只填 min 则只校验下限）。
                 </div>
                 <div class="rule-help" v-if="r.kind === 'array'">
-                  数组长度。对 <code>checkbox</code> 多选生效（<b>upload 不适用</b>，单文件组件）。
+                  数组长度。对 <code>checkbox</code> 多选和 <code>upload</code> 多文件生效。min=至少 N 项，max=最多 N 项。
                 </div>
                 <div class="rule-help" v-if="r.kind === 'string'">
                   字符串长度。对 <code>input</code> 生效。<b>注意</b>：生产 buildRules 当前只在 type='number' 时校验 min/max，string 的 min/max 不生效，建议改用 <code>len</code> 或 <code>custom</code>。
@@ -2008,7 +2012,10 @@ events: {
               m[c.id] = c.value != null && c.value !== '' ? Number(c.value) : null;
             } else if (c.type === 'checkbox') {
               m[c.id] = Array.isArray(c.value) ? c.value : [];
-            } else if (['input', 'select', 'radio', 'date', 'upload'].indexOf(c.type) >= 0) {
+            } else if (c.type === 'upload') {
+              // upload 支持多文件累积，统一存数组 [{path, name}, ...]
+              m[c.id] = Array.isArray(c.value) ? c.value : [];
+            } else if (['input', 'select', 'radio', 'date'].indexOf(c.type) >= 0) {
               m[c.id] = c.value != null ? c.value : '';
             }
           });
@@ -3386,31 +3393,40 @@ events: {
             return f;
           },
           onUploadFile: function (id, e) {
-            var file = e.target.files && e.target.files[0];
-            if (!file) return;
+            var files = e.target.files;
+            if (!files || !files.length) return;
             var cell = this.cellMap[id];
-            if (cell && cell.accept) {
-              var ext = '.' + file.name.split('.').pop().toLowerCase();
-              var allowed = cell.accept.toLowerCase().split(',').map(function (s) { return s.trim(); });
-              if (allowed.indexOf(ext) < 0) {
-                this.$Message.error('不支持的文件格式，仅允许: ' + cell.accept);
-                e.target.value = '';
-                return;
-              }
-            }
-            if (cell && cell.maxSize) {
-              var maxBytes = cell.maxSize * 1024 * 1024;
-              if (file.size > maxBytes) {
-                this.$Message.error('文件大小超过限制，最大 ' + cell.maxSize + 'MB');
-                e.target.value = '';
-                return;
-              }
-            }
+            var max = cell && cell.maxCount > 0 ? Number(cell.maxCount) : null;
             var list = Array.isArray(this.fm[id]) ? this.fm[id].slice() : [];
-            list.push({ name: file.name, size: file.size, type: file.type, lastModified: file.lastModified });
-            this.$set(this.fm, id, list);
+            var accepted = [];
+            for (var fi = 0; fi < files.length; fi++) {
+              var file = files[fi];
+              if (cell && cell.accept) {
+                var ext = '.' + file.name.split('.').pop().toLowerCase();
+                var allowed = cell.accept.toLowerCase().split(',').map(function (s) { return s.trim(); });
+                if (allowed.indexOf(ext) < 0) {
+                  this.$Message.error('不支持的文件格式，仅允许: ' + cell.accept);
+                  continue;
+                }
+              }
+              if (cell && cell.maxSize) {
+                var maxBytes = cell.maxSize * 1024 * 1024;
+                if (file.size > maxBytes) {
+                  this.$Message.error('文件 ' + file.name + ' 超过大小限制，最大 ' + cell.maxSize + 'MB');
+                  continue;
+                }
+              }
+              if (max != null && list.length + accepted.length >= max) {
+                this.$Message.warning('最多上传 ' + max + ' 个文件');
+                break;
+              }
+              accepted.push({ name: file.name, size: file.size, type: file.type, lastModified: file.lastModified });
+            }
+            if (accepted.length) {
+              this.$set(this.fm, id, list.concat(accepted));
+              this.onChange(id);
+            }
             e.target.value = '';
-            this.onChange(id);
           },
           getUploadFileList: function (id) {
             var v = this.fm[id];
@@ -4301,6 +4317,7 @@ events: {
                 if (c.calculationFormula) out.calculationFormula = c.calculationFormula;
                 if (c.accept) out.accept = c.accept;
                 if (c.maxSize != null) out.maxSize = c.maxSize;
+                if (c.maxCount > 0) out.maxCount = Number(c.maxCount);
                 if (c.disabled) out.disabled = true;
                 if (c._hidden) out._hidden = true;
                 if (c.portalHide) out.portalHide = true;

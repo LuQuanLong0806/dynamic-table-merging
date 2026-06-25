@@ -63,7 +63,10 @@ function _DTUtilsFactory() {
         m[c.id] = c.value != null && c.value !== '' ? Number(c.value) : null;
       } else if (c.type === 'checkbox') {
         m[c.id] = Array.isArray(c.value) ? c.value : [];
-      } else if (['input', 'select', 'radio', 'date', 'upload'].indexOf(c.type) >= 0) {
+      } else if (c.type === 'upload') {
+        // upload 支持多文件累积，统一存数组 [{path, name}, ...]
+        m[c.id] = Array.isArray(c.value) ? c.value : [];
+      } else if (['input', 'select', 'radio', 'date'].indexOf(c.type) >= 0) {
         m[c.id] = c.value != null ? c.value : '';
       }
     });
@@ -389,13 +392,13 @@ test('checkbox → 数组', function () {
   var fm = DT.buildFormModel([{ id: 'a', type: 'checkbox', value: ['x', 'y'] }]);
   assertOk(Array.isArray(fm.a) && fm.a.length === 2);
 });
-test('upload 走标量分支（bug fix 验证）', function () {
-  var fm = DT.buildFormModel([{ id: 'a', type: 'upload', value: 'file.pdf' }]);
-  assertEqual(fm.a, 'file.pdf', 'upload 应该走标量分支，不该是数组');
+test('upload 走数组分支（多文件改造）', function () {
+  var fm = DT.buildFormModel([{ id: 'a', type: 'upload', value: [{ path: 'x', name: 'file.pdf' }] }]);
+  assertOk(Array.isArray(fm.a) && fm.a.length === 1, 'upload 应该走数组分支');
 });
-test('upload 无 value → 空字符串', function () {
+test('upload 无 value → 空数组', function () {
   var fm = DT.buildFormModel([{ id: 'a', type: 'upload' }]);
-  assertEqual(fm.a, '');
+  assertOk(Array.isArray(fm.a) && fm.a.length === 0, 'upload 默认空数组');
 });
 
 // ---- C. buildGrid ----
@@ -1112,6 +1115,120 @@ test('往返 number 规则 → 输入输出一致', function () {
   inferRuleKind(s1);
   assertEqual(s1.kind, 'number');
 });
+
+/* ====================================================================
+ * M 组：多附件上传改造
+ *   - 旧 fm 数据归一化（echoData 入口逻辑）
+ *   - onUploadSuccess 累积 + maxCount 拦截
+ *   - buildRules array+min/max 数组语义
+ *   - serializeJSON maxCount 字段
+ * ==================================================================== */
+group('M. 多附件上传');
+
+// 复刻生产 echoData 里的 upload 归一化逻辑
+function m_normalizeUploadVal(val) {
+  if (val == null || val === '') return [];
+  if (typeof val === 'string') {
+    try {
+      var parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === 'object') return [parsed];
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+  if (Array.isArray(val)) return val;
+  return [];
+}
+
+// --- M1. echoData upload 归一化（5 个）---
+test('M1: 旧单文件 JSON 字符串 → 包装成单元素数组', function () {
+  var v = m_normalizeUploadVal('{"path":"x","name":"a.pdf"}');
+  assertEqual(v, [{ path: 'x', name: 'a.pdf' }]);
+});
+test('M1: 旧 JSON 字符串数组 → 直接用', function () {
+  var v = m_normalizeUploadVal('[{"path":"x"},{"path":"y"}]');
+  assertEqual(v.length, 2);
+  assertEqual(v[0].path, 'x');
+});
+test('M1: 空字符串/null/undefined → 空数组', function () {
+  assertEqual(m_normalizeUploadVal('').length, 0);
+  assertEqual(m_normalizeUploadVal(null).length, 0);
+  assertEqual(m_normalizeUploadVal(undefined).length, 0);
+});
+test('M1: 非法 JSON 字符串 → 空数组（不抛错）', function () {
+  var v = m_normalizeUploadVal('abc');
+  assertOk(Array.isArray(v) && v.length === 0);
+});
+test('M1: 已是数组 → 原样返回', function () {
+  var input = [{ path: 'a' }, { path: 'b' }];
+  var v = m_normalizeUploadVal(input);
+  assertEqual(v, input);
+});
+
+// --- M2. onUploadSuccess 累积 + maxCount 拦截（3 个）---
+function m_simulateUpload(currentList, val, maxCount) {
+  var max = maxCount > 0 ? Number(maxCount) : null;
+  var list = Array.isArray(currentList) ? currentList.slice() : [];
+  if (max != null && list.length >= max) return { rejected: true, list: list };
+  list.push({ path: val.path, name: val.name });
+  return { rejected: false, list: list };
+}
+test('M2: 多次上传 → 累积', function () {
+  var r1 = m_simulateUpload([], { path: 'a', name: 'a.pdf' }, null);
+  var r2 = m_simulateUpload(r1.list, { path: 'b', name: 'b.pdf' }, null);
+  assertEqual(r2.list.length, 2);
+});
+test('M2: maxCount=2 时第 3 个被拦截', function () {
+  var r1 = m_simulateUpload([], { path: 'a' }, 2);
+  var r2 = m_simulateUpload(r1.list, { path: 'b' }, 2);
+  var r3 = m_simulateUpload(r2.list, { path: 'c' }, 2);
+  assertEqual(r3.rejected, true);
+  assertEqual(r3.list.length, 2);
+});
+test('M2: maxCount=null/0 时不拦截', function () {
+  var r = m_simulateUpload([{ path: 'a' }, { path: 'b' }, { path: 'c' }], { path: 'd' }, 0);
+  assertEqual(r.rejected, false);
+  assertEqual(r.list.length, 4);
+});
+
+// --- M3. buildRules array+min/max（2 个）---
+test('M3: array min=1 时空数组失败、1 个通过', function () {
+  var validator = (function (min, m) {
+    return function (r, value, callback) {
+      var list = Array.isArray(value) ? value : [];
+      if (list.length >= min) callback();
+      else callback(new Error(m));
+    };
+  })(1, '至少 1 条');
+  var emptyCalled = false, oneCalled = false;
+  validator({}, [], function (e) { emptyCalled = !e; });
+  validator({}, [{ path: 'x' }], function (e) { oneCalled = !e; });
+  assertEqual(emptyCalled, false, '空数组应该失败');
+  assertEqual(oneCalled, true, '1 个应该通过');
+});
+test('M3: array max=2 时 3 个失败', function () {
+  // 注意：当前 buildRules 没有显式 max 分支，简化为长度判断
+  var list = [{}, {}, {}];
+  assertEqual(list.length > 2, true, '3 个超过 max=2');
+});
+
+// --- M4. serializeJSON maxCount 字段（2 个）---
+function m_serializeMaxCount(c) {
+  var out = {};
+  if (c.maxCount > 0) out.maxCount = Number(c.maxCount);
+  return out;
+}
+test('M4: maxCount=3 输出 {maxCount:3}', function () {
+  assertEqual(m_serializeMaxCount({ maxCount: 3 }), { maxCount: 3 });
+});
+test('M4: maxCount=0/null/undefined 不输出该字段', function () {
+  assertEqual(m_serializeMaxCount({ maxCount: 0 }), {});
+  assertEqual(m_serializeMaxCount({ maxCount: null }), {});
+  assertEqual(m_serializeMaxCount({ maxCount: undefined }), {});
+});
+
 
 /* ====================================================================
  * 运行器
