@@ -1194,20 +1194,27 @@ test('M2: maxCount=null/0 时不拦截', function () {
   assertEqual(r.list.length, 4);
 });
 
-// --- M3. buildRules array+min/max（2 个）---
-test('M3: array min=1 时空数组失败、1 个通过', function () {
-  var validator = (function (min, m) {
-    return function (r, value, callback) {
-      var list = Array.isArray(value) ? value : [];
-      if (list.length >= min) callback();
-      else callback(new Error(m));
-    };
-  })(1, '至少 1 条');
-  var emptyCalled = false, oneCalled = false;
-  validator({}, [], function (e) { emptyCalled = !e; });
-  validator({}, [{ path: 'x' }], function (e) { oneCalled = !e; });
-  assertEqual(emptyCalled, false, '空数组应该失败');
-  assertEqual(oneCalled, true, '1 个应该通过');
+// --- M3. buildRules array+min/max（3 个）---
+// 新语义：list 为空时跳过 min（必填由 required 控制，min 仅在用户已上传时生效）
+function m_buildUploadMinValidator(min, m) {
+  return function (r, value, callback) {
+    var list = Array.isArray(value) ? value : [];
+    if (list.length === 0) { callback(); return; }
+    if (list.length >= min) callback();
+    else callback(new Error(m));
+  };
+}
+test('M3: array min=2 时空数组跳过（不报错）', function () {
+  var called = false;
+  m_buildUploadMinValidator(2, '至少 2 个')({}, [], function (e) { called = !e; });
+  assertEqual(called, true, '空数组应跳过 min 校验');
+});
+test('M3: array min=2 时 1 个失败、2 个通过', function () {
+  var oneCalled = false, twoCalled = false;
+  m_buildUploadMinValidator(2, '至少 2 个')({}, [{ path: 'a' }], function (e) { oneCalled = !e; });
+  m_buildUploadMinValidator(2, '至少 2 个')({}, [{ path: 'a' }, { path: 'b' }], function (e) { twoCalled = !e; });
+  assertEqual(oneCalled, false, '1 个应失败');
+  assertEqual(twoCalled, true, '2 个应通过');
 });
 test('M3: array max=2 时 3 个失败', function () {
   // 注意：当前 buildRules 没有显式 max 分支，简化为长度判断
