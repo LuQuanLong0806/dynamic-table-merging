@@ -1542,48 +1542,102 @@ events: {
             </div>
           </div>
 
-          <!-- 校验 validation -->
+          <!-- 校验：必填设置（cell 级别，对照 iView required 属性） -->
           <div class="field-group" v-if="hasValidation">
             <div class="field-group-title">
-              校验规则 validation.rules
-              <span class="badge-count">{{(cell.validation && cell.validation.rules || []).length}}</span>
+              必填设置 required
+              <span v-if="requiredRule" class="badge-count" style="background:#5cadff;color:#fff;">{{requiredState === 'expr' ? '条件' : '必填'}}</span>
+            </div>
+            <div class="sub-list">
+              <div class="sub-item sub-item-vertical">
+                <radio-group
+                  :value="requiredState"
+                  @on-change="setRequiredState"
+                  size="small"
+                  type="button">
+                  <radio label="none"><span>非必填</span></radio>
+                  <radio label="always"><span>始终必填</span></radio>
+                  <radio label="expr"><span>条件必填（表达式为真时必填）</span></radio>
+                </radio-group>
+                <div class="sub-item-vertical" v-if="requiredState === 'expr'" style="margin-top:6px;">
+                  <i-input
+                    type="textarea"
+                    :rows="2"
+                    :value="requiredExpr"
+                    @input="setRequiredExpr"
+                    size="small"
+                    placeholder="如 fm.indval_r3 != null && fm.indval_r3 != ''（truthy 时必填）" />
+                </div>
+                <div class="row-grow" v-if="requiredState !== 'none'" style="margin-top:6px;">
+                  <span style="font-size:12px;color:#888;flex-shrink:0;width:80px;">错误提示</span>
+                  <i-input
+                    :value="requiredMessage"
+                    @input="setRequiredMessage"
+                    size="small"
+                    placeholder="如：此项为必填"
+                    style="flex:1;" />
+                </div>
+                <div class="row-grow" v-if="requiredState !== 'none'" style="margin-top:4px;">
+                  <span style="font-size:12px;color:#888;flex-shrink:0;width:80px;">触发时机</span>
+                  <i-select
+                    :value="requiredTrigger"
+                    @on-change="setRequiredTrigger"
+                    size="small"
+                    clearable
+                    style="width:140px;flex:0 0 140px;"
+                    placeholder="按类型默认">
+                    <i-option value="blur">blur（失焦）</i-option>
+                    <i-option value="change">change（变化）</i-option>
+                  </i-select>
+                  <span style="font-size:11px;color:#aaa;flex:1;">number/select/radio/upload 默认 change；input/date 默认 blur</span>
+                </div>
+                <div class="rule-help" v-if="cell.type === 'upload'" style="margin-top:6px;color:#ed4014;">
+                  ⚠ 上传组件为<b>单文件</b>，"必填"=必须传 1 个；不能用于"至少传 N 个"（N&gt;1 永远无法满足）。
+                </div>
+                <div class="rule-help" v-if="cell.type === 'checkbox'" style="margin-top:6px;">
+                  多选框必填=至少选 1 项（生产自动按 array 校验）。
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 校验：其他规则（除 required 之外的 kind） -->
+          <div class="field-group" v-if="hasValidation">
+            <div class="field-group-title">
+              其他校验规则
+              <span class="badge-count">{{otherRules.length}}</span>
               <i-button class="add-btn" size="small" type="primary" ghost @click="addRule">+ 添加规则</i-button>
               <i-checkbox v-model="advancedRules" style="margin-left:8px;">
                 <span style="font-size:11px;color:#888;">高级（string/pattern/enum/custom…）</span>
               </i-checkbox>
             </div>
             <div class="sub-list">
-              <div class="sub-item sub-item-vertical" v-for="(r, i) in validationRules" :key="i">
+              <div class="sub-item sub-item-vertical" v-for="(r, i) in otherRules" :key="i">
                 <div class="row-grow">
                   <i-select v-model="r.kind" size="small" style="width:140px;flex:0 0 140px;" @on-change="onRuleKindChange(r)">
-                    <i-option value="required">必填 required</i-option>
                     <i-option value="number">数值范围 min/max</i-option>
                     <i-option value="array">数组长度 array</i-option>
                     <template v-if="advancedRules">
-                      <i-option value="string">长度 min/max</i-option>
+                      <i-option value="string">字符串长度 min/max</i-option>
                       <i-option value="pattern">正则 pattern</i-option>
                       <i-option value="len">定长 len</i-option>
                       <i-option value="enum">枚举 enum</i-option>
-                      <i-option value="custom">自定义 custom 表达式</i-option>
-                      <i-option value="validator">validator 函数体</i-option>
-                      <i-option value="depends">条件必填 depends</i-option>
+                      <i-option value="custom">自定义表达式 custom</i-option>
+                      <i-option value="validator">函数体 validator</i-option>
                     </template>
                   </i-select>
                   <i-input v-model="r.message" size="small" placeholder="错误提示文字" style="flex:1;" />
                   <i-button class="sub-remove" size="small" type="error" ghost @click="removeRule(i)">×</i-button>
                 </div>
                 <!-- 说明：根据 kind 显示对应解释 -->
-                <div class="rule-help" v-if="r.kind === 'required'">
-                  必填校验。<b>普通必填</b>=勾选后该字段始终必填；<b>动态条件必填</b>=填写表达式（可访问 <code>fm.字段ID</code> 引用其他字段值），表达式为真时才校验。
-                </div>
                 <div class="rule-help" v-if="r.kind === 'number'">
                   数值范围。仅对 <code>number</code> 类型字段生效。min/max 限定数字大小，任一可留空（如只填 min 则只校验下限）。
                 </div>
                 <div class="rule-help" v-if="r.kind === 'array'">
-                  数组长度校验。对 <code>checkbox</code> 多选 / <code>upload</code> 上传生效。<b>min</b>=至少选 N 个/上传 N 个，<b>max</b>=最多 N 个。
+                  数组长度。对 <code>checkbox</code> 多选生效（<b>upload 不适用</b>，单文件组件）。
                 </div>
                 <div class="rule-help" v-if="r.kind === 'string'">
-                  字符串长度校验。对 <code>input</code> 生效。min/max 限定字符数（min=最短，max=最长），任一可留空。
+                  字符串长度。对 <code>input</code> 生效。<b>注意</b>：生产 buildRules 当前只在 type='number' 时校验 min/max，string 的 min/max 不生效，建议改用 <code>len</code> 或 <code>custom</code>。
                 </div>
                 <div class="rule-help" v-if="r.kind === 'pattern'">
                   正则校验。填写 JS 正则字符串（不带斜杠），值必须匹配整个正则。
@@ -1595,61 +1649,17 @@ events: {
                   枚举校验。值必须在下列出的枚举值之内，逗号分隔（如 <code>A,B,C</code>）。多用于 select/radio。
                 </div>
                 <div class="rule-help" v-if="r.kind === 'custom'">
-                  自定义表达式校验。可访问 <code>value</code>（当前字段值）和 <code>fm.字段ID</code>（其他字段值），表达式为真=校验通过。常用于跨字段联动校验。
+                  自定义表达式。可访问 <code>value</code>（当前字段值）和 <code>fm.字段ID</code>（其他字段值），表达式为真=校验通过。常用于跨字段联动校验。
                 </div>
                 <div class="rule-help" v-if="r.kind === 'validator'">
                   自定义函数体。填写 JS 函数体，参数 <code>(value, fm, extra)</code>，<code>return true</code>=校验通过，<code>return false</code> 或抛错=失败。最灵活，可写复杂逻辑。
                 </div>
-                <div class="rule-help" v-if="r.kind === 'depends'">
-                  条件必填。填写表达式（可访问 <code>fm.字段ID</code>），表达式为真时该字段才必填。等同于 required 的"动态条件必填"模式，但独立配置更灵活。
-                </div>
-                <!-- kind=required：两种模式 —— 普通必填 / 动态条件必填（生产格式 required 为字符串） -->
-                <div class="row-grow" v-if="r.kind === 'required'">
-                  <radio-group
-                    :value="getRequiredMode(r)"
-                    @on-change="v => setRequiredMode(r, v)"
-                    size="small"
-                    type="button">
-                    <radio label="bool"><span>普通必填 required:true</span></radio>
-                    <radio label="expr"><span>动态条件必填 required:'表达式'</span></radio>
-                  </radio-group>
-                </div>
-                <div class="row-grow" v-if="r.kind === 'required' && getRequiredMode(r) === 'bool'">
-                  <radio-group
-                    :value="r.required === true ? 'required' : 'optional'"
-                    @on-change="v => setRequiredBool(r, v === 'required')"
-                    size="small"
-                    type="button">
-                    <radio label="required"><span>必填 required:true</span></radio>
-                    <radio label="optional"><span>非必填 required:false</span></radio>
-                  </radio-group>
-                </div>
-                <div class="sub-item-vertical" v-if="r.kind === 'required' && getRequiredMode(r) === 'expr'">
-                  <div class="row-grow">
-                    <span style="font-size:12px;color:#888;flex-shrink:0;width:110px;">required 条件</span>
-                    <span style="font-size:11px;color:#aaa;flex-shrink:0;">truthy 时必填</span>
-                  </div>
-                  <i-input
-                    type="textarea"
-                    :rows="2"
-                    :value="typeof r.required === 'string' ? r.required : ''"
-                    @input="v => setRequiredExpr(r, v)"
-                    size="small"
-                    placeholder="如 fm.indval_r3 != null && fm.indval_r3 != ''" />
-                </div>
-                <!-- kind=number/array：min/max -->
-                <div class="row-grow" v-if="r.kind === 'number' || r.kind === 'array' || (advancedRules && (r.kind === 'string'))">
+                <!-- kind=number/array/string：min/max -->
+                <div class="row-grow" v-if="r.kind === 'number' || r.kind === 'array' || r.kind === 'string'">
+                  <span style="font-size:12px;color:#888;flex-shrink:0;width:60px;">范围</span>
                   <input-number v-model="r.min" size="small" placeholder="min" style="flex:1;" />
+                  <span style="color:#aaa;">~</span>
                   <input-number v-model="r.max" size="small" placeholder="max" style="flex:1;" />
-                </div>
-                <!-- trigger：仅 required 和 array 用（mock 数据规律） -->
-                <div class="row-grow" v-if="r.kind === 'required' || r.kind === 'array'">
-                  <span style="font-size:12px;color:#888;flex-shrink:0;">触发时机 trigger</span>
-                  <i-select v-model="r.trigger" size="small" clearable style="width:140px;flex:0 0 140px;" placeholder="默认=blur">
-                    <i-option value="change">change</i-option>
-                    <i-option value="blur">blur</i-option>
-                  </i-select>
-                  <span style="font-size:11px;color:#aaa;flex:1;">生产数据常见 trigger:'change'</span>
                 </div>
                 <!-- 以下为高级规则字段（advancedRules 开启时才显示） -->
                 <div class="row-grow" v-if="advancedRules && r.kind === 'enum'">
@@ -1667,15 +1677,12 @@ events: {
                 <div class="sub-item-vertical" v-if="advancedRules && r.kind === 'validator'">
                   <i-input v-model="r.validator" type="textarea" :rows="3" size="small" placeholder='函数体，参数 (value, fm, extra)，return true 校验通过' />
                 </div>
-                <div class="sub-item-vertical" v-if="advancedRules && r.kind === 'depends'">
-                  <i-input v-model="r.depends" type="textarea" :rows="2" size="small" placeholder='条件表达式，如 bm_r42 != null' />
-                </div>
                 <div class="sub-item-vertical" v-if="advancedRules && (r.kind === 'custom' || r.kind === 'validator')">
-                  <i-checkbox v-model="r.useDepends">附加条件 depends</i-checkbox>
-                  <i-input v-show="r.useDepends" v-model="r.depends" type="textarea" :rows="2" size="small" placeholder="depends 表达式" />
+                  <i-checkbox v-model="r.useDepends">附加条件 depends（表达式为假时跳过本规则）</i-checkbox>
+                  <i-input v-show="r.useDepends" v-model="r.depends" type="textarea" :rows="2" size="small" placeholder="depends 表达式，如 fm.audit_status === 'reject'" />
                 </div>
               </div>
-              <div v-if="!validationRules.length" style="color:#999;font-size:12px;">尚未配置校验规则</div>
+              <div v-if="!otherRules.length" style="color:#999;font-size:12px;">尚未配置其他校验规则（必填设置在上方独立配置）</div>
             </div>
           </div>
 
@@ -2344,7 +2351,7 @@ events: {
           cell.precision = 2;
         }
         if (cell.validation && cell.validation.rules) {
-          cell.validation.rules.forEach(inferRuleKind);
+          normalizeRules(cell.validation.rules);
         }
         return cell;
       }
@@ -2428,8 +2435,8 @@ events: {
           // 一次性初始化 validation/rules（原 validationRules computed 里的副作用，放此处避免每次访问触发 $set）
           if (!this.cell.validation) this.$set(this.cell, 'validation', { rules: [] });
           if (!this.cell.validation.rules) this.$set(this.cell.validation, 'rules', []);
-          if (typeof inferRuleKind === 'function') {
-            this.cell.validation.rules.forEach(inferRuleKind);
+          if (typeof normalizeRules === 'function') {
+            normalizeRules(this.cell.validation.rules);
           }
         },
         computed: {
@@ -2484,9 +2491,43 @@ events: {
           validationRules: function () {
             var v = this.cell.validation;
             return (v && v.rules) ? v.rules : [];
+          },
+          // 非 required 类型的 rules（UI 下方"其他校验规则"列表用）
+          otherRules: function () {
+            return this.validationRules.filter(function (r) { return r.kind !== 'required'; });
+          },
+          // 必填 rule（约定在 rules[0]，可能为 null）
+          requiredRule: function () {
+            var rules = this.validationRules;
+            return rules.length && rules[0].kind === 'required' ? rules[0] : null;
+          },
+          // 必填模式：'none' / 'always' / 'expr'
+          // 空字符串视为 'expr'（让 textarea 展开），serializeRule 负责过滤空表达式不输出
+          requiredState: function () {
+            var r = this.requiredRule;
+            if (!r) return 'none';
+            if (typeof r.required === 'string') return 'expr';
+            if (r.required === true) return 'always';
+            return 'none';  // false / null / undefined
+          },
+          requiredExpr: function () {
+            var r = this.requiredRule;
+            return (r && typeof r.required === 'string') ? r.required : '';
+          },
+          requiredMessage: function () {
+            var r = this.requiredRule;
+            return r ? (r.message || '') : '';
+          },
+          requiredTrigger: function () {
+            var r = this.requiredRule;
+            return r ? (r.trigger || '') : '';
           }
         },
         methods: {
+          _defaultTrigger: function () {
+            // 与生产 buildRules 默认 trigger 对齐（[:770-776]）
+            return ['number', 'select', 'radio', 'upload'].indexOf(this.cell.type) >= 0 ? 'change' : 'blur';
+          },
           onTypeChange: function () {
             // 类型切换时保证必要字段
             if (this.hasOptions && !this.cell.options) {
@@ -2512,32 +2553,59 @@ events: {
             this.cell.options.splice(i, 1);
             this.$emit('change');
           },
-          addRule: function () {
+          // 顶部"必填设置"：'none' / 'always' / 'expr'
+          // 缓存策略：最后一次非空表达式存 cell._requiredExprCache（cell 生命周期），
+          // 跨 none/always/expr 切换都保留，删除 required rule 也不丢
+          // 序列化时 serializeJSON 只输出特定字段，_requiredExprCache 自动被忽略，不污染 JSON
+          setRequiredState: function (state) {
             if (!this.cell.validation) this.$set(this.cell, 'validation', { rules: [] });
             if (!this.cell.validation.rules) this.$set(this.cell.validation, 'rules', []);
-            this.cell.validation.rules.push({ kind: 'required', required: true, message: '' });
-            this.$emit('change');
-          },
-          setRequiredBool: function (r, v) {
-            // 勾选普通必填 = required:true；取消勾选 = false（等待用户在表达式框输入）
-            this.$set(r, 'required', v ? true : false);
-            this.$emit('change');
-          },
-          setRequiredExpr: function (r, v) {
-            // 表达式非空 → required 是字符串；空 → 回退到普通必填 true
-            // 不立即 $emit('change')：textarea 失焦时由 cell-body 的 @change 冒泡触发 schedulePreview
-            this.$set(r, 'required', v && v.trim() ? v : true);
-          },
-          getRequiredMode: function (r) {
-            return typeof r.required === 'string' ? 'expr' : 'bool';
-          },
-          setRequiredMode: function (r, mode) {
-            if (mode === 'expr') {
-              if (typeof r.required !== 'string') this.$set(r, 'required', '');
+            var rules = this.cell.validation.rules;
+            var idx = -1;
+            for (var k = 0; k < rules.length; k++) {
+              if (rules[k].kind === 'required') { idx = k; break; }
+            }
+            // 切换前缓存当前非空表达式（不论去哪个状态，都先保住表达式）
+            if (idx >= 0) {
+              var curReq = rules[idx].required;
+              if (typeof curReq === 'string' && curReq.trim()) {
+                this.$set(this.cell, '_requiredExprCache', curReq);
+              }
+            }
+            if (state === 'none') {
+              if (idx >= 0) rules.splice(idx, 1);
             } else {
-              if (typeof r.required === 'string' || r.required == null) this.$set(r, 'required', true);
+              var r = idx >= 0 ? rules[idx] : null;
+              if (!r) {
+                r = { kind: 'required', required: true, message: '此项为必填', trigger: this._defaultTrigger() };
+                rules.unshift(r);
+              }
+              if (state === 'always') {
+                this.$set(r, 'required', true);
+              } else if (state === 'expr') {
+                // 恢复 cell 上缓存的最后一次表达式；无缓存给空串占位让 textarea 展开
+                var cached = typeof this.cell._requiredExprCache === 'string' ? this.cell._requiredExprCache : '';
+                this.$set(r, 'required', cached);
+              }
             }
             this.$emit('change');
+          },
+          setRequiredExpr: function (v) {
+            var r = this.requiredRule;
+            if (!r) return;
+            this.$set(r, 'required', v);
+            // 非空表达式同步缓存到 cell，便于切换状态时恢复
+            if (v && v.trim()) this.$set(this.cell, '_requiredExprCache', v);
+            // 不立即 $emit('change')：textarea 失焦时由 cell-body 的 @change 冒泡触发 schedulePreview
+          },
+          setRequiredMessage: function (v) {
+            var r = this.requiredRule;
+            if (r) this.$set(r, 'message', v);
+            // 同上：input 失焦触发
+          },
+          setRequiredTrigger: function (v) {
+            var r = this.requiredRule;
+            if (r) this.$set(r, 'trigger', v);
           },
           setEvent: function (eventType, body) {
             // 按需创建 cell.events，按需剔除空函数体
@@ -2550,17 +2618,42 @@ events: {
               this.$delete(this.cell.events, eventType);
             }
           },
+          // 下方"其他校验规则"用：默认 kind 按 cell.type 选
+          addRule: function () {
+            var v = this.cell.validation;
+            if (!v) this.$set(this.cell, 'validation', { rules: [] });
+            if (!v.rules) this.$set(v, 'rules', []);
+            var t = this.cell.type;
+            var nr;
+            if (t === 'number') nr = { kind: 'number', message: '', type: 'number', min: null, max: null };
+            else if (t === 'input' || t === 'select') nr = { kind: 'string', message: '', type: 'string', min: null, max: null };
+            else if (t === 'checkbox') nr = { kind: 'array', message: '', type: 'array', min: null, max: null };
+            else nr = { kind: 'custom', message: '', custom: '', depends: '' };
+            v.rules.push(nr);
+            this.$emit('change');
+          },
           removeRule: function (i) {
-            this.cell.validation.rules.splice(i, 1);
+            // i 是 otherRules 中的索引，需映射到 validationRules
+            var otherIdx = -1;
+            for (var k = 0; k < this.cell.validation.rules.length; k++) {
+              if (this.cell.validation.rules[k].kind !== 'required') {
+                otherIdx++;
+                if (otherIdx === i) {
+                  this.cell.validation.rules.splice(k, 1);
+                  break;
+                }
+              }
+            }
             this.$emit('change');
           },
           onRuleKindChange: function (r) {
             // 用对象替换避免 Vue 2 新字段非响应式问题
+            // 注意：required/depends 不再出现在下拉里，但保留分支以兼容已存在数据
             var rules = this.cell.validation.rules;
             var idx = rules.indexOf(r);
             if (idx < 0) return;
             var nr = { kind: r.kind, message: r.message || '', useDepends: false };
-            if (r.kind === 'required') nr.required = true;
+            if (r.kind === 'required') nr.required = true;  // 防御性，下拉里已无
             else if (r.kind === 'number') { nr.type = 'number'; nr.min = r.min != null ? r.min : null; nr.max = r.max != null ? r.max : null; }
             else if (r.kind === 'string') { nr.type = 'string'; nr.min = r.min != null ? r.min : null; nr.max = r.max != null ? r.max : null; }
             else if (r.kind === 'array') { nr.type = 'array'; nr.min = r.min != null ? r.min : null; nr.max = r.max != null ? r.max : null; }
@@ -2569,7 +2662,7 @@ events: {
             else if (r.kind === 'enum') { nr.enum = r.enum || []; nr.enumStr = (r.enum || []).join(','); }
             else if (r.kind === 'custom') { nr.custom = r.custom || ''; nr.depends = ''; }
             else if (r.kind === 'validator') { nr.validator = r.validator || ''; nr.depends = ''; }
-            else if (r.kind === 'depends') { nr.required = true; nr.depends = r.depends || ''; }
+            else if (r.kind === 'depends') { nr.required = true; nr.depends = r.depends || ''; }  // 防御性
             this.$set(rules, idx, nr);
             this.$emit('change');
           },
@@ -4319,7 +4412,7 @@ events: {
                 data.cells.forEach(function (c) {
                   c.__uid = newUid();
                   if (c.validation && c.validation.rules) {
-                    c.validation.rules.forEach(inferRuleKind);
+                    normalizeRules(c.validation.rules);
                   }
                   if (c.linkage) {
                     c.linkage.forEach(function (lk) {
@@ -4429,9 +4522,10 @@ events: {
         var k = r.kind || 'required';
         if (r.message) out.message = r.message;
         if (k === 'required') {
-          if (typeof r.required === 'string') out.required = r.required;
+          // 字符串：非空才输出（空字符串=用户切了"条件必填"但没填表达式，视为非必填）
+          if (typeof r.required === 'string' && r.required.trim()) out.required = r.required;
           else if (r.required === true) out.required = true;
-          // false / null / undefined → 不输出 required（视为非必填）
+          // false / null / undefined / 空字符串 → 不输出 required（视为非必填）
         } else if (k === 'number') {
           out.type = 'number';
           if (r.min != null && r.min !== '') out.min = Number(r.min);
@@ -4511,10 +4605,17 @@ events: {
       }
 
       function inferRuleKind(r) {
+        // 合并：depends + required:true → 新版统一为 required:'expr'（与生产 buildRules 行为等价）
+        // 原因：UI 已将 required 提到 cell 顶部独立配置，旧 kind:'depends' 不再暴露
+        if (r.depends && r.required === true && !r.validator && !r.custom) {
+          r.kind = 'required';
+          r.required = r.depends;
+          delete r.depends;
+          return;
+        }
         if (r.validator) r.kind = 'validator';
         else if (r.custom) r.kind = 'custom';
-        else if (r.depends && r.required) r.kind = 'depends';
-        else if (r.depends) r.kind = 'custom', r.custom = '';
+        else if (r.depends) r.kind = 'custom', r.custom = '';  // 孤立 depends（无 required）→ custom 占位
         else if (r.enum) { r.kind = 'enum'; r.enumStr = (Array.isArray(r.enum) ? r.enum : []).join(','); }
         else if (r.pattern) r.kind = 'pattern';
         else if (r.len != null) r.kind = 'len';
@@ -4523,6 +4624,47 @@ events: {
         else if (r.type === 'number' && (r.min != null || r.max != null)) r.kind = 'number';
         else r.kind = 'required';
         if (r.depends && (r.kind === 'custom' || r.kind === 'validator')) r.useDepends = true;
+      }
+
+      // 规范化 rules 数组：合并多条 required rule 到 rules[0]
+      // 策略：优先 expr（非空字符串），其次 true，最后 false/null；其余 required rule 删除
+      // 同时把 required rule 移到 rules[0]，保证 UI 顶部"必填设置"能稳定读到
+      function normalizeRules(rules) {
+        if (!Array.isArray(rules) || rules.length === 0) return rules;
+        rules.forEach(inferRuleKind);
+        var reqRules = rules.filter(function (r) { return r.kind === 'required'; });
+        if (reqRules.length <= 1) {
+          // 单条或 0 条：把唯一一条 required 移到 [0]
+          if (reqRules.length === 1) {
+            var idx = rules.indexOf(reqRules[0]);
+            if (idx > 0) {
+              rules.splice(idx, 1);
+              rules.unshift(reqRules[0]);
+            }
+          }
+          return rules;
+        }
+        // 多条 required：按优先级合并
+        var chosen = null;
+        reqRules.forEach(function (r) {
+          if (!chosen) { chosen = r; return; }
+          var aExpr = typeof chosen.required === 'string' && chosen.required.trim();
+          var bExpr = typeof r.required === 'string' && r.required.trim();
+          if (bExpr && !aExpr) chosen = r;          // 字符串优先
+          else if (bExpr && aExpr && r.required.length > chosen.required.length) chosen = r;  // 都有 → 取更长
+          else if (!bExpr && !aExpr && r.required === true && chosen.required !== true) chosen = r;  // 都非 expr → true 优先
+        });
+        // 删除其余 required rule
+        for (var i = rules.length - 1; i >= 0; i--) {
+          if (rules[i].kind === 'required' && rules[i] !== chosen) rules.splice(i, 1);
+        }
+        // 移到 [0]
+        var idx0 = rules.indexOf(chosen);
+        if (idx0 > 0) {
+          rules.splice(idx0, 1);
+          rules.unshift(chosen);
+        }
+        return rules;
       }
 
       function inferActionKind(a) {

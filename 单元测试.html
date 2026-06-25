@@ -329,7 +329,27 @@ function test(name, fn) { _groups[_groups.length - 1].cases.push({ name: name, f
 function _rec(res) { _lastResult = res; if (!res.pass) throw new Error(res.detail || '失败'); }
 function assertEqual(actual, expected, msg) {
   var aJson = JSON.stringify(actual), eJson = JSON.stringify(expected);
-  _rec({ pass: aJson === eJson, detail: (msg || '') + '\n  期望: ' + eJson + '\n  实际: ' + aJson });
+  // 深度比较：忽略对象 key 顺序（语义相等），但保留 array 顺序
+  _rec({ pass: _deepEqual(actual, expected), detail: (msg || '') + '\n  期望: ' + eJson + '\n  实际: ' + aJson });
+}
+function _deepEqual(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return a === b;
+  if (typeof a !== 'object' || typeof b !== 'object') return a === b;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (!_deepEqual(a[i], b[i])) return false;
+    return true;
+  }
+  var aKeys = Object.keys(a), bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (var k = 0; k < aKeys.length; k++) {
+    var key = aKeys[k];
+    if (!(key in b)) return false;
+    if (!_deepEqual(a[key], b[key])) return false;
+  }
+  return true;
 }
 function assertOk(value, msg) { _rec({ pass: !!value, detail: msg || '值为假' }); }
 function assertFail(value, msg) { _rec({ pass: !value, detail: msg || '值应为假' }); }
@@ -821,14 +841,16 @@ test('removeRow 删除后再插入 → 状态可还原', function () {
 });
 
 // --- appendColumns / appendRows（2 个用例）---
-test('appendColumns 末尾追加 2 列 → 现有 cell 不动，后续新 cell 起点为 maxC+1', function () {
+test('appendColumns 末尾追加 2 列 → 现有 cell 不动，新 cell 起点为 maxC+1', function () {
   var cells = [{ id: 'a', x: '1', y: '1' }, { id: 'b', x: '3', y: '1' }];
   DT.appendColumns(cells, 2);
   assertEqual(cells[0].x, '1');
   assertEqual(cells[1].x, '3');
-  // 验证 append 等价于 insertColumns(maxC+1, count)，新 cell 从 col 4 开始
+  // appendColumns 等价于 insertColumns(maxC+1, count)，maxC=3 → 新空间从 col=4 起
   cells.push({ id: 'c', x: '4', y: '1' });
-  DT.insertColumns(cells, 5, 1);
+  assertEqual(cells[2].x, '4');
+  // 在 col=4 前插 1 列，c (col=4) 右移到 5
+  DT.insertColumns(cells, 4, 1);
   assertEqual(cells[2].x, '5');
 });
 test('appendRows 末尾追加 1 行 → 现有 cell 不动', function () {
@@ -860,6 +882,235 @@ test('insertColumns 空 cells 数组 → 无操作不报错', function () {
   var cells = [];
   DT.insertColumns(cells, 1, 1);
   assertEqual(cells.length, 0);
+});
+
+// ---- L. validation rules 序列化与兼容 ----
+// 与配置页面.html 同名函数保持一致（cell-card 子组件 methods + 全局函数）
+// 用例覆盖：序列化 iView 标准、inferRuleKind 旧数据迁移、normalizeRules 多 required 合并
+function serializeRule(r) {
+  var out = {};
+  var k = r.kind || 'required';
+  if (r.message) out.message = r.message;
+  if (k === 'required') {
+    if (typeof r.required === 'string' && r.required.trim()) out.required = r.required;
+    else if (r.required === true) out.required = true;
+  } else if (k === 'number') {
+    out.type = 'number';
+    if (r.min != null && r.min !== '') out.min = Number(r.min);
+    if (r.max != null && r.max !== '') out.max = Number(r.max);
+  } else if (k === 'string') {
+    out.type = 'string';
+    if (r.min != null && r.min !== '') out.min = Number(r.min);
+    if (r.max != null && r.max !== '') out.max = Number(r.max);
+  } else if (k === 'array') {
+    out.type = 'array';
+    if (r.min != null && r.min !== '') out.min = Number(r.min);
+    if (r.max != null && r.max !== '') out.max = Number(r.max);
+  } else if (k === 'pattern') {
+    if (r.pattern) out.pattern = r.pattern;
+  } else if (k === 'len') {
+    if (r.len != null && r.len !== '') out.len = Number(r.len);
+  } else if (k === 'enum') {
+    var arr = Array.isArray(r.enum) ? r.enum.slice()
+      : String(r.enumStr == null ? '' : r.enumStr).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (arr.length) out.enum = arr;
+  } else if (k === 'custom') {
+    if (r.custom) out.custom = r.custom;
+    if (r.useDepends && r.depends) out.depends = r.depends;
+  } else if (k === 'validator') {
+    if (r.validator) out.validator = r.validator;
+    if (r.useDepends && r.depends) out.depends = r.depends;
+  } else if (k === 'depends') {
+    out.required = true;
+    if (r.depends) out.depends = r.depends;
+  }
+  return out;
+}
+function inferRuleKind(r) {
+  if (r.depends && r.required === true && !r.validator && !r.custom) {
+    r.kind = 'required';
+    r.required = r.depends;
+    delete r.depends;
+    return;
+  }
+  if (r.validator) r.kind = 'validator';
+  else if (r.custom) r.kind = 'custom';
+  else if (r.depends) r.kind = 'custom', r.custom = '';
+  else if (r.enum) { r.kind = 'enum'; r.enumStr = (Array.isArray(r.enum) ? r.enum : []).join(','); }
+  else if (r.pattern) r.kind = 'pattern';
+  else if (r.len != null) r.kind = 'len';
+  else if (r.type === 'array') r.kind = 'array';
+  else if (r.type === 'string') r.kind = 'string';
+  else if (r.type === 'number' && (r.min != null || r.max != null)) r.kind = 'number';
+  else r.kind = 'required';
+  if (r.depends && (r.kind === 'custom' || r.kind === 'validator')) r.useDepends = true;
+}
+function normalizeRules(rules) {
+  if (!Array.isArray(rules) || rules.length === 0) return rules;
+  rules.forEach(inferRuleKind);
+  var reqRules = rules.filter(function (r) { return r.kind === 'required'; });
+  if (reqRules.length <= 1) {
+    if (reqRules.length === 1) {
+      var idx = rules.indexOf(reqRules[0]);
+      if (idx > 0) {
+        rules.splice(idx, 1);
+        rules.unshift(reqRules[0]);
+      }
+    }
+    return rules;
+  }
+  var chosen = null;
+  reqRules.forEach(function (r) {
+    if (!chosen) { chosen = r; return; }
+    var aExpr = typeof chosen.required === 'string' && chosen.required.trim();
+    var bExpr = typeof r.required === 'string' && r.required.trim();
+    if (bExpr && !aExpr) chosen = r;
+    else if (bExpr && aExpr && r.required.length > chosen.required.length) chosen = r;
+    else if (!bExpr && !aExpr && r.required === true && chosen.required !== true) chosen = r;
+  });
+  for (var i = rules.length - 1; i >= 0; i--) {
+    if (rules[i].kind === 'required' && rules[i] !== chosen) rules.splice(i, 1);
+  }
+  var idx0 = rules.indexOf(chosen);
+  if (idx0 > 0) {
+    rules.splice(idx0, 1);
+    rules.unshift(chosen);
+  }
+  return rules;
+}
+
+group('L. 校验规则序列化与兼容');
+
+// --- L1. serializeRule 各 kind 输出（7 个）---
+test('serializeRule required:true → {required:true, message}', function () {
+  var out = serializeRule({ kind: 'required', required: true, message: 'x' });
+  assertEqual(out, { required: true, message: 'x' });
+});
+test('serializeRule required:"fm.x" → 字符串动态必填', function () {
+  var out = serializeRule({ kind: 'required', required: 'fm.x', message: 'y' });
+  assertEqual(out, { required: 'fm.x', message: 'y' });
+});
+test('serializeRule required:false → 不输出 required 字段（message 保留）', function () {
+  var out = serializeRule({ kind: 'required', required: false, message: 'z' });
+  assertEqual(out, { message: 'z' });
+});
+test('serializeRule required:""（空字符串）→ 不输出（用户切了条件必填但没填表达式）', function () {
+  var out = serializeRule({ kind: 'required', required: '', message: 'z' });
+  assertEqual(out, { message: 'z' });
+});
+test('serializeRule number → {type, min, max}', function () {
+  var out = serializeRule({ kind: 'number', min: 0, max: 100 });
+  assertEqual(out, { type: 'number', min: 0, max: 100 });
+});
+test('serializeRule pattern → {pattern}', function () {
+  var out = serializeRule({ kind: 'pattern', pattern: '^\\d+$' });
+  assertEqual(out, { pattern: '^\\d+$' });
+});
+test('serializeRule enum → {enum:[...]}', function () {
+  var out = serializeRule({ kind: 'enum', enum: ['A', 'B'] });
+  assertEqual(out, { enum: ['A', 'B'] });
+});
+test('serializeRule validator → {validator:body}', function () {
+  var out = serializeRule({ kind: 'validator', validator: 'return true' });
+  assertEqual(out, { validator: 'return true' });
+});
+
+// --- L2. inferRuleKind 兼容旧数据（4 个）---
+test('inferRuleKind {required:true} → kind=required', function () {
+  var r = { required: true };
+  inferRuleKind(r);
+  assertEqual(r.kind, 'required');
+  assertEqual(r.required, true);
+});
+test('inferRuleKind {required:"fm.x"} → kind=required, 字符串保留', function () {
+  var r = { required: 'fm.x' };
+  inferRuleKind(r);
+  assertEqual(r.kind, 'required');
+  assertEqual(r.required, 'fm.x');
+});
+test('inferRuleKind {depends:"fm.x", required:true} → 合并为 required:"fm.x"', function () {
+  var r = { depends: 'fm.x', required: true };
+  inferRuleKind(r);
+  assertEqual(r.kind, 'required');
+  assertEqual(r.required, 'fm.x');
+  assertOk(!r.depends, 'depends 应已删除');
+});
+test('inferRuleKind {type:"number", min:0, max:100} → kind=number', function () {
+  var r = { type: 'number', min: 0, max: 100 };
+  inferRuleKind(r);
+  assertEqual(r.kind, 'number');
+});
+
+// --- L3. normalizeRules 多 required 合并（4 个）---
+test('normalizeRules 单条 required → 移到 [0]', function () {
+  var rules = [{ kind: 'number', type: 'number', min: 0 }, { kind: 'required', required: true }];
+  normalizeRules(rules);
+  assertEqual(rules[0].kind, 'required');
+  assertEqual(rules[1].kind, 'number');
+  assertEqual(rules.length, 2);
+});
+test('normalizeRules 多条 required → 合并保留 expr 优先', function () {
+  var rules = [
+    { kind: 'required', required: true },
+    { kind: 'required', required: 'fm.x != null' }
+  ];
+  normalizeRules(rules);
+  assertEqual(rules.length, 1);
+  assertEqual(rules[0].kind, 'required');
+  assertEqual(rules[0].required, 'fm.x != null');
+});
+test('normalizeRules 两条都是 true → 取一条', function () {
+  var rules = [
+    { kind: 'required', required: true, message: 'a' },
+    { kind: 'required', required: true, message: 'b' }
+  ];
+  normalizeRules(rules);
+  assertEqual(rules.length, 1);
+  assertEqual(rules[0].required, true);
+});
+test('normalizeRules 两条 expr → 取更长的（信息更全）', function () {
+  var rules = [
+    { kind: 'required', required: 'fm.a' },
+    { kind: 'required', required: 'fm.a != null && fm.b != null' }
+  ];
+  normalizeRules(rules);
+  assertEqual(rules.length, 1);
+  assertEqual(rules[0].required, 'fm.a != null && fm.b != null');
+});
+
+// --- L4. 端到端：序列化往返（4 个）---
+test('往返 required:true 序列化 → infer 状态保持', function () {
+  var r1 = { kind: 'required', required: true, message: '必填' };
+  var s1 = serializeRule(r1);
+  assertEqual(s1, { required: true, message: '必填' });
+  inferRuleKind(s1);
+  assertEqual(s1.kind, 'required');
+  assertEqual(s1.required, true);
+});
+test('往返 required:"fm.x" 序列化 → infer 状态保持', function () {
+  var r1 = { kind: 'required', required: 'fm.x != null' };
+  var s1 = serializeRule(r1);
+  assertEqual(s1, { required: 'fm.x != null' });
+  inferRuleKind(s1);
+  assertEqual(s1.kind, 'required');
+  assertEqual(s1.required, 'fm.x != null');
+});
+test('往返 旧 depends 格式 → infer 合并到 required expr', function () {
+  // 模拟导入旧 JSON：{depends, required:true}
+  var legacy = { depends: 'fm.x != null', required: true };
+  inferRuleKind(legacy);
+  assertEqual(legacy.kind, 'required');
+  assertEqual(legacy.required, 'fm.x != null');
+  // 再序列化输出 iView 标准
+  var out = serializeRule(legacy);
+  assertEqual(out, { required: 'fm.x != null' });
+});
+test('往返 number 规则 → 输入输出一致', function () {
+  var r1 = { kind: 'number', type: 'number', min: 0, max: 100, message: '范围' };
+  var s1 = serializeRule(r1);
+  assertEqual(s1, { type: 'number', min: 0, max: 100, message: '范围' });
+  inferRuleKind(s1);
+  assertEqual(s1.kind, 'number');
 });
 
 /* ====================================================================
