@@ -2356,9 +2356,6 @@ events: {
           },
           partial || {}
         );
-        if (cell.type === 'number' && cell.precision == null) {
-          cell.precision = 2;
-        }
         if (cell.validation && cell.validation.rules) {
           normalizeRules(cell.validation.rules);
         }
