@@ -2792,7 +2792,7 @@ events: {
       Vue.component('preview-renderer', {
         template: '#preview-renderer-tpl',
         props: {
-          config: { type: Object, default: function () { return { title: '', cells: [], freezeRows: 0 }; } },
+          config: { type: Object, default: function () { return { title: '', cells: [], freezeRows: 1 }; } },
           mode: { type: String, default: 'portal' },
           gridPad: { type: Object, default: function () { return { cols: 0, rows: 0 }; } }
         },
@@ -3325,7 +3325,11 @@ events: {
             var self = this;
             (this.config.cells || []).forEach(function (c) {
               if (c.type !== 'formula' || !c.calculationFormula) return;
-              self.$set(self.formulaResults, c.id, self.evalF(c.calculationFormula));
+              var v = self.evalF(c.calculationFormula);
+              self.$set(self.formulaResults, c.id, v);
+              // 同步写入 fm：对齐生产 dynamic-eval-table.vue
+              // 让 formula cell 的值能被其他 CALC 引用、onChange 函数体读取、depends 表达式判断
+              self.$set(self.fm, c.id, v);
             });
           },
           evalF: function (f) {
@@ -3570,7 +3574,7 @@ events: {
             showExportModal: false,
             minifyExport: false,
             previewTimer: null,
-            previewConfig: { title: '', cells: [], freezeRows: 0 },
+            previewConfig: { title: '', cells: [], freezeRows: 1 },
             gridPad: { cols: 0, rows: 0 },
             editDrawerUid: null,
             editDrawerDraft: null,
@@ -4307,7 +4311,7 @@ events: {
               title: '确认清空',
               content: '将清空所有单元格配置，确定继续？',
               onOk: function () {
-                self.config = { title: self.config.title, cells: [], freezeRows: 0 };
+                self.config = { title: self.config.title, cells: [], freezeRows: 1 };
                 self.gridPad = { cols: 0, rows: 0 };
                 self.expandedSet = {};
                 self.schedulePreview();
@@ -4320,7 +4324,8 @@ events: {
             // 清理空字段，避免导出垃圾
             var cleaned = {
               title: data.title || '',
-              freezeRows: data.freezeRows > 0 ? Number(data.freezeRows) : undefined,
+              // 始终输出 freezeRows（包括 0）：让生产端能识别"主动关闭冻结"的语义
+              freezeRows: Math.max(0, parseInt(data.freezeRows, 10) || 0),
               cells: data.cells.map(function (c) {
                 var out = { id: c.id, x: String(c.x), y: String(c.y), type: c.type };
                 if (c.content) out.content = c.content;
@@ -4484,7 +4489,10 @@ events: {
                 self._pendingImport = {
                   title: data.title || '',
                   cells: data.cells,
-                  freezeRows: Math.max(0, parseInt(data.freezeRows, 10) || 0),
+                  // JSON 里有 freezeRows 用它（包括 0），没字段默认 1（对齐生产端默认）
+                  freezeRows: data.freezeRows != null
+                    ? Math.max(0, parseInt(data.freezeRows, 10) || 0)
+                    : 1,
                   maxCol: maxCol,
                   maxRow: maxRow,
                   summary: summary,
