@@ -29,6 +29,26 @@
     return { start: mn, end: mx, span: mx - mn + 1 };
   }
 
+  // upload cell 值归一化（兼容旧数据格式）
+  // 旧：JSON 字符串 '{"path":"x","name":"a.pdf"}' / 单对象 / 数组 / 空字符串
+  // 新：统一数组 [{path, name}, ...]
+  function normalizeUploadVal(val) {
+    if (val == null || val === '') return [];
+    if (typeof val === 'string') {
+      try {
+        var parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed && typeof parsed === 'object') return [parsed];
+        return [];
+      } catch (e) {
+        return [];
+      }
+    }
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'object') return [val];
+    return [];
+  }
+
   function buildFormModel(cells) {
     var m = {};
     (cells || []).forEach(function (c) {
@@ -37,7 +57,7 @@
         m[c.id] = c.value != null && c.value !== '' ? Number(c.value) : null;
       } else if (c.type === 'checkbox') {
         m[c.id] = Array.isArray(c.value) ? c.value : [];
-      } else if (['input', 'select', 'radio', 'date', 'upload'].indexOf(c.type) >= 0) {
+      } else if (['input', 'textarea', 'select', 'radio', 'date', 'upload'].indexOf(c.type) >= 0) {
         m[c.id] = c.value != null ? c.value : '';
       }
     });
@@ -92,7 +112,7 @@
         if (O[r][c]) { cols.push({ skip: true }); continue; }
         var e = G[r][c];
         if (!e) { cols.push({ skip: false, cell: null }); continue; }
-        var isCtrl = ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload']
+        var isCtrl = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload']
           .indexOf(e.cell.type) >= 0;
         var cls = [];
         if (e.cell.type === 'text' && (c === 0 || c === 2) && /<b>/.test(e.cell.content || '')) {
@@ -310,6 +330,7 @@
 
   return {
     parseRange: parseRange,
+    normalizeUploadVal: normalizeUploadVal,
     buildFormModel: buildFormModel,
     buildGrid: buildGrid,
     evalDepends: evalDepends,

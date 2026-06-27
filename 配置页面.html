@@ -1123,11 +1123,16 @@
           cancel-text="取消"
           @on-ok="doImport"
         >
+          <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <i-button size="small" @click="$refs.importFileInput.click()">📂 选择 JSON 文件</i-button>
+            <span style="font-size:12px;color:#888;">选择文件后<b>自动导入</b>；或粘贴到下方文本框再点「导入」</span>
+            <input ref="importFileInput" type="file" accept=".json,application/json" style="display:none" @change="onImportFileSelect" />
+          </div>
           <i-input
             v-model="importText"
             type="textarea"
             :rows="18"
-            placeholder='粘贴 JSON，格式：{"title":"...","cells":[...]}'
+            placeholder='粘贴 JSON 或选择文件，格式：{"title":"...","cells":[...]}'
             class="json-modal-textarea"
           />
           <div v-if="importError" style="color:#ed4014;margin-top:8px;font-size:12px;">{{importError}}</div>
@@ -4604,6 +4609,32 @@ events: {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             this.$Message.success('已下载 ' + title + '.json');
+          },
+          // 用户在导入弹窗选了 JSON 文件：读文件内容后**直接应用**，无需再点「导入」按钮
+          // 用户仍可在导入前在 textarea 里编辑/粘贴（粘贴路径不变，仍需点「导入」）
+          onImportFileSelect: function (e) {
+            var file = e.target.files && e.target.files[0];
+            // 清空 input.value 允许下次选同一文件
+            e.target.value = '';
+            if (!file) return;
+            var nameOk = /\.json$/i.test(file.name || '');
+            var typeOk = (file.type || '') === 'application/json';
+            if (!nameOk && !typeOk) {
+              this.importError = '请选择 .json 文件';
+              return;
+            }
+            this.importError = '';
+            var reader = new FileReader();
+            var self = this;
+            reader.onload = function (ev) {
+              self.importText = String(ev.target.result || '');
+              // 选完文件直接触发导入流程（含校验、确认弹窗、应用）
+              self.doImport();
+            };
+            reader.onerror = function () {
+              self.importError = '文件读取失败';
+            };
+            reader.readAsText(file, 'UTF-8');
           },
           doImport: function () {
             this.importError = '';
