@@ -55,6 +55,23 @@ function _DTUtilsFactory() {
     var mx = Math.max.apply(null, p);
     return { start: mn, end: mx, span: mx - mn + 1 };
   }
+  // upload cell 值归一化（兼容旧数据格式）— 与生产/配置页对齐
+  function normalizeUploadVal(val) {
+    if (val == null || val === '') return [];
+    if (typeof val === 'string') {
+      try {
+        var parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed && typeof parsed === 'object') return [parsed];
+        return [];
+      } catch (e) {
+        return [];
+      }
+    }
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'object') return [val];
+    return [];
+  }
   function buildFormModel(cells) {
     var m = {};
     (cells || []).forEach(function (c) {
@@ -66,7 +83,7 @@ function _DTUtilsFactory() {
       } else if (c.type === 'upload') {
         // upload 支持多文件累积，统一存数组 [{path, name}, ...]
         m[c.id] = Array.isArray(c.value) ? c.value : [];
-      } else if (['input', 'select', 'radio', 'date'].indexOf(c.type) >= 0) {
+      } else if (['input', 'textarea', 'select', 'radio', 'date'].indexOf(c.type) >= 0) {
         m[c.id] = c.value != null ? c.value : '';
       }
     });
@@ -116,7 +133,7 @@ function _DTUtilsFactory() {
         if (O[r][c]) { cols.push({ skip: true }); continue; }
         var e = G[r][c];
         if (!e) { cols.push({ skip: false, cell: null }); continue; }
-        var isCtrl = ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload']
+        var isCtrl = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload']
           .indexOf(e.cell.type) >= 0;
         var cls = [];
         if (e.cell.type === 'text' && (c === 0 || c === 2) && /<b>/.test(e.cell.content || '')) {
@@ -250,7 +267,7 @@ function _DTUtilsFactory() {
   }
 
   return {
-    parseRange: parseRange, buildFormModel: buildFormModel, buildGrid: buildGrid,
+    parseRange: parseRange, normalizeUploadVal: normalizeUploadVal, buildFormModel: buildFormModel, buildGrid: buildGrid,
     evalDepends: evalDepends, evalCustom: evalCustom, evalMath: evalMath, evalEvent: evalEvent,
     getStep: getStep,
     insertColumns: insertColumns, insertRows: insertRows,
@@ -305,7 +322,7 @@ function checkOverlap(cells, x, y, excludeUid) {
 }
 
 /* ---- schema 校验（返回错误数组）---- */
-var VALID_TYPES = ['label', 'text', 'input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload', 'formula'];
+var VALID_TYPES = ['label', 'text', 'input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload', 'formula'];
 function validateConfig(data) {
   if (!data || typeof data !== 'object') return ['数据不是对象'];
   if (!Array.isArray(data.cells)) return ['数据必须包含 cells 数组'];
@@ -1126,21 +1143,9 @@ test('往返 number 规则 → 输入输出一致', function () {
  * ==================================================================== */
 group('M. 多附件上传');
 
-// 复刻生产 echoData 里的 upload 归一化逻辑
+// 使用 DT 导出的 normalizeUploadVal（验证 export 真正可用，对齐生产/配置页）
 function m_normalizeUploadVal(val) {
-  if (val == null || val === '') return [];
-  if (typeof val === 'string') {
-    try {
-      var parsed = JSON.parse(val);
-      if (Array.isArray(parsed)) return parsed;
-      if (parsed && typeof parsed === 'object') return [parsed];
-      return [];
-    } catch (e) {
-      return [];
-    }
-  }
-  if (Array.isArray(val)) return val;
-  return [];
+  return DT.normalizeUploadVal(val);
 }
 
 // --- M1. echoData upload 归一化（5 个）---
@@ -1235,6 +1240,113 @@ test('M4: maxCount=0/null/undefined 不输出该字段', function () {
   assertEqual(m_serializeMaxCount({ maxCount: 0 }), {});
   assertEqual(m_serializeMaxCount({ maxCount: null }), {});
   assertEqual(m_serializeMaxCount({ maxCount: undefined }), {});
+});
+
+// ---- N. 公式依赖图 / 选项类型对齐（与 preview-renderer / 生产组件方法对照）----
+// 注意：extractFormulaDeps / coerceOptionValue 在两端都是组件方法（非 DTUtils 导出），
+// 这里复刻其纯逻辑做对照测试。组件方法变更时，本组需同步更新。
+group('N. 公式依赖图 / 选项类型对齐');
+
+function n_extractFormulaDeps(f, ids, cellMap, allCells) {
+  if (!f) return [];
+  if (f.trim() === 'CALC_SCORE') {
+    return (allCells || []).filter(function (c) { return c.type === 'number'; })
+      .map(function (c) { return c.id; });
+  }
+  var m = f.match(/^(SUM|AVG|MIN)\((.+)\)$/i);
+  if (m) {
+    return m[2].split(',').map(function (x) { return x.trim(); })
+      .filter(function (id) { return cellMap[id]; });
+  }
+  var body = f;
+  var cm = f.match(/^CALC\((.+)\)$/i);
+  if (cm) body = cm[1];
+  return ids.filter(function (id) {
+    return new RegExp('\\b' + id + '\\b').test(body);
+  });
+}
+function n_coerceOptionValue(cell, val) {
+  if (!cell || !cell.options || !cell.options.length) return val;
+  for (var i = 0; i < cell.options.length; i++) {
+    if (String(cell.options[i].value) === String(val)) return cell.options[i].value;
+  }
+  return val;
+}
+
+// --- N1. extractFormulaDeps：SUM/AVG/MIN 参数即依赖 ---
+test('N1: SUM(a,b,c) → [a,b,c]（仅保留存在的 cell）', function () {
+  var cellMap = { a: 1, b: 1, c: 1 };
+  var deps = n_extractFormulaDeps('SUM(a,b,c)', ['a', 'b', 'c'], cellMap, []);
+  assertEqual(deps, ['a', 'b', 'c']);
+});
+test('N1: SUM 参数中不存在的 id 被过滤', function () {
+  var cellMap = { a: 1 };
+  var deps = n_extractFormulaDeps('SUM(a,ghost)', ['a'], cellMap, []);
+  assertEqual(deps, ['a']);
+});
+test('N1: AVG/MIN 同 SUM 处理', function () {
+  var cellMap = { x: 1, y: 1 };
+  assertEqual(n_extractFormulaDeps('AVG(x,y)', ['x', 'y'], cellMap, []), ['x', 'y']);
+  assertEqual(n_extractFormulaDeps('MIN(x,y)', ['x', 'y'], cellMap, []), ['x', 'y']);
+});
+
+// --- N2. CALC_SCORE 通配依赖所有 number cell ---
+test('N2: CALC_SCORE → 所有 number cell id', function () {
+  var allCells = [
+    { id: 'a', type: 'number' },
+    { id: 'b', type: 'text' },
+    { id: 'c', type: 'number' }
+  ];
+  var deps = n_extractFormulaDeps('CALC_SCORE', ['a', 'b', 'c'], {}, allCells);
+  assertEqual(deps, ['a', 'c']);
+});
+
+// --- N3. CALC(expr) 与裸表达式：词边界匹配 ---
+test('N3: CALC(expr) 提取括号内依赖', function () {
+  var cellMap = { score_a: 1, score_b: 1 };
+  var ids = ['score_a', 'score_b'];
+  var deps = n_extractFormulaDeps('CALC(score_a + score_b * 0.5)', ids, cellMap, []);
+  assertEqual(deps.sort(), ['score_a', 'score_b']);
+});
+test('N3: 词边界：score 不会误匹配 score_a', function () {
+  var cellMap = { score_a: 1 };
+  var deps = n_extractFormulaDeps('CALC(score_a + 1)', ['score_a'], cellMap, []);
+  assertEqual(deps, ['score_a']);
+  // 反例：'score' 不应被当做依赖（虽然不在 ids，确保词边界不前缀匹配）
+  var deps2 = n_extractFormulaDeps('CALC(score_a)', ['score'], { score: 1 }, []);
+  assertEqual(deps2, []);
+});
+test('N3: 空公式 → []', function () {
+  assertEqual(n_extractFormulaDeps('', ['a'], { a: 1 }, []), []);
+  assertEqual(n_extractFormulaDeps(null, ['a'], { a: 1 }, []), []);
+});
+
+// --- N4. coerceOptionValue：字符串值对齐到 option 原始类型 ---
+test('N4: option 数字类型，字符串 "1" → 数字 1', function () {
+  var cell = { options: [{ value: 1, label: 'A' }, { value: 2, label: 'B' }] };
+  assertEqual(n_coerceOptionValue(cell, '1'), 1);
+  assertEqual(typeof n_coerceOptionValue(cell, '1'), 'number');
+});
+test('N4: option 字符串类型，数字 1 → 字符串 "1"', function () {
+  var cell = { options: [{ value: '1', label: 'A' }] };
+  assertEqual(n_coerceOptionValue(cell, 1), '1');
+  assertEqual(typeof n_coerceOptionValue(cell, 1), 'string');
+});
+test('N4: 无 options / 空 options → 原值返回', function () {
+  assertEqual(n_coerceOptionValue(null, '1'), '1');
+  assertEqual(n_coerceOptionValue({ options: [] }, '1'), '1');
+});
+test('N4: 无匹配 → 原值返回（不抛错）', function () {
+  var cell = { options: [{ value: 1 }] };
+  assertEqual(n_coerceOptionValue(cell, 'xyz'), 'xyz');
+});
+
+// --- N5. DT.normalizeUploadVal 导出验证 ---
+test('N5: DT.normalizeUploadVal 真正导出可用', function () {
+  assertOk(typeof DT.normalizeUploadVal === 'function');
+  // 行为与 M1 一致：旧 JSON 字符串 → 单元素数组
+  var v = DT.normalizeUploadVal('{"path":"x","name":"a.pdf"}');
+  assertEqual(v, [{ path: 'x', name: 'a.pdf' }]);
 });
 
 

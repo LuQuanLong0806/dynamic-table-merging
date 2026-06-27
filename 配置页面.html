@@ -704,14 +704,12 @@
         padding: 8px;
       }
       .preview-renderer .axis-row-top {
+        /* 不再单独 sticky：thead 会把 axis-row-top + 冻结行整体吸顶 */
+      }
+      .preview-renderer thead {
         position: sticky;
         top: 0;
         z-index: 2;
-      }
-      .preview-renderer .row-freeze {
-        position: sticky;
-        top: 20px;            /* 让位给 axis-row-top（行号头高度约 20px） */
-        z-index: 1;            /* 低于 axis，不破坏调试坐标轴 */
       }
       .preview-renderer .axis-row-head {
         position: sticky;
@@ -720,7 +718,6 @@
       }
       .preview-renderer .axis-corner {
         position: sticky;
-        top: 0;
         left: 0;
         z-index: 3;
       }
@@ -1795,7 +1792,7 @@ events: {
                 <i-input :value="(cell.events || {}).onChange" @input="v => setEvent('onChange', v)" type="textarea" :rows="3"
                   size="small" placeholder="如：fm.total = (Number(fm.a)||0) + (Number(fm.b)||0)" />
               </div>
-              <div class="sub-item sub-item-vertical" v-if="cell.type === 'input'">
+              <div class="sub-item sub-item-vertical" v-if="cell.type === 'input' || cell.type === 'textarea'">
                 <div class="row-grow">
                   <span style="font-size:12px;color:#888;width:90px;flex-shrink:0;font-weight:bold;">onBlur</span>
                   <span style="font-size:11px;color:#aaa;flex:1;">输入框失焦时触发。适合做格式化（trim / 大小写）</span>
@@ -1803,7 +1800,7 @@ events: {
                 <i-input :value="(cell.events || {}).onBlur" @input="v => setEvent('onBlur', v)" type="textarea" :rows="2"
                   size="small" placeholder="如：fm.indval_r3 = (fm.indval_r3 || '').trim()" />
               </div>
-              <div class="sub-item sub-item-vertical" v-if="cell.type === 'input'">
+              <div class="sub-item sub-item-vertical" v-if="cell.type === 'input' || cell.type === 'textarea'">
                 <div class="row-grow">
                   <span style="font-size:12px;color:#888;width:90px;flex-shrink:0;font-weight:bold;">onInput</span>
                   <span style="font-size:11px;color:#aaa;flex:1;">输入中触发（每字符）。高频，慎用重逻辑</span>
@@ -1856,52 +1853,30 @@ events: {
                 <col class="axis-col-width">
                 <col v-for="(w,i) in colWidths" :key="i" :style="w">
               </colgroup>
-              <tr class="axis-row-top">
-                <th class="axis-corner"></th>
-                <th v-for="c in colCount" :key="'ax-c-'+c" class="axis-col-head">{{c}}</th>
-              </tr>
-              <tr v-for="(row, ri) in gridRows" v-if="visibleRows[ri]" :key="ri"
-                  :class="{ 'row-freeze': config.freezeRows > 0 && ri < config.freezeRows }">
-                <td class="axis-row-head">{{ri+1}}</td>
-                <template v-for="(entry, ci) in row">
-                  <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
-                      :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci">
-                    <span class="cell-id-badge label-badge" @click.stop="copyId(entry.cell.id)" :title="entry.cell.id + '（点击复制）'">{{entry.cell.id}}</span>
-                    <span class="cell-edit-icon" @click.stop="onIdClick(entry.cell.id)" title="编辑此单元格"><Icon type="md-create" size="11" color="#fff" /></span>
-                    <div v-if="entry.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(entry.cell.clampLines)" v-html="entry.cell.content"></div>
-                    <div v-else v-html="entry.cell.content"></div>
-                  </th>
-                  <td v-else-if="!entry.skip && entry.cell && !isHidden(entry.cell.id)"
-                      :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
-                      :class="entry.cls">
-                    <span class="cell-id-badge" @click.stop="copyId(entry.cell.id)" :title="entry.cell.id + '（点击复制）'">{{entry.cell.id}}</span>
-                    <span class="cell-edit-icon" @click.stop="onIdClick(entry.cell.id)" title="编辑此单元格"><Icon type="md-create" size="11" color="#fff" /></span>
-                    <div v-for="item in entry.items" :key="item.cell.id"
-                         :data-cell-id="item.cell.id"
-                         class="alt-item">
-                      <div v-if="item.isText && item.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(item.cell.clampLines)" v-html="item.cell.content || ''"></div>
-                      <div v-else-if="item.isText" v-html="item.cell.content || ''"></div>
-                      <span v-else-if="item.isFormula" class="formula-val">{{formulaResults[item.cell.id]}}</span>
-                      <form-item v-else-if="item.isControl" :prop="formRules[item.cell.id] ? item.cell.id : ''">
-                        <cell-control
-                          :cell="item.cell"
-                          :fm="fm"
-                          :disabled="isDisabled(item.cell.id)"
-                          @set-val="setVal"
-                          @on-input="onInput"
-                          @on-change="onChange"
-                          @on-blur="onBlur"
-                          @upload-file="onUploadFile"
-                          @remove-upload="removeUpload"
-                        ></cell-control>
-                      </form-item>
-                    </div>
-                  </td>
-                  <td v-else-if="!entry.skip" :key="ci" class="empty-cell-slot">
-                    <span class="cell-edit-icon" @click.stop="$emit('add-cell-at', ci + 1, ri + 1)" title="在此位置添加单元格"><Icon type="md-add" size="11" color="#fff" /></span>
-                  </td>
-                </template>
-              </tr>
+              <thead>
+                <tr class="axis-row-top">
+                  <th class="axis-corner"></th>
+                  <th v-for="c in colCount" :key="'ax-c-'+c" class="axis-col-head">{{c}}</th>
+                </tr>
+                <preview-row
+                  v-for="(row, ri) in gridRows"
+                  v-if="visibleRows[ri] && ri < freezeRowCount"
+                  :key="'f-'+ri"
+                  :row="row"
+                  :ri="ri"
+                  v-on="$listeners"
+                ></preview-row>
+              </thead>
+              <tbody>
+                <preview-row
+                  v-for="(row, ri) in gridRows"
+                  v-if="visibleRows[ri] && ri >= freezeRowCount"
+                  :key="ri"
+                  :row="row"
+                  :ri="ri"
+                  v-on="$listeners"
+                ></preview-row>
+              </tbody>
             </table>
           </i-form>
           <div class="btn-bar">
@@ -1910,6 +1885,56 @@ events: {
           </div>
         </div>
       </div>
+    </script>
+
+    <!-- ==================== 预览表格单行子组件 ====================
+         与生产 EvalRow.vue 对称：thead/tbody 共用同一份渲染逻辑，
+         通过 inject 拿到父 preview-renderer 实例，转发 fm/状态/方法，
+         避免在 thead/tbody 各复制一份 ~40 行 tr 模板。
+         v-on="$listeners" 让此子组件的 emit（add-cell-at）直接转发到最外层。 -->
+    <script type="text/x-template" id="preview-row-tpl">
+      <tr>
+        <td class="axis-row-head">{{ri+1}}</td>
+        <template v-for="(entry, ci) in row">
+          <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
+              :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci">
+            <span class="cell-id-badge label-badge" @click.stop="copyId(entry.cell.id)" :title="entry.cell.id + '（点击复制）'">{{entry.cell.id}}</span>
+            <span class="cell-edit-icon" @click.stop="onIdClick(entry.cell.id)" title="编辑此单元格"><Icon type="md-create" size="11" color="#fff" /></span>
+            <div v-if="entry.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(entry.cell.clampLines)" v-html="entry.cell.content"></div>
+            <div v-else v-html="entry.cell.content"></div>
+          </th>
+          <td v-else-if="!entry.skip && entry.cell && !isHidden(entry.cell.id)"
+              :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
+              :class="entry.cls">
+            <span class="cell-id-badge" @click.stop="copyId(entry.cell.id)" :title="entry.cell.id + '（点击复制）'">{{entry.cell.id}}</span>
+            <span class="cell-edit-icon" @click.stop="onIdClick(entry.cell.id)" title="编辑此单元格"><Icon type="md-create" size="11" color="#fff" /></span>
+            <div v-for="item in entry.items" :key="item.cell.id"
+                 :data-cell-id="item.cell.id"
+                 class="alt-item">
+              <div v-if="item.isText && item.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(item.cell.clampLines)" v-html="item.cell.content || ''"></div>
+              <div v-else-if="item.isText" v-html="item.cell.content || ''"></div>
+              <span v-else-if="item.isFormula" class="formula-val">{{formulaResults[item.cell.id]}}</span>
+              <form-item v-else-if="item.isControl" :prop="formRules[item.cell.id] ? item.cell.id : ''">
+                <cell-control
+                  :cell="item.cell"
+                  :fm="fm"
+                  :disabled="isDisabled(item.cell.id)"
+                  @set-val="setVal"
+                  @on-input="onInput"
+                  @on-change="onChange"
+                  @on-number-change="onNumberChange"
+                  @on-blur="onBlur"
+                  @upload-file="onUploadFile"
+                  @remove-upload="removeUpload"
+                ></cell-control>
+              </form-item>
+            </div>
+          </td>
+          <td v-else-if="!entry.skip" :key="ci" class="empty-cell-slot">
+            <span class="cell-edit-icon" @click.stop="$emit('add-cell-at', ci + 1, ri + 1)" title="在此位置添加单元格"><Icon type="md-add" size="11" color="#fff" /></span>
+          </td>
+        </template>
+      </tr>
     </script>
 
     <!-- ==================== 单元格输入控件子组件 ====================
@@ -1924,9 +1949,17 @@ events: {
           :placeholder="cell.placeholder || cell.content || ''"
           :disabled="disabled"
           @on-blur="e => { $emit('on-blur', cell.id, e); $emit('on-change', cell.id, e); }" />
+        <i-input v-if="cell.type==='textarea'"
+          type="textarea"
+          :rows="3"
+          :value="fm[cell.id]"
+          @input="val => { $emit('set-val', cell.id, val); $emit('on-input', cell.id, val); }"
+          :placeholder="cell.placeholder || cell.content || ''"
+          :disabled="disabled"
+          @on-blur="e => { $emit('on-blur', cell.id, e); $emit('on-change', cell.id, e); }" />
         <input-number v-if="cell.type==='number'"
           :value="fm[cell.id]"
-          @on-change="val => { $emit('set-val', cell.id, val); $emit('on-change', cell.id, val); }"
+          @on-change="val => { $emit('on-number-change', cell.id, val); }"
           :active-change="false"
           :precision="cell.precision != null ? cell.precision : undefined"
           :placeholder="cell.placeholder || ''"
@@ -2002,6 +2035,25 @@ events: {
           var mx = Math.max.apply(null, p);
           return { start: mn, end: mx, span: mx - mn + 1 };
         }
+        // upload cell 值归一化（兼容旧数据格式）
+        // 旧：JSON 字符串 '{"path":"x","name":"a.pdf"}' / 单对象 / 数组 / 空字符串
+        // 新：统一数组 [{path, name}, ...]
+        function normalizeUploadVal(val) {
+          if (val == null || val === '') return [];
+          if (typeof val === 'string') {
+            try {
+              var parsed = JSON.parse(val);
+              if (Array.isArray(parsed)) return parsed;
+              if (parsed && typeof parsed === 'object') return [parsed];
+              return [];
+            } catch (e) {
+              return [];
+            }
+          }
+          if (Array.isArray(val)) return val;
+          if (typeof val === 'object') return [val];
+          return [];
+        }
         function buildFormModel(cells) {
           var m = {};
           (cells || []).forEach(function (c) {
@@ -2013,7 +2065,7 @@ events: {
             } else if (c.type === 'upload') {
               // upload 支持多文件累积，统一存数组 [{path, name}, ...]
               m[c.id] = Array.isArray(c.value) ? c.value : [];
-            } else if (['input', 'select', 'radio', 'date'].indexOf(c.type) >= 0) {
+            } else if (['input', 'textarea', 'select', 'radio', 'date'].indexOf(c.type) >= 0) {
               m[c.id] = c.value != null ? c.value : '';
             }
           });
@@ -2063,7 +2115,7 @@ events: {
               if (O[r][c]) { cols.push({ skip: true }); continue; }
               var e = G[r][c];
               if (!e) { cols.push({ skip: false, cell: null }); continue; }
-              var isCtrl = ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload']
+              var isCtrl = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload']
                 .indexOf(e.cell.type) >= 0;
               var cls = [];
               if (e.cell.type === 'text' && (c === 0 || c === 2) && /<b>/.test(e.cell.content || '')) {
@@ -2269,6 +2321,7 @@ events: {
         }
         return {
           parseRange: parseRange,
+          normalizeUploadVal: normalizeUploadVal,
           buildFormModel: buildFormModel,
           buildGrid: buildGrid,
           evalDepends: evalDepends,
@@ -2296,6 +2349,7 @@ events: {
         { v: 'label', l: 'label 表头/标签' },
         { v: 'text', l: 'text 静态文本' },
         { v: 'input', l: 'input 文本输入' },
+        { v: 'textarea', l: 'textarea 多行文本' },
         { v: 'number', l: 'number 数字输入' },
         { v: 'select', l: 'select 下拉' },
         { v: 'radio', l: 'radio 单选' },
@@ -2308,6 +2362,7 @@ events: {
         label: '表头或左侧行标题',
         text: '静态展示文本，可含 <b>...</b>',
         input: '单行文本输入',
+        textarea: '多行文本输入',
         number: '数值输入，自动转 Number',
         select: '下拉单选',
         radio: '单选，竖排展示',
@@ -2317,7 +2372,7 @@ events: {
         formula: '由其它字段计算得出'
       };
       var TYPE_LABELS = {
-        label: 'label', text: 'text', input: 'input', number: 'number',
+        label: 'label', text: 'text', input: 'input', textarea: 'textarea', number: 'number',
         select: 'select', radio: 'radio', checkbox: 'checkbox',
         date: 'date', upload: 'upload', formula: 'formula'
       };
@@ -2328,6 +2383,7 @@ events: {
         { key: 'label',   icon: '🏷️', name: '标题 / 标签',  desc: '表头或行首的纯文字', build: function (id, x, y) { return { id: id, type: 'label', x: x, y: y, content: '新标题' }; } },
         { key: 'text',    icon: '📝', name: '静态文本',     desc: '展示文字（可含 <b>加粗</b>）', build: function (id, x, y) { return { id: id, type: 'text', x: x, y: y, content: '说明文字' }; } },
         { key: 'input',   icon: '✏️', name: '文本输入',     desc: '单行输入框', build: function (id, x, y) { return { id: id, type: 'input', x: x, y: y, content: '', placeholder: '请输入', validation: { rules: [ { kind: 'required', required: false, message: '此项为必填' } ] } }; } },
+        { key: 'textarea', icon: '📄', name: '多行文本',     desc: '多行文本输入框', build: function (id, x, y) { return { id: id, type: 'textarea', x: x, y: y, content: '', placeholder: '请输入', validation: { rules: [ { kind: 'required', required: false, message: '此项为必填' } ] } }; } },
         { key: 'number',  icon: '🔢', name: '数字输入',     desc: '数值，可设最小/最大值', build: function (id, x, y) { return { id: id, type: 'number', x: x, y: y, content: '', placeholder: '请输入数字', validation: { rules: [ { kind: 'number', type: 'number', min: 0, max: 100, message: '请输入 0-100 之间的数字' } ] } }; } },
         { key: 'select',  icon: '📋', name: '下拉选择',     desc: '单选下拉框', build: function (id, x, y) { return { id: id, type: 'select', x: x, y: y, content: '请选择', options: [ { value: '1', label: '选项一' }, { value: '2', label: '选项二' } ] }; } },
         { key: 'radio',   icon: '🔘', name: '单选题',       desc: '竖排单选', build: function (id, x, y) { return { id: id, type: 'radio', x: x, y: y, content: '', options: [ { value: '1', label: '选项一' }, { value: '2', label: '选项二' }, { value: '3', label: '选项三' } ] }; } },
@@ -2464,19 +2520,19 @@ events: {
             return c.replace(/<[^>]+>/g, '').slice(0, 60);
           },
           hasPlaceholder: function () {
-            return ['input', 'number', 'select'].indexOf(this.cell.type) >= 0;
+            return ['input', 'textarea', 'number', 'select'].indexOf(this.cell.type) >= 0;
           },
           hasOptions: function () {
             return ['select', 'radio', 'checkbox'].indexOf(this.cell.type) >= 0;
           },
           hasValidation: function () {
-            return ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(this.cell.type) >= 0;
+            return ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(this.cell.type) >= 0;
           },
           hasLinkage: function () {
             return ['select', 'radio'].indexOf(this.cell.type) >= 0;
           },
           hasEvents: function () {
-            return ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(this.cell.type) >= 0;
+            return ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(this.cell.type) >= 0;
           },
           isHeaderRowCell: function () {
             // y=1 或 y=2 且 x 是单列（非跨列）的 cell 才能配列宽权重
@@ -2553,8 +2609,8 @@ events: {
             if (this.cell.type === 'formula' && !this.cell.calculationFormula) {
               this.$set(this.cell, 'calculationFormula', '');
             }
-            // 切换离开 input 时清理 onBlur/onInput（只 input 触发）
-            if (this.cell.type !== 'input' && this.cell.events) {
+            // 切换离开 input/textarea 时清理 onBlur/onInput（只 input/textarea 触发）
+            if (this.cell.type !== 'input' && this.cell.type !== 'textarea' && this.cell.events) {
               if (this.cell.events.onBlur) this.$delete(this.cell.events, 'onBlur');
               if (this.cell.events.onInput) this.$delete(this.cell.events, 'onInput');
               if (!Object.keys(this.cell.events).length) this.$delete(this.cell, 'events');
@@ -2643,7 +2699,7 @@ events: {
             var t = this.cell.type;
             var nr;
             if (t === 'number') nr = { kind: 'number', message: '', type: 'number', min: null, max: null };
-            else if (t === 'input' || t === 'select') nr = { kind: 'string', message: '', type: 'string', min: null, max: null };
+            else if (t === 'input' || t === 'textarea' || t === 'select') nr = { kind: 'string', message: '', type: 'string', min: null, max: null };
             else if (t === 'checkbox') nr = { kind: 'array', message: '', type: 'array', min: null, max: null };
             else nr = { kind: 'custom', message: '', custom: '', depends: '' };
             v.rules.push(nr);
@@ -2755,6 +2811,7 @@ events: {
       // 工具函数统一来自 window.DTUtils（见 dynamic-table-utils.js）
       // 这里仅做 pr_ 别名，保持原调用点不变
       var pr_parseRange = window.DTUtils.parseRange;
+      var pr_normalizeUploadVal = window.DTUtils.normalizeUploadVal;
       var pr_buildFormModel = window.DTUtils.buildFormModel;
       var pr_buildGrid = window.DTUtils.buildGrid;
       var pr_evalDepends = window.DTUtils.evalDepends;
@@ -2797,6 +2854,34 @@ events: {
         }
       });
 
+      Vue.component('preview-row', {
+        template: '#preview-row-tpl',
+        props: {
+          row: { type: Array, default: function () { return []; } },
+          ri: { type: Number, default: 0 }
+        },
+        inject: ['previewRenderer'],
+        computed: {
+          fm: function () { return this.previewRenderer.fm; },
+          formulaResults: function () { return this.previewRenderer.formulaResults; },
+          formRules: function () { return this.previewRenderer.formRules; }
+        },
+        methods: {
+          isHidden: function (id) { return this.previewRenderer.isHidden(id); },
+          isDisabled: function (id) { return this.previewRenderer.isDisabled(id); },
+          clampStyle: function (lines) { return this.previewRenderer.clampStyle(lines); },
+          copyId: function (id) { return this.previewRenderer.copyId(id); },
+          onIdClick: function (id) { return this.previewRenderer.onIdClick(id); },
+          setVal: function () { return this.previewRenderer.setVal.apply(this.previewRenderer, arguments); },
+          onInput: function () { return this.previewRenderer.onInput.apply(this.previewRenderer, arguments); },
+          onChange: function () { return this.previewRenderer.onChange.apply(this.previewRenderer, arguments); },
+          onNumberChange: function () { return this.previewRenderer.onNumberChange.apply(this.previewRenderer, arguments); },
+          onBlur: function () { return this.previewRenderer.onBlur.apply(this.previewRenderer, arguments); },
+          onUploadFile: function () { return this.previewRenderer.onUploadFile.apply(this.previewRenderer, arguments); },
+          removeUpload: function () { return this.previewRenderer.removeUpload.apply(this.previewRenderer, arguments); }
+        }
+      });
+
       Vue.component('preview-renderer', {
         template: '#preview-renderer-tpl',
         props: {
@@ -2804,6 +2889,7 @@ events: {
           mode: { type: String, default: 'portal' },
           gridPad: { type: Object, default: function () { return { cols: 0, rows: 0 }; } }
         },
+        provide: function () { return { previewRenderer: this }; },
         data: function () {
           var state = this._buildState(this.config);
           return {
@@ -2821,6 +2907,10 @@ events: {
           };
         },
         computed: {
+          // 冻结行数：0 = 仅 axis-row-top 吸顶；>0 = 前 N 行数据行 + axis-row-top 一起在 thead 内吸顶
+          freezeRowCount: function () {
+            return this.config.freezeRows > 0 ? Number(this.config.freezeRows) : 0;
+          },
           formRules: function () {
             var R = {}, self = this;
             (this.config.cells || []).forEach(function (c) {
@@ -2872,7 +2962,11 @@ events: {
           }
         },
         created: function () {
+          this.buildFormulaDeps();
           this.recalc();
+          // 初次渲染批量触发 onChange：让带 onChange 的 cell 自动跑一次
+          // （如 fm.b = fm.a * 2 这种初始联动，配置页预览需复现此效果）
+          this.triggerAllOnChange('init-new');
         },
         methods: {
           _buildState: function (data) {
@@ -2999,7 +3093,7 @@ events: {
             // 重要：alts（左上角与其他 cell 重合的 cell）不加入 items，
             // 避免一个 td 渲染出多个 cell 的内容（"一个单元格出现两个 id"问题）
             // alts 数据仍保留在 entry.alts，配置抽屉/单元格列表里仍可见、可编辑、可导出
-            var CTRL_TYPES = ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
+            var CTRL_TYPES = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
             grid.rows.forEach(function (row) {
               row.forEach(function (entry) {
                 if (!entry || entry.skip || !entry.cell) return;
@@ -3051,6 +3145,7 @@ events: {
             this.formulaCache = {};
             var self = this;
             this.$nextTick(function () {
+              self.buildFormulaDeps();
               self.recalc();
               // 重建字段映射缓存 + 清校验状态
               self._fieldMap = {};
@@ -3060,6 +3155,8 @@ events: {
                   if (f) f.validateState = '';
                 });
               }
+              // 配置变化后重跑 onChange（用户改了 events 公式后预览实时复现）
+              self.triggerAllOnChange('rebuild');
             });
           },
           _fieldMap: {},
@@ -3086,7 +3183,7 @@ events: {
               list.push({
                 cell: a.cell,
                 isText: a.cell.type === 'text',
-                isControl: ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(a.cell.type) >= 0,
+                isControl: ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(a.cell.type) >= 0,
                 isFormula: a.cell.type === 'formula'
               });
             });
@@ -3307,8 +3404,11 @@ events: {
                 var nv;
                 if (tt === 'number') {
                   nv = av === '' || av == null || isNaN(Number(av)) ? null : Number(av);
-                } else if (tt === 'checkbox' || tt === 'upload') {
+                } else if (tt === 'checkbox') {
                   nv = Array.isArray(av) ? av : [];
+                } else if (tt === 'upload') {
+                  // 与生产对齐：linkage setValue 改 upload target 时归一化（兼容旧 JSON 字符串/对象）
+                  nv = pr_normalizeUploadVal(av);
                 } else {
                   nv = av == null ? '' : av;
                 }
@@ -3334,6 +3434,109 @@ events: {
             var empty = tc && tc.type === 'checkbox' ? [] : tc && tc.type === 'number' ? null : '';
             if (tc && tc.type === 'upload') empty = [];
             this.$set(this.fm, id, empty);
+          },
+          // 公式依赖图：{ formulaId: [被它引用的 cellId, ...] }
+          // CALC_SCORE 通配依赖所有 number cell；其余按公式文本静态扫描
+          // 用于 recalcIncremental 增量重算（性能优化，避免每次 Number 改动都全表 recalc）
+          buildFormulaDeps: function () {
+            var deps = {}, self = this;
+            var ids = Object.keys(this.cellMap);
+            (this.config.cells || []).forEach(function (c) {
+              if (c.type !== 'formula' || !c.calculationFormula) return;
+              deps[c.id] = self.extractFormulaDeps(c.calculationFormula, ids);
+            });
+            this._formulaDeps = deps;
+          },
+          extractFormulaDeps: function (f, ids) {
+            if (!f) return [];
+            if (f.trim() === 'CALC_SCORE') {
+              return (this.config.cells || [])
+                .filter(function (c) { return c.type === 'number'; })
+                .map(function (c) { return c.id; });
+            }
+            var m = f.match(/^(SUM|AVG|MIN)\((.+)\)$/i);
+            if (m) {
+              return m[2].split(',').map(function (x) { return x.trim(); })
+                .filter(function (id) { return this.cellMap[id]; }, this);
+            }
+            var body = f;
+            var cm = f.match(/^CALC\((.+)\)$/i);
+            if (cm) body = cm[1];
+            return ids.filter(function (id) {
+              return new RegExp('\\b' + id + '\\b').test(body);
+            });
+          },
+          // 增量重算：仅重算依赖了 changedId 的公式
+          // 兜底：依赖图缺失时降级为全表 recalc
+          recalcIncremental: function (changedId) {
+            var depsMap = this._formulaDeps;
+            if (!depsMap || !Object.keys(depsMap).length) {
+              this.recalc();
+              return;
+            }
+            var any = false, self = this;
+            Object.keys(depsMap).forEach(function (formulaId) {
+              var deps = depsMap[formulaId];
+              if (!deps || deps.indexOf(changedId) < 0) return;
+              var cell = self.cellMap[formulaId];
+              if (!cell || !cell.calculationFormula) return;
+              var v = self.evalF(cell.calculationFormula);
+              self.$set(self.formulaResults, formulaId, v);
+              self.$set(self.fm, formulaId, v);
+              any = true;
+            });
+            if (!any) this.recalc();
+          },
+          // Number cell 专用 change 入口（与生产 onNumberChange 对齐）
+          // 顺序：setVal → events/linkage → recalc → validate
+          // 有 linkage/events 时全表 recalc（因为可能改了其他 cell），否则增量
+          onNumberChange: function (id, val) {
+            var cell = this.cellMap[id];
+            if (cell && cell.type === 'number') {
+              val = val === '' || val === undefined || val === null ? null : Number(val);
+            }
+            // 直接 $set，不走 setVal（setVal 内部会全表 recalc，破坏增量优化）
+            this.$set(this.fm, id, val);
+            var fi = this._fieldMap[id];
+            if (fi) fi.validateState = '';
+            var hasLinkage = cell && cell.linkage && cell.linkage.length;
+            var hasEvents = cell && cell.events && (cell.events.onChange || cell.events.change);
+            this.runCellEvent('change', id, this.fm[id], val);
+            this.handleLinkage(id);
+            if (hasLinkage || hasEvents) this.recalc();
+            else this.recalcIncremental(id);
+            this.validateField(id);
+            this.validateDependents(id);
+          },
+          // option 类型对齐：解决后端序列化成字符串导致 CheckboxGroup/RadioGroup/Select 严格匹配失效
+          coerceOptionValue: function (cell, val) {
+            if (!cell || !cell.options || !cell.options.length) return val;
+            for (var i = 0; i < cell.options.length; i++) {
+              if (String(cell.options[i].value) === String(val)) return cell.options[i].value;
+            }
+            return val;
+          },
+          // 初始化场景下批量触发所有 cell 的 onChange 一次（与生产 triggerAllOnChange 对齐）
+          //   reason='init-new'：配置页预览初次渲染，让带 onChange 的 cell 自动跑一次
+          // 顺序：按 y 升序、x 升序（自然阅读顺序），跑完用户 JS + linkage，末尾统一 recalc 一次
+          triggerAllOnChange: function (reason) {
+            if (!this.config || !this.config.cells) return;
+            var candidates = (this.config.cells || []).filter(function (c) {
+              if (!c || !c.events) return false;
+              return c.events.onChange || c.events.change;
+            });
+            candidates.sort(function (a, b) {
+              var ya = pr_parseRange(a.y).start, yb = pr_parseRange(b.y).start;
+              if (ya !== yb) return ya - yb;
+              return pr_parseRange(a.x).start - pr_parseRange(b.x).start;
+            });
+            var self = this;
+            candidates.forEach(function (c) {
+              self.runCellEvent('change', c.id, self.fm[c.id], null);
+              self.handleLinkage(c.id);
+            });
+            this.recalc();
+            if (reason) console.log('[triggerAllOnChange]', reason, '触发 ' + candidates.length + ' 个 cell');
           },
           recalc: function () {
             var self = this;
@@ -3544,7 +3747,7 @@ events: {
             (this.config.cells || []).forEach(function (c) {
               if (c.type === 'number') self.$set(self.fm, c.id, c.value != null && c.value !== '' ? Number(c.value) : null);
               else if (c.type === 'checkbox' || c.type === 'upload') self.$set(self.fm, c.id, []);
-              else if (['input', 'select', 'radio', 'date'].indexOf(c.type) >= 0) self.$set(self.fm, c.id, c.value != null ? c.value : '');
+              else if (['input', 'textarea', 'select', 'radio', 'date'].indexOf(c.type) >= 0) self.$set(self.fm, c.id, c.value != null ? c.value : '');
             });
             var ds = {}, hs = {}, mode = this.mode;
             (this.config.cells || []).forEach(function (c) {
@@ -4148,7 +4351,7 @@ events: {
             // 表格总行数:取 cells 的 maxY、gridPad 扩展、draft 自身 y 范围三者较大值
             // 含 draftRowEnd 保证:用户在抽屉里把 draft.y 改大时,扫描仍能覆盖 draft 占据的整段
             var maxRow = Math.max(this.maxY || 0, (this.gridPad && this.gridPad.rows) || 0, draftRowEnd || 0);
-            var CTRL_TYPES = ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
+            var CTRL_TYPES = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
             function isUnconfigured(c) {
               if (CTRL_TYPES.indexOf(c.type) >= 0) return false;  // 控件类型 = 已配置
               if (c.validation && c.validation.rules && c.validation.rules.length > 0) return false;  // 有 rules = 已配置
@@ -4432,7 +4635,7 @@ events: {
                   return;
                 }
                 // schema 校验：必填字段 + 类型枚举 + ID/坐标冲突
-                var validTypes = ['label', 'text', 'input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload', 'formula'];
+                var validTypes = ['label', 'text', 'input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload', 'formula'];
                 var errors = [];
                 var idMap = {};
                 var overlapWarns = [];
