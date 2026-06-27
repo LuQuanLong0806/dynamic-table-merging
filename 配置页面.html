@@ -1066,7 +1066,7 @@
                   :class="{ disabled: !editDrawerDirty }"
                   @click="editDrawerDirty && revertEditDrawer()"
                 >放弃修改</a>
-                <i-button size="small" @click="applyToColumn" title="把当前 cell 的 type/precision/placeholder/options/accept/maxSize/clampLines/validation 复制到同列所有未配置过的单元格(已配置过的不动)">应用到整列</i-button>
+                <i-button size="small" @click="applyToColumn" title="把当前 cell 的 type/precision/placeholder/options/accept/maxCount/clampLines/validation 复制到同列所有未配置过的单元格(已配置过的不动)">应用到整列</i-button>
                 <i-button type="primary" size="small" @click="commitEditDrawer">确定</i-button>
               </div>
             </div>
@@ -1211,10 +1211,11 @@ events: {
 }</code></pre>
 
             <h3>⑥ 列宽权重（width）<span style="font-size:11px;color:#2d8cf0;font-weight:normal;"> 新</span></h3>
-            <p>每个第一行单列 cell 可配 <code>width</code> 字段（数字，作为权重）。列宽计算规则：</p>
+            <p>表头第 <b>1/2 行</b>的单列 cell 可配 <code>width</code> 字段（数字，作为权重）。多行表头时自动选<b>最细分行</b>（单列 cell 数最多的行）作为主行，所有列的权重从主行取。</p>
             <ul>
-              <li>列权重 = 第一行 cell 的 <code>width</code> 字段 &gt; 表头匹配 <code>FIXED_COL_RULES</code>（序号/编号 4，一/二/三级指标 6，评分规则 6，分值/得分 5）&gt; 0（参与剩余均分）</li>
-              <li>有权重的列按权重值占位，没权重的列均分剩余空间</li>
+              <li>最细分行 = 单列 cell 数最多的行（相等取第一行，最多看 2 行）</li>
+              <li>列权重 = 主行 cell 的 <code>width</code> 字段 &gt; 主行 content 匹配 <code>FIXED_COL_RULES</code>（序号/编号 4，一/二/三级指标 6，评分规则 6，分值/得分 5）&gt; 走默认均分</li>
+              <li>主行该列没单列 cell（被合并了）→ 该列走默认均分</li>
               <li><b>归一化</b>：所有<b>可见列</b>宽度之和始终 = 100%。列被隐藏时，原本分给它的宽度按比例补给可见列</li>
             </ul>
             <pre style="background:#f6f8fa;padding:8px;border-radius:3px;font-size:11px;overflow-x:auto;"><code>// 让某列占 15% 权重
@@ -1478,13 +1479,13 @@ events: {
             </div>
             <div v-if="cell.type === 'label' || cell.type === 'text'">
               <label class="field-label">溢出隐藏 clampLines</label>
-              <input-number v-model="cell.clampLines" size="small" :min="0" :step="1" placeholder="0" style="width:100%" />
+              <input-number :value="cell.clampLines == null ? null : cell.clampLines" @on-change="setClampLines" size="small" :min="0" :step="1" placeholder="0" style="width:100%" />
               <div style="font-size:11px;color:#888;padding-top:2px;">0 或空 = 全部显示；N = 截断到 N 行（鼠标悬停看完整）</div>
             </div>
-            <div v-if="isFirstRowCell">
+            <div v-if="isHeaderRowCell">
               <label class="field-label">列宽权重 width</label>
-              <input-number v-model="cell.width" size="small" :min="0" :step="1" placeholder="留空" style="width:100%" />
-              <div style="font-size:11px;color:#888;padding-top:2px;">配置后作为该列权重参与列宽计算，所有可见列权重和 = 100%</div>
+              <input-number :value="cell.width == null ? null : cell.width" @on-change="setCellWidth" size="small" :min="0" :step="1" placeholder="留空" style="width:100%" />
+              <div style="font-size:11px;color:#888;padding-top:2px;">表头第 1/2 行的单列 cell 可配；多行表头第一行合并时配第二行</div>
             </div>
           </div>
 
@@ -1532,16 +1533,12 @@ events: {
                 <i-input v-model="cell.accept" size="small" placeholder=".pdf,.jpg,.png" />
               </div>
               <div>
-                <label class="field-label">最大体积 maxSize (MB)</label>
-                <input-number v-model="cell.maxSize" size="small" :min="0" :step="1" style="width:100%" />
-              </div>
-              <div>
                 <label class="field-label">最多文件数 maxCount</label>
-                <input-number v-model="cell.maxCount" size="small" :min="0" :step="1" style="width:100%" placeholder="0 或留空 = 不限" />
+                <input-number :value="cell.maxCount == null ? null : cell.maxCount" @on-change="setMaxCount" size="small" :min="0" :step="1" style="width:100%" placeholder="0 或留空 = 不限" />
               </div>
               <div class="full" style="grid-column: 1 / -1;">
                 <div class="rule-help" style="margin-top:2px;">
-                  <b>accept</b>=允许的文件后缀（逗号分隔）；<b>maxSize</b>=单文件大小上限（MB），超出会拒绝上传；<b>maxCount</b>=最多文件数（0 或留空 = 不限，&gt;0 = 最多 N 个）。<b>每次只能选 1 个文件，可多次上传累积</b>。校验"至少上传 N 个"在校验规则里配 array + min。
+                  <b>accept</b>=允许的文件后缀（逗号分隔）；<b>maxCount</b>=最多文件数（0 或留空 = 不限，&gt;0 = 最多 N 个）。<b>每次只能选 1 个文件，可多次上传累积</b>。单文件大小上限由生产端统一控制（默认 50MB）。校验"至少上传 N 个"在校验规则里配 array + min。
                 </div>
               </div>
             </div>
@@ -2481,11 +2478,12 @@ events: {
           hasEvents: function () {
             return ['input', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'].indexOf(this.cell.type) >= 0;
           },
-          isFirstRowCell: function () {
-            // y=1 且 x 是单列（非跨列）的 cell 才能配列宽权重
+          isHeaderRowCell: function () {
+            // y=1 或 y=2 且 x 是单列（非跨列）的 cell 才能配列宽权重
+            // 多行表头场景：第一行合并时，第二行单列 cell 也能配（最多 2 行）
             if (!this.cell.y) return false;
             var yr = pr_parseRange(this.cell.y);
-            if (yr.start !== 1) return false;
+            if (yr.start !== 1 && yr.start !== 2) return false;
             var xr = pr_parseRange(this.cell.x);
             return xr.span === 1;
           },
@@ -2533,6 +2531,19 @@ events: {
           _defaultTrigger: function () {
             // 与生产 buildRules 默认 trigger 对齐（[:770-776]）
             return ['number', 'select', 'radio', 'upload'].indexOf(this.cell.type) >= 0 ? 'change' : 'blur';
+          },
+          setCellWidth: function (val) {
+            // 用 $set 保证新建 cell（makeCell 未初始化 width）时也响应式
+            this.$set(this.cell, 'width', val);
+          },
+          setMaxCount: function (val) {
+            // 用 $set 保证导入 cell（无 maxCount 字段）时也响应式；
+            // iView InputNumber 对 undefined 会显示默认值 1，必须显式经 $set 写入
+            this.$set(this.cell, 'maxCount', val);
+          },
+          setClampLines: function (val) {
+            // 同 setMaxCount：导入 cell 无 clampLines 字段时 $set 兜底
+            this.$set(this.cell, 'clampLines', val);
           },
           onTypeChange: function () {
             // 类型切换时保证必要字段
@@ -2910,20 +2921,26 @@ events: {
               { p: /^评分规则$/, w: 6 },
               { p: /^(分值|得分)$/, w: 5 }
             ];
-            // 列宽权重：第一行 cell 的 width 字段 > FIXED_COL_RULES 匹配值
+            // 列宽权重：选表头第 1/2 行中"最细分行"（可见单列 cell 数最多）作为主行
+            // 主行 cell 的 width 字段 > FIXED_COL_RULES 匹配值；主行没覆盖的列走默认均分
+            // 相等行数取第一行；最多 2 行表头；隐藏 cell 不参与统计
             var fixedCols = {};
+            var rowCells = { 1: [], 2: [] };
             cells.forEach(function (c) {
-              var xr = pr_parseRange(c.x);
-              if (xr.span !== 1) return;
-              var yr = pr_parseRange(c.y);
-              if (yr.start !== 1) return;  // 只看第一行
-              var idx = xr.start - 1;
-              // 优先 cell.width
+              if (!c || !c.x || !c.y) return;
+              if (hs[c.id]) return;
+              if (pr_parseRange(c.x).span !== 1) return;
+              var ys = pr_parseRange(c.y).start;
+              if (ys === 1 || ys === 2) rowCells[ys].push(c);
+            });
+            var primaryRow = rowCells[1].length >= rowCells[2].length ? rowCells[1] : rowCells[2];
+            primaryRow.forEach(function (c) {
+              var idx = pr_parseRange(c.x).start - 1;
+              if (fixedCols[idx] != null) return;
               if (c.width != null && !isNaN(Number(c.width)) && Number(c.width) > 0) {
                 fixedCols[idx] = Number(c.width);
                 return;
               }
-              // 回退 FIXED_COL_RULES
               if (!c.content) return;
               var text = String(c.content).replace(/<[^>]+>/g, '').trim();
               for (var ri = 0; ri < FIXED_COL_RULES.length; ri++) {
@@ -3420,13 +3437,6 @@ events: {
                 var allowed = cell.accept.toLowerCase().split(',').map(function (s) { return s.trim(); });
                 if (allowed.indexOf(ext) < 0) {
                   this.$Message.error('不支持的文件格式，仅允许: ' + cell.accept);
-                  continue;
-                }
-              }
-              if (cell && cell.maxSize) {
-                var maxBytes = cell.maxSize * 1024 * 1024;
-                if (file.size > maxBytes) {
-                  this.$Message.error('文件 ' + file.name + ' 超过大小限制，最大 ' + cell.maxSize + 'MB');
                   continue;
                 }
               }
@@ -4112,7 +4122,7 @@ events: {
             // 草稿直接丢弃即可（原 cell 从未被修改）
             this.closeEditDrawer();
           },
-          // 「应用到整列」: 把当前 draft 的 type/precision/placeholder/options/accept/maxSize/clampLines/validation
+          // 「应用到整列」: 把当前 draft 的 type/precision/placeholder/options/accept/maxCount/clampLines/validation
           // 应用到同列所有网格位置: 已有未配置 cell 被修改,空位自动创建新 cell
           // 跳过: 已配置过的 cell、合并 cell(跨多行/多列的标签)、被合并 cell 覆盖的位置
           applyToColumn: function () {
@@ -4189,7 +4199,7 @@ events: {
             // 二次确认(批量操作不可逆,虽然有撤销栈仍提示)
             // 不复制 width(首行列宽,每列只 1 个)、calculationFormula(绑定具体 cell id,复制会错)、
             // content(标签/提示文字,每行不同)、value(初始值,通常与 id 绑定)
-            var COPY_KEYS = ['type', 'placeholder', 'precision', 'options', 'validation', 'accept', 'maxSize', 'clampLines'];
+            var COPY_KEYS = ['type', 'placeholder', 'precision', 'options', 'validation', 'accept', 'maxCount', 'clampLines'];
             var rangeDesc = dStart === dEnd
               ? '第 ' + dStart + ' 列'
               : '第 ' + dStart + '-' + dEnd + ' 列（跨多列）';
@@ -4198,7 +4208,7 @@ events: {
             if (newPositions.length > 0) summaryLines.push('在空位创建 <b>' + newPositions.length + '</b> 个新单元格（默认 id 为 cell_rY_cX）');
             this.$Modal.confirm({
               title: '确认应用到整列',
-              content: '将把当前单元格的 <b>type / precision / placeholder / options / accept / maxSize / clampLines / validation</b> 应用到<b>' + rangeDesc + '</b>:<br><br>• ' + summaryLines.join('<br>• ') + '<br><br>已配置过的不动。可用 Ctrl+Z 撤销。',
+              content: '将把当前单元格的 <b>type / precision / placeholder / options / accept / maxCount / clampLines / validation</b> 应用到<b>' + rangeDesc + '</b>:<br><br>• ' + summaryLines.join('<br>• ') + '<br><br>已配置过的不动。可用 Ctrl+Z 撤销。',
               okText: '应用',
               cancelText: '取消',
               onOk: function () {
@@ -4331,7 +4341,6 @@ events: {
                 if (c.options && c.options.length) out.options = c.options.filter(function (o) { return o.label || o.value; });
                 if (c.calculationFormula) out.calculationFormula = c.calculationFormula;
                 if (c.accept) out.accept = c.accept;
-                if (c.maxSize != null) out.maxSize = c.maxSize;
                 if (c.maxCount > 0) out.maxCount = Number(c.maxCount);
                 if (c.disabled) out.disabled = true;
                 if (c._hidden) out._hidden = true;
