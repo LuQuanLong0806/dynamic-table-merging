@@ -1214,12 +1214,14 @@ events: {
 }</code></pre>
 
             <h3>⑥ 列宽权重（width）<span style="font-size:11px;color:#2d8cf0;font-weight:normal;"> 新</span></h3>
-            <p>表头第 <b>1/2 行</b>的 cell（含跨列合并 cell）可配 <code>width</code> 字段（数字，作为权重）。多行表头时自动选<b>覆盖列数最多</b>的行作为主行，所有列的权重从主行取。</p>
+            <p>所有<b>表头 cell</b>（type=label，含跨列合并 cell，不限 y）都能配 <code>width</code> 字段。计算时扫描所有可见的 label cell，取覆盖列数最多的行作为主行，用该行 cell 的 width 算列宽。</p>
             <ul>
-              <li>主行 = 覆盖列数（合并 cell 按 x span 计入）最多的行，相等取第一行，最多看 2 行</li>
+              <li><b>主行选择</b>：扫描所有可见的 type=label cell，按 y 起始行分组，取覆盖列数（合并 cell 按 x span 计入）最多的行；相等取 y 较小的</li>
               <li>列权重 = 主行 cell 的 <code>width</code> 字段 &gt; 主行 content 匹配 <code>FIXED_COL_RULES</code>（序号/编号 4，一/二/三级指标 6，评分规则 6，分值/得分 5）&gt; 走默认均分</li>
               <li><b>合并 cell 总分摊</b>：跨列合并 cell 的 width 是<b>整个合并 cell 的总权重</b>，按 x span 平均分摊到覆盖的每列。例：3 列合并配 20 → 每列约 6.67，整个合并 cell 占 20%（而非每列 20% 合计 60%）</li>
               <li>主行该列没 cell 覆盖 → 该列走默认均分</li>
+              <li>隐藏的 cell（hiddenState/portalHide/platformHide）不参与列宽计算</li>
+              <li>不依赖 <code>freezeRows</code>：表头判断用 <code>type=label</code>，freezeRows=0 也能识别表头</li>
               <li><b>归一化</b>：所有<b>可见列</b>宽度之和始终 = 100%。列被隐藏时，原本分给它的宽度按比例补给可见列</li>
             </ul>
             <pre style="background:#f6f8fa;padding:8px;border-radius:3px;font-size:11px;overflow-x:auto;"><code>// 让某列占 15% 权重
@@ -2597,15 +2599,20 @@ events: {
           setCellWidth: function (val) {
             // 用 $set 保证新建 cell（makeCell 未初始化 width）时也响应式
             this.$set(this.cell, 'width', val);
+            // 显式 $emit('change')：iView InputNumber 的 DOM change 仅在失焦时派发，
+            // 步进按钮/键盘 Enter 触发 on-change 时不会冒泡到 cell-body，预览不刷新
+            this.$emit('change');
           },
           setMaxCount: function (val) {
             // 用 $set 保证导入 cell（无 maxCount 字段）时也响应式；
             // iView InputNumber 对 undefined 会显示默认值 1，必须显式经 $set 写入
             this.$set(this.cell, 'maxCount', val);
+            this.$emit('change');
           },
           setClampLines: function (val) {
             // 同 setMaxCount：导入 cell 无 clampLines 字段时 $set 兜底
             this.$set(this.cell, 'clampLines', val);
+            this.$emit('change');
           },
           onTypeChange: function () {
             // 类型切换时保证必要字段
@@ -3024,34 +3031,40 @@ events: {
               grid.maxR = targetR;
             }
             maxC = targetC;
-            // 列宽规则（对齐生产 dynamic-eval-table.vue 的 FIXED_COL_RULES）
+            // 列宽规则（FIXED_COL_RULES 与生产 dynamic-eval-table.vue 对齐）
             var FIXED_COL_RULES = [
               { p: /^(序号|编号|No\.?)$/i, w: 4 },
               { p: /^(一级|二级|三级)指标$/, w: 6 },
               { p: /^评分规则$/, w: 6 },
               { p: /^(分值|得分)$/, w: 5 }
             ];
-            // 主行 cell 的 width 是"整个 cell 的总权重"，跨列合并时**分摊**到覆盖的每列（width/span）
-            // 这样合并 cell 配 20 = 整个合并列占 20%（而非每列 20% 合计 60%），与生产 dynamic-eval-table.vue 对齐
-            // 主行没覆盖的列走默认均分；相等行数取第一行；最多 2 行表头；隐藏 cell 不参与统计
+            // 列宽算法（用户规则 + 2026-06-27 案例修正）：
+            //   1. 配置面板：所有 type=label 的表头 cell 都能配 width（isHeaderRowCell 不限 y/span）
+            //   2. 计算列宽：扫描所有"可见的 type=label cell"（不限 y，不依赖 freezeRows）
+            //      按 y 起始行升序遍历，让"具体行（y 大）覆盖占位行（y 小，如 title）"
+            //      每个 cell 的 width/FIXED_COL_RULES 都生效，按 x span 分摊到覆盖的每列
+            //   3. 合并 cell 的 width 按 x span 分摊（合并 cell 配 20 = 整个合并列占 20%）
+            //   4. 没被任何 label cell 覆盖的列走默认均分；归一化让可见列宽和 = 100%
+            //   不再用 primaryRow 选主行：47-光伏 JSON 案例 y=1 title 跨 12 列无 width，
+            //   y=2 11 个具体表头 spanSum 同为 12，旧算法取 y 较小导致 y=2 width 全失效
             var fixedCols = {};
-            var rowCells = { 1: [], 2: [] };
-            cells.forEach(function (c) {
-              if (!c || !c.x || !c.y) return;
-              if (hs[c.id]) return;
-              var ys = pr_parseRange(c.y).start;
-              if (ys === 1 || ys === 2) rowCells[ys].push(c);
+            var labelCells = cells.filter(function (c) {
+              if (!c || !c.x || !c.y) return false;
+              if (c.type !== 'label') return false;  // 只看 label cell（表头）
+              if (hs[c.id]) return false;  // 隐藏 cell 不参与
+              return true;
             });
-            var spanSum = function (arr) {
-              return arr.reduce(function (s, c) { return s + pr_parseRange(c.x).span; }, 0);
-            };
-            var primaryRow = spanSum(rowCells[1]) >= spanSum(rowCells[2]) ? rowCells[1] : rowCells[2];
-            primaryRow.forEach(function (c) {
+            // 按 y 起始行升序：让具体行（y 大）后处理，覆盖占位行（y 小）的 width
+            labelCells.sort(function (a, b) {
+              return pr_parseRange(a.y).start - pr_parseRange(b.y).start;
+            });
+            labelCells.forEach(function (c) {
               var xr = pr_parseRange(c.x);
               var span = xr.span;
+              if (span < 1) return;
               // 合并 cell 的 width/FIXED_COL_RULES 总权重按 span 分摊到每列
+              // 同列被多个 cell 覆盖时，y 较大的覆盖 y 较小的（"后来居上"）
               for (var ci = xr.start - 1; ci < xr.end; ci++) {
-                if (fixedCols[ci] != null) continue;
                 if (c.width != null && !isNaN(Number(c.width)) && Number(c.width) > 0) {
                   fixedCols[ci] = Number(c.width) / span;
                   continue;
