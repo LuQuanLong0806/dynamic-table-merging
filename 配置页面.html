@@ -3095,22 +3095,18 @@ events: {
             for (var ci = 0; ci < maxC; ci++) {
               colHidden[ci] = colHasAnyCell[ci] && !colHasVisibleCell[ci];
             }
-            // 计算列宽：固定权重列按权重，剩余列均分剩余空间
-            var hiddenCount = 0, fixedTotal = 0, fixedCount = 0;
-            for (var hi = 0; hi < maxC; hi++) {
-              if (colHidden[hi]) { hiddenCount++; continue; }
-              if (fixedCols[hi] != null) { fixedTotal += fixedCols[hi]; fixedCount++; }
-            }
-            var visibleCount = maxC - hiddenCount;
-            var remainCols = visibleCount - fixedCount;
+            // 计算列宽：配过 width 的按 width，没配的用 DEFAULT_COL_WEIGHT（与生产 colWidthsFinal 对齐）
+            // B 方案：没配的列不"吃剩余空间"，而是给个默认权重 5 跟配过的一起归一化
+            //   避免"少数没配的列吃 70%"——12 列 11 配 sum=30、1 没配时，旧的剩余均分让没配的吃 70%
+            var DEFAULT_COL_WEIGHT = 5;
+            var hiddenCount = 0;
             var rawWidths = [];
             for (var cj = 0; cj < maxC; cj++) {
-              if (colHidden[cj]) { rawWidths.push(0); continue; }
-              if (fixedCols[cj] != null) rawWidths.push(fixedCols[cj]);
-              else if (remainCols > 0) rawWidths.push((100 - fixedTotal) / remainCols);
-              else rawWidths.push(100 / maxC);
+              if (colHidden[cj]) { hiddenCount++; rawWidths.push(0); continue; }
+              rawWidths.push(fixedCols[cj] != null ? fixedCols[cj] : DEFAULT_COL_WEIGHT);
             }
             // 归一化：可见列宽和 = 100%（隐藏列分走宽度补给可见列）
+            var visibleCount = maxC - hiddenCount;
             var visibleSum = 0;
             for (var vi = 0; vi < maxC; vi++) {
               if (!colHidden[vi]) visibleSum += rawWidths[vi];
