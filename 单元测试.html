@@ -265,6 +265,96 @@ function _DTUtilsFactory() {
     cells.forEach(function (c) { if (!c || !c.y) return; var yr = parseRange(c.y); if (yr.end > maxR) maxR = yr.end; });
     return insertRows(cells, maxR + 1, count);
   }
+  // 「应用到整列」目标列表生成（与 dynamic-table-utils.js / 配置页面.html 内联保持一致）
+  function buildApplyTargets(draft, cells, opts) {
+    opts = opts || {};
+    var freezeRows = opts.freezeRows || 0;
+    var excludeUid = opts.excludeUid;
+    var CTRL_TYPES = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
+    var draftRange = parseRange(draft.x);
+    var dStart = draftRange.start, dEnd = draftRange.end;
+    var draftRowRange = parseRange(draft.y);
+    var draftRowStart = draftRowRange.start, draftRowEnd = draftRowRange.end;
+    var maxRow;
+    if (opts.maxRow != null) {
+      maxRow = opts.maxRow;
+    } else {
+      var cellsMaxY = 0;
+      cells.forEach(function (c) {
+        if (!c || !c.y) return;
+        var r = parseRange(c.y);
+        if (r.end > cellsMaxY) cellsMaxY = r.end;
+      });
+      maxRow = Math.max(cellsMaxY, draftRowEnd);
+    }
+    function isHeaderCell(c) {
+      if (!c) return false;
+      if (c.type === 'label') return true;
+      if (parseRange(c.y).start <= freezeRows) return true;
+      return false;
+    }
+    function isConfiguredCell(c) {
+      if (!c) return false;
+      if (CTRL_TYPES.indexOf(c.type) >= 0) return true;
+      if (c.validation && c.validation.rules && c.validation.rules.length > 0) return true;
+      if (c.content && String(c.content).trim()) return true;
+      return false;
+    }
+    function findCellAt(col, row) {
+      for (var k = 0; k < cells.length; k++) {
+        var cc = cells[k];
+        if (parseRange(cc.x).start === col && parseRange(cc.y).start === row) return cc;
+      }
+      return null;
+    }
+    function isCovered(col, row) {
+      for (var k = 0; k < cells.length; k++) {
+        var cc = cells[k];
+        if (excludeUid != null && cc.__uid === excludeUid) continue;
+        var cxr = parseRange(cc.x), cyr = parseRange(cc.y);
+        if (cxr.start <= col && col <= cxr.end && cyr.start <= row && row <= cyr.end) return true;
+      }
+      if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) return true;
+      return false;
+    }
+    var targets = [];
+    for (var col = dStart; col <= dEnd; col++) {
+      for (var row = 1; row <= maxRow; row++) {
+        if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) continue;
+        var cAt = findCellAt(col, row);
+        if (cAt) {
+          if (excludeUid != null && cAt.__uid === excludeUid) continue;
+          var cxr = parseRange(cAt.x), cyr = parseRange(cAt.y);
+          if (cxr.start !== cxr.end || cyr.start !== cyr.end) continue;
+          targets.push({
+            key: 'cell_' + cAt.__uid,
+            row: row, col: col, type: 'existing',
+            cellUid: cAt.__uid, cellId: cAt.id, cellType: cAt.type,
+            isHeader: isHeaderCell(cAt), isConfigured: isConfiguredCell(cAt),
+            label: 'r' + row + ' ' + (cAt.id || '(无id)') + (cAt.type ? ' (' + cAt.type + ')' : '')
+          });
+        } else if (!isCovered(col, row)) {
+          targets.push({
+            key: 'empty_r' + row + '_c' + col,
+            row: row, col: col, type: 'empty',
+            isHeader: row <= freezeRows, isConfigured: false,
+            label: 'r' + row + ' (空位)'
+          });
+        }
+      }
+    }
+    return targets;
+  }
+  function pickFields(src, fields) {
+    var out = {};
+    if (!src || !fields) return out;
+    fields.forEach(function (k) {
+      if (src[k] != null) {
+        out[k] = JSON.parse(JSON.stringify(src[k]));
+      }
+    });
+    return out;
+  }
 
   return {
     parseRange: parseRange, normalizeUploadVal: normalizeUploadVal, buildFormModel: buildFormModel, buildGrid: buildGrid,
@@ -273,6 +363,7 @@ function _DTUtilsFactory() {
     insertColumns: insertColumns, insertRows: insertRows,
     removeColumn: removeColumn, removeRow: removeRow,
     appendColumns: appendColumns, appendRows: appendRows,
+    buildApplyTargets: buildApplyTargets, pickFields: pickFields,
     _clearCache: function () { _exprCache = {}; },
     _cacheSize: function () { return Object.keys(_exprCache).length; }
   };
@@ -1240,6 +1331,348 @@ test('M4: maxCount=0/null/undefined 不输出该字段', function () {
   assertEqual(m_serializeMaxCount({ maxCount: 0 }), {});
   assertEqual(m_serializeMaxCount({ maxCount: null }), {});
   assertEqual(m_serializeMaxCount({ maxCount: undefined }), {});
+});
+
+// ---- O. 「应用到整列」目标列表 + 字段拷贝（buildApplyTargets / pickFields）----
+group('O. 应用到整列（buildApplyTargets / pickFields）');
+
+test('O1: 空 cells + maxRow=0 → 空 targets', function () {
+  // maxRow=0 且 cells 空，扫描范围只有 draft 自身 → 跳过后 0 个目标
+  var draft = { x: '3', y: '5', type: 'number' };
+  assertEqual(DT.buildApplyTargets(draft, [], { maxRow: 0 }), []);
+});
+
+test('O2: 同列只有 draft 自己 → 没有 existing target（excludeUid 排除）', function () {
+  var cur = { id: 'a', x: '3', y: '5', type: 'number', __uid: 1 };
+  var draft = { x: '3', y: '5', type: 'number' };
+  var r = DT.buildApplyTargets(draft, [cur], { excludeUid: 1, maxRow: 0 });
+  // draft 自身在 r5c3，maxRow=0 → 扫描范围只到 r5，但 r5 被自己占据 → 0 个目标
+  assertEqual(r, []);
+});
+
+test('O3: 同列有未配置 cell（label 空内容）→ existing 数量=1，isConfigured=false', function () {
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  var uncfg = { id: 'u', x: '3', y: '6', type: 'label', content: '', __uid: 2 };
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, uncfg], { excludeUid: 1, maxRow: 6 });
+  var existings = r.filter(function (t) { return t.type === 'existing'; });
+  assertEqual(existings.length, 1);
+  assertEqual(existings[0].cellId, 'u');
+  assertEqual(existings[0].isConfigured, false);
+  assertEqual(existings[0].row, 6);
+  assertEqual(existings[0].col, 3);
+});
+
+test('O4: 同列有已配置 cell（type=number）→ isConfigured=true', function () {
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  var cfg = { id: 'c', x: '3', y: '6', type: 'number', __uid: 2 };
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, cfg], { excludeUid: 1, maxRow: 6 });
+  var existings = r.filter(function (t) { return t.type === 'existing'; });
+  assertEqual(existings.length, 1);
+  assertEqual(existings[0].isConfigured, true);
+});
+
+test('O5: label 类型 cell → isHeader=true（无论 y 多少）', function () {
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  var lbl = { id: 'h', x: '3', y: '1', type: 'label', content: '表头', __uid: 2 };
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, lbl], { excludeUid: 1, maxRow: 5 });
+  var lblTarget = r.filter(function (t) { return t.cellId === 'h'; })[0];
+  assertEqual(lblTarget.isHeader, true);
+  assertEqual(lblTarget.isConfigured, true); // 有 content
+});
+
+test('O6: y <= freezeRows 但 type 不是 label → isHeader=true（行级表头判定）', function () {
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  var txt = { id: 't', x: '3', y: '2', type: 'text', content: '副表头', __uid: 2 };
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, txt], { excludeUid: 1, freezeRows: 2, maxRow: 5 });
+  var txtTarget = r.filter(function (t) { return t.cellId === 't'; })[0];
+  assertEqual(txtTarget.isHeader, true);
+});
+
+test('O7: 合并 cell（跨多列）被跳过', function () {
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  var merged = { id: 'm', x: '3,5', y: '6', type: 'label', content: '合并', __uid: 2 };
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, merged], { excludeUid: 1 });
+  // 合并 cell 在 col=3 row=6 出现，但应被跳过
+  for (var i = 0; i < r.length; i++) {
+    assertFail(r[i].cellId === 'm', '合并 cell 不应进入 targets');
+  }
+});
+
+test('O8: 合并 cell（跨多行）被跳过', function () {
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  var merged = { id: 'm', x: '3', y: '6,8', type: 'label', content: '合并', __uid: 2 };
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, merged], { excludeUid: 1 });
+  for (var i = 0; i < r.length; i++) {
+    assertFail(r[i].cellId === 'm', '跨行合并 cell 不应进入 targets');
+  }
+});
+
+test('O9: 空位识别（无 cell 占据且未被覆盖）→ type=empty', function () {
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  // cur 在 r5c3，draft 也在 r5c3，扫描 r1-r7：r5 跳过（draft 自己），r1-r4/r6/r7 共 6 个空位
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur], { excludeUid: 1, maxRow: 7 });
+  var empties = r.filter(function (t) { return t.type === 'empty'; });
+  assertEqual(empties.length, 6);
+  var rows = empties.map(function (t) { return t.row; }).sort(function (a, b) { return a - b; });
+  assertEqual(rows, [1, 2, 3, 4, 6, 7]);
+});
+
+test('O10: 被合并 cell 覆盖的空位不识别（isCovered 过滤）', function () {
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  // big 占据 c3 r6-r8（合并），cur 在 r5c3，draft 在 r5c3
+  // r6/r7/r8 的 c3 都被 big 覆盖，不应识别为空位
+  var big = { id: 'b', x: '3', y: '6,8', type: 'label', content: '大', __uid: 2 };
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, big], { excludeUid: 1 });
+  // 检查 r6/r7/r8 的 c3 没有空位 target
+  var badEmpties = r.filter(function (t) {
+    return t.type === 'empty' && t.col === 3 && (t.row === 6 || t.row === 7 || t.row === 8);
+  });
+  assertEqual(badEmpties.length, 0);
+});
+
+test('O11: draft 占据多个位置（跨列）时全部跳过', function () {
+  // draft 跨 col 3-5 row 5，那么 c3r5/c4r5/c5r5 都应跳过
+  var cur = { id: 'cur', x: '3,5', y: '5', type: 'number', __uid: 1 };
+  var other = { id: 'o', x: '3', y: '6', type: 'label', content: '', __uid: 2 };
+  var r = DT.buildApplyTargets({ x: '3,5', y: '5' }, [cur, other], { excludeUid: 1 });
+  // 不应有 r5 的 target（draft 自己占据）
+  for (var i = 0; i < r.length; i++) {
+    assertFail(r[i].row === 5, 'draft 占据的行不应有 target');
+  }
+});
+
+test('O12: 不同列的 cell 不进入 targets', function () {
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  var otherCol = { id: 'oc', x: '4', y: '6', type: 'label', content: '', __uid: 2 };
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, otherCol], { excludeUid: 1 });
+  // otherCol 在 c4，不应出现在 c3 的扫描结果里
+  var wrongCell = r.filter(function (t) { return t.cellId === 'oc'; });
+  assertEqual(wrongCell.length, 0);
+  // 所有 target 应该都在 col=3
+  var allCol3 = r.every(function (t) { return t.col === 3; });
+  assertOk(allCol3, '所有 target 都应在 col=3');
+});
+
+test('O13: pickFields 深拷贝指定字段', function () {
+  var src = { type: 'number', precision: 2, options: [{ label: 'A', value: '1' }], ignored: 'x' };
+  var out = DT.pickFields(src, ['type', 'options']);
+  assertEqual(Object.keys(out).sort(), ['options', 'type']);
+  assertEqual(out.type, 'number');
+  assertEqual(out.options, [{ label: 'A', value: '1' }]);
+  // 深拷贝验证：修改 out 不影响 src
+  out.options[0].label = 'B';
+  assertEqual(src.options[0].label, 'A');
+});
+
+test('O14: pickFields 跳过 null/undefined 字段', function () {
+  var src = { a: null, b: undefined, c: 1 };
+  var out = DT.pickFields(src, ['a', 'b', 'c', 'd']);
+  assertEqual(out, { c: 1 });
+});
+
+test('O15: pickFields 容错（src=null / fields=null）→ {}', function () {
+  assertEqual(DT.pickFields(null, ['a']), {});
+  assertEqual(DT.pickFields({ a: 1 }, null), {});
+});
+
+test('O16: 表头判定优先级：label 类型 + y=10 也算表头', function () {
+  // 表头不限于 y=1/y=2，只要 type=label 就算
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  var lblFar = { id: 'lbl', x: '3', y: '10', type: 'label', content: '远表头', __uid: 2 };
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, lblFar], { excludeUid: 1 });
+  var lblTarget = r.filter(function (t) { return t.cellId === 'lbl'; })[0];
+  assertEqual(lblTarget.isHeader, true);
+});
+
+test('O17: 空位 isHeader 由 row <= freezeRows 决定', function () {
+  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur], { excludeUid: 1, freezeRows: 2, maxRow: 4 });
+  // r1/r2 是表头行（freezeRows=2），r3/r4 不是；但 r1/r2 此时被 cur 在 r5 之前覆盖检查
+  // draft 在 r5，r1/r2 没被覆盖 → 应有 r1c3/r2c3/r3c3/r4c3 共 4 个空位
+  var empties = r.filter(function (t) { return t.type === 'empty'; });
+  var headers = empties.filter(function (t) { return t.isHeader; });
+  var nonHeaders = empties.filter(function (t) { return !t.isHeader; });
+  assertEqual(headers.length, 2); // r1, r2
+  assertEqual(nonHeaders.length, 2); // r3, r4
+});
+
+// ---- P. 合并 cell + 隐藏列（colHidden 算法 + visibleColspan）----
+// 复刻配置页面 _buildState 与生产 dynamic-eval-table.vue 的 hiddenCols 算法纯逻辑做对照。
+// 关键场景：合并 cell 跨越独立 cell 所在列，独立 cell 被 hide 时该列必须能正常隐藏。
+group('P. 合并 cell + 隐藏列');
+
+// 配置页面版 colHidden：列上有 cell 默认显示，独立 cell 全 hide 才隐藏
+function p_colHiddenConfig(cells, hiddenIds, maxC) {
+  var hs = {};
+  (hiddenIds || []).forEach(function (id) { hs[id] = true; });
+  var colHasAnyCell = {};
+  var colHasSingleCell = {};
+  var colHasVisibleSingleCell = {};
+  cells.forEach(function (c) {
+    if (!c || !c.x) return;
+    var xr = DT.parseRange(c.x);
+    for (var i = xr.start - 1; i < xr.end; i++) {
+      colHasAnyCell[i] = true;
+      if (xr.span === 1) {
+        colHasSingleCell[i] = true;
+        if (!hs[c.id]) colHasVisibleSingleCell[i] = true;
+      }
+    }
+  });
+  var colHidden = {};
+  for (var ci = 0; ci < maxC; ci++) {
+    if (!colHasAnyCell[ci]) colHidden[ci] = false;
+    else if (colHasSingleCell[ci]) colHidden[ci] = !colHasVisibleSingleCell[ci];
+    else colHidden[ci] = false;
+  }
+  return colHidden;
+}
+
+// 生产版 colHidden：默认隐藏，独立 cell visible 点亮所在列；合并 cell 只点亮无独立 cell 的跨越列
+function p_colHiddenProd(cells, hiddenIds, maxC) {
+  var hs = {};
+  (hiddenIds || []).forEach(function (id) { hs[id] = true; });
+  var result = {};
+  for (var ci = 0; ci < maxC; ci++) result[ci] = true;
+  var colHasSingle = {};
+  cells.forEach(function (c) {
+    if (!c || c.x == null) return;
+    var xr = DT.parseRange(c.x);
+    if (xr.span !== 1) return;
+    var ci2 = xr.start - 1;
+    colHasSingle[ci2] = true;
+    if (!hs[c.id]) result[ci2] = false;
+  });
+  cells.forEach(function (c) {
+    if (!c || c.x == null) return;
+    var xr = DT.parseRange(c.x);
+    if (xr.span === 1) return;
+    if (hs[c.id]) return;
+    for (var i = xr.start - 1; i < xr.end; i++) {
+      if (colHasSingle[i]) continue;
+      result[i] = false;
+    }
+  });
+  return result;
+}
+
+// visibleColspan：扫 cell.x 范围内未 hide 的列数（两端共用）
+function p_visibleColspan(cell, colHidden) {
+  if (!cell || !cell.x) return 1;
+  var xr = DT.parseRange(cell.x);
+  if (xr.span === 1) {
+    return colHidden[xr.start - 1] ? 0 : 1;
+  }
+  var vis = 0;
+  for (var c = xr.start - 1; c < xr.end; c++) {
+    if (!colHidden[c]) vis++;
+  }
+  return vis;
+}
+
+test('P1: 配置页 — 合并 cell 跨越 col1，独立 A hide 时 col1 仍要隐藏', function () {
+  // 行 1：合并 D（x="1,3"）；行 2：独立 A/B/C 各占一列；A 被 portalHide
+  var cells = [
+    { id: 'D', x: '1,3', y: '1', type: 'label' },
+    { id: 'A', x: '1', y: '2', type: 'label' },
+    { id: 'B', x: '2', y: '2', type: 'label' },
+    { id: 'C', x: '3', y: '2', type: 'label' }
+  ];
+  var ch = p_colHiddenConfig(cells, ['A'], 3);
+  assertEqual(ch[0], true);   // col1 hide（修复前为 false —— D 贡献 visible）
+  assertEqual(ch[1], false);  // col2 显示
+  assertEqual(ch[2], false);  // col3 显示
+});
+
+test('P2: 配置页 — visibleColspan 在部分列 hide 时动态收缩', function () {
+  var cells = [
+    { id: 'D', x: '1,3', y: '1', type: 'label' },
+    { id: 'A', x: '1', y: '2', type: 'label' },
+    { id: 'B', x: '2', y: '2', type: 'label' },
+    { id: 'C', x: '3', y: '2', type: 'label' }
+  ];
+  var ch = p_colHiddenConfig(cells, ['A'], 3);
+  assertEqual(p_visibleColspan(cells[0], ch), 2);  // D 跨 3 列，col1 hide → 可见 2
+  assertEqual(p_visibleColspan(cells[1], ch), 0);  // A 单列且列 hide → 0（不渲染）
+  assertEqual(p_visibleColspan(cells[2], ch), 1);
+  assertEqual(p_visibleColspan(cells[3], ch), 1);
+});
+
+test('P3: 配置页 — 独立 cell 全可见时合并 cell colspan 不变', function () {
+  var cells = [
+    { id: 'D', x: '1,3', y: '1', type: 'label' },
+    { id: 'A', x: '1', y: '2', type: 'label' },
+    { id: 'B', x: '2', y: '2', type: 'label' },
+    { id: 'C', x: '3', y: '2', type: 'label' }
+  ];
+  var ch = p_colHiddenConfig(cells, [], 3);
+  assertEqual(ch[0] || false, false);
+  assertEqual(ch[1] || false, false);
+  assertEqual(ch[2] || false, false);
+  assertEqual(p_visibleColspan(cells[0], ch), 3);
+});
+
+test('P4: 配置页 — 独立 cell 全 hide 时所有列都隐藏，合并 cell visibleColspan=0', function () {
+  var cells = [
+    { id: 'D', x: '1,3', y: '1', type: 'label' },
+    { id: 'A', x: '1', y: '2', type: 'label' },
+    { id: 'B', x: '2', y: '2', type: 'label' },
+    { id: 'C', x: '3', y: '2', type: 'label' }
+  ];
+  var ch = p_colHiddenConfig(cells, ['A', 'B', 'C'], 3);
+  assertEqual(ch[0], true);
+  assertEqual(ch[1], true);
+  assertEqual(ch[2], true);
+  assertEqual(p_visibleColspan(cells[0], ch), 0);  // D 全跨列 hide → 不渲染
+});
+
+test('P5: 生产 — 合并 cell 跨越 col1，独立 A hide 时 col1 隐藏（与配置页对齐）', function () {
+  var cells = [
+    { id: 'D', x: '1,3', y: '1', type: 'label' },
+    { id: 'A', x: '1', y: '2', type: 'label' },
+    { id: 'B', x: '2', y: '2', type: 'label' },
+    { id: 'C', x: '3', y: '2', type: 'label' }
+  ];
+  var ch = p_colHiddenProd(cells, ['A'], 3);
+  assertEqual(ch[0], true);   // col1 hide（修复前为 false —— D 点亮了 col1）
+  assertEqual(ch[1], false);
+  assertEqual(ch[2], false);
+  assertEqual(p_visibleColspan(cells[0], ch), 2);  // D 可见列数 2
+});
+
+test('P6: 生产 — 仅合并 cell 跨越无独立 cell 时仍点亮（避免破坏合并视觉）', function () {
+  // D 跨 col1-3，col2/3 没有独立 cell → 由 D 点亮
+  var cells = [
+    { id: 'D', x: '1,3', y: '1', type: 'label' },
+    { id: 'A', x: '1', y: '2', type: 'label' }
+  ];
+  var ch = p_colHiddenProd(cells, [], 3);
+  assertEqual(ch[0], false);  // A 点亮
+  assertEqual(ch[1], false);  // D 点亮（col2 无独立 cell）
+  assertEqual(ch[2], false);  // D 点亮（col3 无独立 cell）
+  assertEqual(p_visibleColspan(cells[0], ch), 3);
+});
+
+test('P7: 生产 — 仅合并 cell 跨越无独立 cell，D 自身 hide 时不点亮', function () {
+  var cells = [
+    { id: 'D', x: '1,3', y: '1', type: 'label' },
+    { id: 'A', x: '1', y: '2', type: 'label' }
+  ];
+  var ch = p_colHiddenProd(cells, ['D'], 3);
+  assertEqual(ch[0], false);  // A 可见点亮 col1
+  assertEqual(ch[1], true);   // D hide，col2 无点亮
+  assertEqual(ch[2], true);
+});
+
+test('P8: 配置页 — 空列（无 cell）不隐藏，visibleColspan 对空位返回 1', function () {
+  // col4 完全无 cell
+  var cells = [
+    { id: 'A', x: '1', y: '1', type: 'label' }
+  ];
+  var ch = p_colHiddenConfig(cells, [], 4);
+  assertEqual(ch[0], false);  // A 可见
+  assertEqual(ch[3], false);  // 空列不隐藏（配置页语义）
+  assertEqual(p_visibleColspan({ x: '4' }, ch), 1);
 });
 
 // ---- N. 公式依赖图 / 选项类型对齐（与 preview-renderer / 生产组件方法对照）----

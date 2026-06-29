@@ -328,6 +328,125 @@
     return insertRows(cells, maxR + 1, count);
   }
 
+  // 「应用到整列」目标列表生成（纯函数，供配置页 + 单元测试共享）
+  // draft: 当前编辑中的 cell draft（含 x/y/type/...）
+  // cells: 全部 cells 数组（含 draft 对应的 cur cell）
+  // opts: { freezeRows, maxRow, excludeUid }
+  //   - freezeRows: 表头行数，y <= freezeRows 的 cell 视为表头
+  //   - maxRow: 显式指定扫描到第几行；不传则取 cells maxY + draftRowEnd 较大值
+  //   - excludeUid: 排除的 cell __uid（通常是 draft 对应的 cur cell，避免应用到自己）
+  // 返回: [{ key, row, col, type: 'existing'|'empty', cellUid?, cellId?, cellType?,
+  //         isHeader, isConfigured, label }]
+  //   - 合并 cell（跨多行/多列）跳过——批量改会破坏合并结构
+  //   - draft 自己占据的矩形位置跳过
+  //   - 被任何 cell 覆盖的空位跳过
+  function buildApplyTargets(draft, cells, opts) {
+    opts = opts || {};
+    var freezeRows = opts.freezeRows || 0;
+    var excludeUid = opts.excludeUid;
+    var CTRL_TYPES = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
+
+    var draftRange = parseRange(draft.x);
+    var dStart = draftRange.start, dEnd = draftRange.end;
+    var draftRowRange = parseRange(draft.y);
+    var draftRowStart = draftRowRange.start, draftRowEnd = draftRowRange.end;
+
+    // maxRow：opts.maxRow 显式传值就用它（含 0）；否则取 cells maxY / draftRowEnd 较大值
+    // draft 自己占据的位置由 isCovered 兜底过滤，所以不需要 draftRowEnd 参与 max
+    var maxRow;
+    if (opts.maxRow != null) {
+      maxRow = opts.maxRow;
+    } else {
+      var cellsMaxY = 0;
+      cells.forEach(function (c) {
+        if (!c || !c.y) return;
+        var r = parseRange(c.y);
+        if (r.end > cellsMaxY) cellsMaxY = r.end;
+      });
+      maxRow = Math.max(cellsMaxY, draftRowEnd);
+    }
+
+    function isHeaderCell(c) {
+      if (!c) return false;
+      if (c.type === 'label') return true;
+      if (parseRange(c.y).start <= freezeRows) return true;
+      return false;
+    }
+    function isConfiguredCell(c) {
+      if (!c) return false;
+      if (CTRL_TYPES.indexOf(c.type) >= 0) return true;
+      if (c.validation && c.validation.rules && c.validation.rules.length > 0) return true;
+      if (c.content && String(c.content).trim()) return true;
+      return false;
+    }
+    function findCellAt(col, row) {
+      for (var k = 0; k < cells.length; k++) {
+        var cc = cells[k];
+        if (parseRange(cc.x).start === col && parseRange(cc.y).start === row) return cc;
+      }
+      return null;
+    }
+    function isCovered(col, row) {
+      for (var k = 0; k < cells.length; k++) {
+        var cc = cells[k];
+        if (excludeUid != null && cc.__uid === excludeUid) continue;
+        var cxr = parseRange(cc.x), cyr = parseRange(cc.y);
+        if (cxr.start <= col && col <= cxr.end && cyr.start <= row && row <= cyr.end) return true;
+      }
+      if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) return true;
+      return false;
+    }
+
+    var targets = [];
+    for (var col = dStart; col <= dEnd; col++) {
+      for (var row = 1; row <= maxRow; row++) {
+        // 跳过 draft 自己占据的矩形位置
+        if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) continue;
+        var cAt = findCellAt(col, row);
+        if (cAt) {
+          if (excludeUid != null && cAt.__uid === excludeUid) continue;
+          // 合并 cell 跳过
+          var cxr = parseRange(cAt.x), cyr = parseRange(cAt.y);
+          if (cxr.start !== cxr.end || cyr.start !== cyr.end) continue;
+          targets.push({
+            key: 'cell_' + cAt.__uid,
+            row: row, col: col,
+            type: 'existing',
+            cellUid: cAt.__uid,
+            cellId: cAt.id,
+            cellType: cAt.type,
+            isHeader: isHeaderCell(cAt),
+            isConfigured: isConfiguredCell(cAt),
+            label: 'r' + row + ' ' + (cAt.id || '(无id)') + (cAt.type ? ' (' + cAt.type + ')' : '')
+          });
+        } else if (!isCovered(col, row)) {
+          targets.push({
+            key: 'empty_r' + row + '_c' + col,
+            row: row, col: col,
+            type: 'empty',
+            isHeader: row <= freezeRows,
+            isConfigured: false,
+            label: 'r' + row + ' (空位)'
+          });
+        }
+      }
+    }
+    return targets;
+  }
+
+  // 从 src 中按 fields 列表深拷贝字段，返回 patch 对象（不修改 src）
+  // 调用方拿到 patch 后用 Vue.$set 应用到目标 cell
+  function pickFields(src, fields) {
+    var out = {};
+    if (!src || !fields) return out;
+    fields.forEach(function (k) {
+      if (src[k] != null) {
+        out[k] = JSON.parse(JSON.stringify(src[k]));
+      }
+    });
+    return out;
+  }
+
   return {
     parseRange: parseRange,
     normalizeUploadVal: normalizeUploadVal,
@@ -344,6 +463,8 @@
     removeRow: removeRow,
     appendColumns: appendColumns,
     appendRows: appendRows,
+    buildApplyTargets: buildApplyTargets,
+    pickFields: pickFields,
     _clearCache: function () { _exprCache = {}; }
   };
 });

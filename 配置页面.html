@@ -148,6 +148,109 @@
         color: #888;
         line-height: 1.4;
       }
+      /* 「应用到整列」弹窗 */
+      .apply-col-section {
+        margin-bottom: 16px;
+      }
+      .apply-col-section-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .apply-col-quick a {
+        margin-left: 12px;
+        font-size: 12px;
+        font-weight: 400;
+        color: #2d8cf0;
+      }
+      .apply-col-fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .apply-col-field {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        background: #f5f7fa;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .apply-col-field input {
+        margin-right: 4px;
+      }
+      .apply-col-field.field-danger {
+        background: #fff3e0;
+      }
+      .field-warn {
+        margin-left: 4px;
+        color: #ed4014;
+        font-size: 11px;
+      }
+      .apply-col-hint {
+        margin-top: 6px;
+        font-size: 11px;
+        color: #888;
+      }
+      .apply-col-targets {
+        max-height: 320px;
+        overflow-y: auto;
+        border: 1px solid #e8eaec;
+        border-radius: 4px;
+        padding: 8px;
+      }
+      .apply-col-target {
+        display: flex;
+        align-items: center;
+        padding: 4px 6px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .apply-col-target:hover {
+        background: #f5f7fa;
+      }
+      .apply-col-target input {
+        margin-right: 6px;
+      }
+      .target-label {
+        flex: 1;
+        color: #333;
+      }
+      .target-tag {
+        margin-left: 8px;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .tag-header {
+        background: #f0f0f0;
+        color: #808695;
+      }
+      .tag-empty {
+        background: #e8f7e8;
+        color: #19be6b;
+      }
+      .tag-configured {
+        background: #fff3e0;
+        color: #ff9900;
+      }
+      .tag-unconfigured {
+        background: #e8f7ff;
+        color: #2d8cf0;
+      }
+      .apply-col-empty {
+        padding: 20px;
+        text-align: center;
+        color: #888;
+        font-size: 12px;
+      }
       .stat-chip {
         display: inline-flex;
         align-items: center;
@@ -1063,7 +1166,7 @@
                   :class="{ disabled: !editDrawerDirty }"
                   @click="editDrawerDirty && revertEditDrawer()"
                 >放弃修改</a>
-                <i-button size="small" @click="applyToColumn" title="把当前 cell 的 type/precision/placeholder/options/accept/maxCount/clampLines/validation 复制到同列所有未配置过的单元格(已配置过的不动)">应用到整列</i-button>
+                <i-button size="small" @click="applyToColumn" title="弹出窗格，勾选字段+目标单元格后批量应用">应用到整列</i-button>
                 <i-button type="primary" size="small" @click="commitEditDrawer">确定</i-button>
               </div>
             </div>
@@ -1409,6 +1512,80 @@ events: {
           </div>
           <div style="margin-top:12px;font-size:12px;color:#888;text-align:center;">
             创建后会自动定位到下一个空位（x:1, y:{{maxY + 1}}），可在抽屉里改坐标
+          </div>
+        </modal>
+
+        <!-- 「应用到整列」弹窗：勾选字段 + 勾选目标 -->
+        <modal
+          v-model="applyToColumnModal.visible"
+          title="应用到整列"
+          width="640"
+          :mask-closable="false"
+          @on-cancel="cancelApplyToColumn"
+        >
+          <div class="apply-col-section">
+            <div class="apply-col-section-title">复制字段（勾选要批量应用的字段）</div>
+            <div class="apply-col-fields">
+              <label
+                v-for="f in applyFieldList"
+                :key="f.key"
+                class="apply-col-field"
+                :class="{ 'field-danger': f.danger }"
+              >
+                <input
+                  type="checkbox"
+                  v-model="applyToColumnModal.fieldSelection[f.key]"
+                />
+                <span>{{ f.label }}</span>
+                <span v-if="f.danger" class="field-warn">⚠覆盖</span>
+              </label>
+            </div>
+            <div class="apply-col-hint">
+              已勾 <b>{{ applySelectedFieldCount }}</b> / {{ applyFieldList.length }} 个字段
+            </div>
+          </div>
+
+          <div class="apply-col-section">
+            <div class="apply-col-section-title">
+              <span>目标单元格（共 {{ applyToColumnModal.targets.length }} 个）</span>
+              <span class="apply-col-quick">
+                <a href="javascript:void(0)" @click="selectAllTargets">全选</a>
+                <a href="javascript:void(0)" @click="selectNonHeaderTargets">排除表头</a>
+                <a href="javascript:void(0)" @click="selectUnconfiguredTargets">仅未配置</a>
+                <a href="javascript:void(0)" @click="clearTargetSelection">清空</a>
+              </span>
+            </div>
+            <div class="apply-col-targets">
+              <label
+                v-for="t in applyToColumnModal.targets"
+                :key="t.key"
+                class="apply-col-target"
+              >
+                <input
+                  type="checkbox"
+                  v-model="applyToColumnModal.targetSelection[t.key]"
+                />
+                <span class="target-label">{{ t.label }}</span>
+                <span v-if="t.isHeader" class="target-tag tag-header">表头</span>
+                <span v-else-if="t.type === 'empty'" class="target-tag tag-empty">空位</span>
+                <span v-else-if="t.isConfigured" class="target-tag tag-configured">已配置</span>
+                <span v-else class="target-tag tag-unconfigured">未配置</span>
+              </label>
+              <div v-if="applyToColumnModal.targets.length === 0" class="apply-col-empty">
+                同列没有可应用的位置
+              </div>
+            </div>
+          </div>
+
+          <div slot="footer">
+            <i-button @click="cancelApplyToColumn">取消</i-button>
+            <i-button
+              type="primary"
+              :disabled="applySelectedTargetCount === 0 || applySelectedFieldCount === 0"
+              @click="confirmApplyToColumn"
+            >
+              应用 ({{ applySelectedTargetCount }})
+            </i-button>
           </div>
         </modal>
       </div>
@@ -1860,12 +2037,16 @@ events: {
             <table>
               <colgroup>
                 <col class="axis-col-width">
-                <col v-for="(w,i) in colWidths" :key="i" :style="w">
+                <template v-for="(w,i) in colWidths">
+                  <col v-if="!hiddenCols[i]" :key="'col-'+i" :style="w">
+                </template>
               </colgroup>
               <thead>
                 <tr class="axis-row-top">
                   <th class="axis-corner"></th>
-                  <th v-for="c in colCount" :key="'ax-c-'+c" class="axis-col-head">{{c}}</th>
+                  <template v-for="c in colCount">
+                    <th v-if="!hiddenCols[c-1]" :key="'ax-c-'+c" class="axis-col-head">{{c}}</th>
+                  </template>
                 </tr>
                 <preview-row
                   v-for="(row, ri) in gridRows"
@@ -1905,15 +2086,15 @@ events: {
       <tr>
         <td class="axis-row-head">{{ri+1}}</td>
         <template v-for="(entry, ci) in row">
-          <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id)"
-              :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci">
+          <th v-if="entry.isLabel && !entry.skip && !isHidden(entry.cell.id) && entry.visibleColspan > 0"
+              :colspan="entry.visibleColspan" :rowspan="entry.rowspan" :key="ci">
             <span class="cell-id-badge label-badge" @click.stop="copyId(entry.cell.id)" :title="entry.cell.id + '（点击复制）'">{{entry.cell.id}}</span>
             <span class="cell-edit-icon" @click.stop="onIdClick(entry.cell.id)" title="编辑此单元格"><Icon type="md-create" size="11" color="#fff" /></span>
             <div v-if="entry.cell.clampLines > 0" class="cell-clamp" :style="clampStyle(entry.cell.clampLines)" v-html="entry.cell.content"></div>
             <div v-else v-html="entry.cell.content"></div>
           </th>
-          <td v-else-if="!entry.skip && entry.cell && !isHidden(entry.cell.id)"
-              :colspan="entry.colspan" :rowspan="entry.rowspan" :key="ci"
+          <td v-else-if="!entry.skip && entry.cell && !isHidden(entry.cell.id) && entry.visibleColspan > 0"
+              :colspan="entry.visibleColspan" :rowspan="entry.rowspan" :key="ci"
               :class="entry.cls">
             <span class="cell-id-badge" @click.stop="copyId(entry.cell.id)" :title="entry.cell.id + '（点击复制）'">{{entry.cell.id}}</span>
             <span class="cell-edit-icon" @click.stop="onIdClick(entry.cell.id)" title="编辑此单元格"><Icon type="md-create" size="11" color="#fff" /></span>
@@ -1939,7 +2120,7 @@ events: {
               </form-item>
             </div>
           </td>
-          <td v-else-if="!entry.skip" :key="ci" class="empty-cell-slot">
+          <td v-else-if="!entry.skip && entry.visibleColspan > 0" :key="ci" class="empty-cell-slot">
             <span class="cell-edit-icon" @click.stop="$emit('add-cell-at', ci + 1, ri + 1)" title="在此位置添加单元格"><Icon type="md-add" size="11" color="#fff" /></span>
           </td>
         </template>
@@ -2328,6 +2509,103 @@ events: {
           });
           return insertRows(cells, maxR + 1, count);
         }
+        // 「应用到整列」目标列表生成（纯函数，供配置页 + 单元测试共享）
+        // 详见 dynamic-table-utils.js 同名函数注释
+        function buildApplyTargets(draft, cells, opts) {
+          opts = opts || {};
+          var freezeRows = opts.freezeRows || 0;
+          var excludeUid = opts.excludeUid;
+          var CTRL_TYPES = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
+          var draftRange = parseRange(draft.x);
+          var dStart = draftRange.start, dEnd = draftRange.end;
+          var draftRowRange = parseRange(draft.y);
+          var draftRowStart = draftRowRange.start, draftRowEnd = draftRowRange.end;
+          var maxRow;
+          if (opts.maxRow != null) {
+            maxRow = opts.maxRow;
+          } else {
+            var cellsMaxY = 0;
+            cells.forEach(function (c) {
+              if (!c || !c.y) return;
+              var r = parseRange(c.y);
+              if (r.end > cellsMaxY) cellsMaxY = r.end;
+            });
+            maxRow = Math.max(cellsMaxY, draftRowEnd);
+          }
+          function isHeaderCell(c) {
+            if (!c) return false;
+            if (c.type === 'label') return true;
+            if (parseRange(c.y).start <= freezeRows) return true;
+            return false;
+          }
+          function isConfiguredCell(c) {
+            if (!c) return false;
+            if (CTRL_TYPES.indexOf(c.type) >= 0) return true;
+            if (c.validation && c.validation.rules && c.validation.rules.length > 0) return true;
+            if (c.content && String(c.content).trim()) return true;
+            return false;
+          }
+          function findCellAt(col, row) {
+            for (var k = 0; k < cells.length; k++) {
+              var cc = cells[k];
+              if (parseRange(cc.x).start === col && parseRange(cc.y).start === row) return cc;
+            }
+            return null;
+          }
+          function isCovered(col, row) {
+            for (var k = 0; k < cells.length; k++) {
+              var cc = cells[k];
+              if (excludeUid != null && cc.__uid === excludeUid) continue;
+              var cxr = parseRange(cc.x), cyr = parseRange(cc.y);
+              if (cxr.start <= col && col <= cxr.end && cyr.start <= row && row <= cyr.end) return true;
+            }
+            if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) return true;
+            return false;
+          }
+          var targets = [];
+          for (var col = dStart; col <= dEnd; col++) {
+            for (var row = 1; row <= maxRow; row++) {
+              if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) continue;
+              var cAt = findCellAt(col, row);
+              if (cAt) {
+                if (excludeUid != null && cAt.__uid === excludeUid) continue;
+                var cxr = parseRange(cAt.x), cyr = parseRange(cAt.y);
+                if (cxr.start !== cxr.end || cyr.start !== cyr.end) continue;
+                targets.push({
+                  key: 'cell_' + cAt.__uid,
+                  row: row, col: col,
+                  type: 'existing',
+                  cellUid: cAt.__uid,
+                  cellId: cAt.id,
+                  cellType: cAt.type,
+                  isHeader: isHeaderCell(cAt),
+                  isConfigured: isConfiguredCell(cAt),
+                  label: 'r' + row + ' ' + (cAt.id || '(无id)') + (cAt.type ? ' (' + cAt.type + ')' : '')
+                });
+              } else if (!isCovered(col, row)) {
+                targets.push({
+                  key: 'empty_r' + row + '_c' + col,
+                  row: row, col: col,
+                  type: 'empty',
+                  isHeader: row <= freezeRows,
+                  isConfigured: false,
+                  label: 'r' + row + ' (空位)'
+                });
+              }
+            }
+          }
+          return targets;
+        }
+        function pickFields(src, fields) {
+          var out = {};
+          if (!src || !fields) return out;
+          fields.forEach(function (k) {
+            if (src[k] != null) {
+              out[k] = JSON.parse(JSON.stringify(src[k]));
+            }
+          });
+          return out;
+        }
         return {
           parseRange: parseRange,
           normalizeUploadVal: normalizeUploadVal,
@@ -2344,6 +2622,8 @@ events: {
           removeRow: removeRow,
           appendColumns: appendColumns,
           appendRows: appendRows,
+          buildApplyTargets: buildApplyTargets,
+          pickFields: pickFields,
           _clearCache: function () { _exprCache = {}; }
         };
       }
@@ -3079,21 +3359,34 @@ events: {
                 }
               }
             });
+            // 列隐藏判断（修复合并 cell 跨越导致列无法隐藏的 bug）：
+            // 旧逻辑：合并 cell 也贡献 colHasVisibleCell，导致独立 cell 全 hide 时
+            //         因合并 cell 跨越该列，colHidden 仍为 false → 出现"空白单元格"
+            // 新逻辑：列隐藏完全由"独立 cell (span=1)"的可见性决定；
+            //         合并 cell 跨越的列若没有独立 cell，保持可见，由渲染端动态调整 colspan
             var colHasAnyCell = {};
-            var colHasVisibleCell = {};
+            var colHasSingleCell = {};
+            var colHasVisibleSingleCell = {};
             cells.forEach(function (c) {
               if (!c || !c.x) return;
               var xr = pr_parseRange(c.x);
               for (var i = xr.start - 1; i < xr.end; i++) {
                 colHasAnyCell[i] = true;
-                if (!hs[c.id]) colHasVisibleCell[i] = true;
+                if (xr.span === 1) {
+                  colHasSingleCell[i] = true;
+                  if (!hs[c.id]) colHasVisibleSingleCell[i] = true;
+                }
               }
             });
-            // 隐藏条件：列上有 cell 但全部被显式 hide（保留"批量列可见性"语义）
-            // 注意：列上完全没 cell 时（如插入的空列）不算 hidden，要显示出来
+            // 隐藏条件：
+            //   - 列上有独立 cell 且全部 hide → 隐藏
+            //   - 列上只有合并 cell 跨越（无独立 cell）→ 不隐藏（colspan 动态调整）
+            //   - 列上完全没 cell（如插入的空列）→ 不隐藏
             var colHidden = {};
             for (var ci = 0; ci < maxC; ci++) {
-              colHidden[ci] = colHasAnyCell[ci] && !colHasVisibleCell[ci];
+              if (!colHasAnyCell[ci]) colHidden[ci] = false;
+              else if (colHasSingleCell[ci]) colHidden[ci] = !colHasVisibleSingleCell[ci];
+              else colHidden[ci] = false;
             }
             // 计算列宽：配过 width 的按 width，没配的用 DEFAULT_COL_WEIGHT（与生产 colWidthsFinal 对齐）
             // B 方案：没配的列不"吃剩余空间"，而是给个默认权重 5 跟配过的一起归一化
@@ -3125,9 +3418,24 @@ events: {
             // 避免一个 td 渲染出多个 cell 的内容（"一个单元格出现两个 id"问题）
             // alts 数据仍保留在 entry.alts，配置抽屉/单元格列表里仍可见、可编辑、可导出
             var CTRL_TYPES = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
-            grid.rows.forEach(function (row) {
-              row.forEach(function (entry) {
-                if (!entry || entry.skip || !entry.cell) return;
+            grid.rows.forEach(function (row, ri) {
+              row.forEach(function (entry, ci) {
+                if (!entry || entry.skip) return;
+                // 预算 visibleColspan：合并 cell 跨越多列时，实际可见列数（被 hide 的列不计入）
+                // 用于修复"合并 cell 跨越已隐藏列 → 出现空白单元格"的 bug
+                // - cell 存在：扫 x 范围内未 hide 的列数；全部 hide 时返回 0（渲染端跳过）
+                // - 空位 cell=null：单列，看该列是否 hide
+                if (!entry.cell) {
+                  entry.visibleColspan = colHidden[ci] ? 0 : 1;
+                } else {
+                  var xr2 = pr_parseRange(entry.cell.x);
+                  var vis = 0;
+                  for (var cc = xr2.start - 1; cc < xr2.end; cc++) {
+                    if (!colHidden[cc]) vis++;
+                  }
+                  entry.visibleColspan = vis;
+                }
+                if (!entry.cell) return;
                 entry.items = [{
                   cell: entry.cell,
                   isText: entry.isText,
@@ -3820,6 +4128,19 @@ events: {
             editDrawerSnapshot: null,
             editDrawerLastSaved: null,
             editDrawerDirty: false,
+            applyToColumnModal: {
+              visible: false,
+              draft: null,
+              curCellUid: null,
+              // 字段勾选：默认 8 个常见字段勾上，content/value/width 默认不勾
+              fieldSelection: {
+                type: true, placeholder: true, precision: true, options: true,
+                validation: true, accept: true, maxCount: true, clampLines: true,
+                content: false, value: false, width: false
+              },
+              targets: [],          // buildApplyTargets 的结果
+              targetSelection: {}   // { key: bool }
+            },
             listDrawerOpen: false,
             previewMode: 'all',
             showTemplateModal: false,
@@ -3911,6 +4232,30 @@ events: {
           editDrawerCell: function () {
             // 草稿模式：抽屉里编辑的是 draft 副本，点"确定"才写回 config.cells
             return this.editDrawerDraft;
+          },
+          // 「应用到整列」字段列表（label + 是否高危险）
+          applyFieldList: function () {
+            return [
+              { key: 'type', label: 'type 类型' },
+              { key: 'placeholder', label: 'placeholder 占位' },
+              { key: 'precision', label: 'precision 精度' },
+              { key: 'options', label: 'options 选项' },
+              { key: 'validation', label: 'validation 校验' },
+              { key: 'accept', label: 'accept 文件类型' },
+              { key: 'maxCount', label: 'maxCount 文件上限' },
+              { key: 'clampLines', label: 'clampLines 行数' },
+              { key: 'content', label: 'content 内容', danger: true },
+              { key: 'value', label: 'value 初始值', danger: true },
+              { key: 'width', label: 'width 列宽', danger: true }
+            ];
+          },
+          applySelectedFieldCount: function () {
+            var s = this.applyToColumnModal.fieldSelection;
+            return Object.keys(s).filter(function (k) { return s[k]; }).length;
+          },
+          applySelectedTargetCount: function () {
+            var s = this.applyToColumnModal.targetSelection;
+            return Object.keys(s).filter(function (k) { return s[k]; }).length;
           },
           editDrawerIndex: function () {
             if (!this.editDrawerUid) return -1;
@@ -4354,9 +4699,12 @@ events: {
             // 草稿直接丢弃即可（原 cell 从未被修改）
             this.closeEditDrawer();
           },
-          // 「应用到整列」: 把当前 draft 的 type/precision/placeholder/options/accept/maxCount/clampLines/validation
-          // 应用到同列所有网格位置: 已有未配置 cell 被修改,空位自动创建新 cell
-          // 跳过: 已配置过的 cell、合并 cell(跨多行/多列的标签)、被合并 cell 覆盖的位置
+          // 「应用到整列」: 弹出窗格让用户勾选字段+目标单元格后批量应用
+          //   - 字段：默认勾 type/placeholder/precision/options/validation/accept/maxCount/clampLines
+          //           content/value/width 默认不勾（每行不同，按需开）
+          //   - 目标：列出同列所有 cell + 空位，区分表头/已配置/未配置，默认勾"未配置"
+          //   - 跳过：draft 自己、合并 cell（不能批量改）
+          //   - 应用：draft 先 commit 回当前 cell，再按勾选字段拷贝到勾选目标
           applyToColumn: function () {
             var i = this.editDrawerIndex;
             if (i < 0 || !this.editDrawerDraft) {
@@ -4366,121 +4714,119 @@ events: {
             var draft = this.editDrawerDraft;
             var cur = this.config.cells[i];
             var uid = cur.__uid;
-            // ID 冲突检测(同 commitEditDrawer)
             if (this.idExists(draft.id, uid)) {
               this.$Message.error('ID "' + draft.id + '" 已被其他单元格占用，请改用其他 ID');
               return;
             }
-            var self = this;
-            var pr = window.DTUtils.parseRange;
-            var draftRange = pr(draft.x);
-            var dStart = draftRange.start, dEnd = draftRange.end;
-            var draftRowRange = pr(draft.y);
-            var draftRowStart = draftRowRange.start, draftRowEnd = draftRowRange.end;
-            // 表格总行数:取 cells 的 maxY、gridPad 扩展、draft 自身 y 范围三者较大值
-            // 含 draftRowEnd 保证:用户在抽屉里把 draft.y 改大时,扫描仍能覆盖 draft 占据的整段
-            var maxRow = Math.max(this.maxY || 0, (this.gridPad && this.gridPad.rows) || 0, draftRowEnd || 0);
-            var CTRL_TYPES = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
-            function isUnconfigured(c) {
-              if (CTRL_TYPES.indexOf(c.type) >= 0) return false;  // 控件类型 = 已配置
-              if (c.validation && c.validation.rules && c.validation.rules.length > 0) return false;  // 有 rules = 已配置
-              if (c.content && String(c.content).trim()) return false;  // label/text 有内容(表头/标签) = 已配置
-              return true;  // 仅当 type 是 label/text 且 content 为空(新建占位) 才视为未配置
-            }
-            // 找左上角在 (col,row) 的 cell
-            function findCellAt(col, row) {
-              for (var k = 0; k < self.config.cells.length; k++) {
-                var cc = self.config.cells[k];
-                if (pr(cc.x).start === col && pr(cc.y).start === row) return cc;
-              }
-              return null;
-            }
-            // 该位置是否被任何 cell(含合并) 覆盖
-            // 注意:draft 即将 commit,它占据的位置(可能用户改过坐标)也算已覆盖,避免创建重叠 cell
-            function isCovered(col, row) {
-              for (var k = 0; k < self.config.cells.length; k++) {
-                var cc = self.config.cells[k];
-                var cxr = pr(cc.x), cyr = pr(cc.y);
-                if (cxr.start <= col && col <= cxr.end && cyr.start <= row && row <= cyr.end) return true;
-              }
-              if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) return true;
-              return false;
-            }
-            var targets = [];      // 已有未配置 cell,待修改
-            var newPositions = []; // 空位,待创建
-            for (var col = dStart; col <= dEnd; col++) {
-              for (var row = 1; row <= maxRow; row++) {
-                // 跳过 draft 即将占据的位置(整矩形,不只是左上角)
-                if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) continue;
-                var cAt = findCellAt(col, row);
-                if (cAt) {
-                  var cxr = pr(cAt.x), cyr = pr(cAt.y);
-                  if (cxr.start !== cxr.end || cyr.start !== cyr.end) continue;  // 合并 cell 跳过
-                  if (!isUnconfigured(cAt)) continue;
-                  if (cAt === cur) continue;
-                  targets.push(cAt);
-                } else if (!isCovered(col, row)) {
-                  newPositions.push({ col: col, row: row });
-                }
-              }
-            }
-            if (targets.length === 0 && newPositions.length === 0) {
-              this.$Message.info('没有可应用的位置（同列都已配置过或被合并 cell 占用）');
+            var maxRow = Math.max(this.maxY || 0, (this.gridPad && this.gridPad.rows) || 0);
+            var targets = window.DTUtils.buildApplyTargets(draft, this.config.cells, {
+              freezeRows: this.config.freezeRows || 0,
+              maxRow: maxRow,
+              excludeUid: uid
+            });
+            if (targets.length === 0) {
+              this.$Message.info('同列没有可应用的位置（都已被合并 cell 覆盖或没有其他行）');
               return;
             }
-            // 二次确认(批量操作不可逆,虽然有撤销栈仍提示)
-            // 不复制 width(首行列宽,每列只 1 个)、calculationFormula(绑定具体 cell id,复制会错)、
-            // content(标签/提示文字,每行不同)、value(初始值,通常与 id 绑定)
-            var COPY_KEYS = ['type', 'placeholder', 'precision', 'options', 'validation', 'accept', 'maxCount', 'clampLines'];
-            var rangeDesc = dStart === dEnd
-              ? '第 ' + dStart + ' 列'
-              : '第 ' + dStart + '-' + dEnd + ' 列（跨多列）';
-            var summaryLines = [];
-            if (targets.length > 0) summaryLines.push('修改 <b>' + targets.length + '</b> 个已有未配置单元格');
-            if (newPositions.length > 0) summaryLines.push('在空位创建 <b>' + newPositions.length + '</b> 个新单元格（默认 id 为 cell_rY_cX）');
-            this.$Modal.confirm({
-              title: '确认应用到整列',
-              content: '将把当前单元格的 <b>type / precision / placeholder / options / accept / maxCount / clampLines / validation</b> 应用到<b>' + rangeDesc + '</b>:<br><br>• ' + summaryLines.join('<br>• ') + '<br><br>已配置过的不动。可用 Ctrl+Z 撤销。',
-              okText: '应用',
-              cancelText: '取消',
-              onOk: function () {
-                self._pushUndo();
-                // 先把 draft 写回当前 cell(同 commitEditDrawer)
-                Object.keys(cur).forEach(function (k) { if (!(k in draft)) delete cur[k]; });
-                Object.keys(draft).forEach(function (k) { self.$set(cur, k, JSON.parse(JSON.stringify(draft[k]))); });
-                // 修改已有 targets
-                targets.forEach(function (c) {
-                  COPY_KEYS.forEach(function (k) {
-                    if (draft[k] != null) {
-                      self.$set(c, k, JSON.parse(JSON.stringify(draft[k])));
-                    } else if (k in c) {
-                      self.$delete(c, k);
-                    }
-                  });
+            // 默认勾"未配置"目标（跟旧版"只对未配置生效"行为一致）
+            var selection = {};
+            targets.forEach(function (t) {
+              selection[t.key] = !t.isHeader && !t.isConfigured;
+            });
+            this.$set(this.applyToColumnModal, 'draft', draft);
+            this.$set(this.applyToColumnModal, 'curCellUid', uid);
+            this.$set(this.applyToColumnModal, 'targets', targets);
+            this.$set(this.applyToColumnModal, 'targetSelection', selection);
+            this.$set(this.applyToColumnModal, 'visible', true);
+          },
+          cancelApplyToColumn: function () {
+            this.$set(this.applyToColumnModal, 'visible', false);
+            this.$set(this.applyToColumnModal, 'draft', null);
+            this.$set(this.applyToColumnModal, 'targets', []);
+            this.$set(this.applyToColumnModal, 'targetSelection', {});
+          },
+          confirmApplyToColumn: function () {
+            var modal = this.applyToColumnModal;
+            var draft = modal.draft;
+            if (!draft) return;
+            var self = this;
+            var fields = Object.keys(modal.fieldSelection).filter(function (k) { return modal.fieldSelection[k]; });
+            var selectedTargets = modal.targets.filter(function (t) { return modal.targetSelection[t.key]; });
+            if (fields.length === 0 || selectedTargets.length === 0) {
+              this.$Message.info('请至少勾选 1 个字段和 1 个目标');
+              return;
+            }
+            // 找当前 cur cell
+            var cur = null;
+            for (var k = 0; k < this.config.cells.length; k++) {
+              if (this.config.cells[k].__uid === modal.curCellUid) { cur = this.config.cells[k]; break; }
+            }
+            this._pushUndo();
+            // 1. draft 先 commit 回 cur（同 commitEditDrawer 全量写回）
+            if (cur) {
+              Object.keys(cur).forEach(function (k) { if (!(k in draft)) delete cur[k]; });
+              Object.keys(draft).forEach(function (k) { self.$set(cur, k, JSON.parse(JSON.stringify(draft[k]))); });
+            }
+            // 2. 对每个 existing target，按勾选字段拷贝
+            var patch = window.DTUtils.pickFields(draft, fields);
+            var existingCount = 0, newCount = 0;
+            selectedTargets.forEach(function (t) {
+              if (t.type === 'existing') {
+                var target = null;
+                for (var j = 0; j < self.config.cells.length; j++) {
+                  if (self.config.cells[j].__uid === t.cellUid) { target = self.config.cells[j]; break; }
+                }
+                if (!target) return;
+                fields.forEach(function (k) {
+                  if (draft[k] != null) {
+                    self.$set(target, k, JSON.parse(JSON.stringify(draft[k])));
+                  } else if (k in target) {
+                    self.$delete(target, k);
+                  }
                 });
-                // 在空位创建新 cell
-                newPositions.forEach(function (p) {
-                  var partial = {
-                    id: self.genUniqueId('cell_r' + p.row + '_c' + p.col),
-                    x: String(p.col),
-                    y: String(p.row),
-                    content: ''
-                  };
-                  COPY_KEYS.forEach(function (k) {
-                    if (draft[k] != null) partial[k] = JSON.parse(JSON.stringify(draft[k]));
-                  });
-                  self.config.cells.push(makeCell(partial));
+                existingCount++;
+              } else {
+                var partial = {
+                  id: self.genUniqueId('cell_r' + t.row + '_c' + t.col),
+                  x: String(t.col),
+                  y: String(t.row),
+                  content: ''
+                };
+                fields.forEach(function (k) {
+                  if (draft[k] != null) partial[k] = JSON.parse(JSON.stringify(draft[k]));
                 });
-                self.editDrawerLastSaved = new Date();
-                self.closeEditDrawer();
-                self.forceRefreshPreview();
-                var total = targets.length + newPositions.length;
-                var parts = [];
-                if (targets.length > 0) parts.push('修改 ' + targets.length + ' 个');
-                if (newPositions.length > 0) parts.push('创建 ' + newPositions.length + ' 个');
-                self.$Message.success('已应用 ' + total + ' 个位置（' + parts.join('、') + '）');
+                self.config.cells.push(makeCell(partial));
+                newCount++;
               }
             });
+            this.editDrawerLastSaved = new Date();
+            this.cancelApplyToColumn();
+            this.closeEditDrawer();
+            this.forceRefreshPreview();
+            var parts = [];
+            if (existingCount > 0) parts.push('修改 ' + existingCount + ' 个');
+            if (newCount > 0) parts.push('创建 ' + newCount + ' 个');
+            this.$Message.success('已应用（' + parts.join('、') + '）');
+          },
+          selectAllTargets: function () {
+            var sel = {};
+            this.applyToColumnModal.targets.forEach(function (t) { sel[t.key] = true; });
+            this.$set(this.applyToColumnModal, 'targetSelection', sel);
+          },
+          selectNonHeaderTargets: function () {
+            var sel = {};
+            this.applyToColumnModal.targets.forEach(function (t) { sel[t.key] = !t.isHeader; });
+            this.$set(this.applyToColumnModal, 'targetSelection', sel);
+          },
+          selectUnconfiguredTargets: function () {
+            var sel = {};
+            this.applyToColumnModal.targets.forEach(function (t) { sel[t.key] = !t.isHeader && !t.isConfigured; });
+            this.$set(this.applyToColumnModal, 'targetSelection', sel);
+          },
+          clearTargetSelection: function () {
+            var sel = {};
+            this.applyToColumnModal.targets.forEach(function (t) { sel[t.key] = false; });
+            this.$set(this.applyToColumnModal, 'targetSelection', sel);
           },
           addCellAndEdit: function () {
             this.showTemplateModal = true;
