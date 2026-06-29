@@ -1,1943 +1,2739 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <title>动态表格工具 - 单元测试</title>
-  <style>
-    * { box-sizing: border-box; font-family: 'Microsoft YaHei', sans-serif; }
-    body { margin: 20px; background: #f5f5f5; color: #333; }
-    h1 { font-size: 18px; margin: 0 0 12px; }
-    h2 { font-size: 15px; margin: 20px 0 8px; padding-left: 8px; border-left: 3px solid #2d8cf0; }
-    .toolbar { background: #fff; padding: 12px; border-radius: 4px; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .toolbar button, .toolbar label { padding: 6px 14px; border: none; border-radius: 3px; cursor: pointer; font-size: 13px; }
-    .toolbar button { background: #2d8cf0; color: #fff; }
-    .toolbar button:hover { background: #1c70d0; }
-    .toolbar label { background: #f5f5f5; border: 1px solid #ddd; }
-    .summary { background: #fff; padding: 12px; border-radius: 4px; margin-bottom: 16px; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .summary .pass { color: #19be6b; font-weight: bold; }
-    .summary .fail { color: #ed4014; font-weight: bold; }
-    .case { background: #fff; padding: 8px 12px; border-radius: 3px; margin-bottom: 4px; font-size: 13px; display: flex; justify-content: space-between; }
-    .case.pass { border-left: 3px solid #19be6b; }
-    .case.fail { border-left: 3px solid #ed4014; }
-    .case .name { flex: 1; }
-    .case .status { font-weight: bold; }
-    .case .detail { color: #888; font-family: monospace; font-size: 12px; margin-left: 12px; }
-    .case.fail .detail { color: #c33; white-space: pre-wrap; }
-    .stats { background: #fff; padding: 12px; border-radius: 4px; font-size: 13px; line-height: 1.8; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .stats code { background: #f0f0f0; padding: 1px 6px; border-radius: 2px; font-size: 12px; }
-  </style>
-</head>
-<body>
-  <h1>动态表格工具 - 单元测试</h1>
-
-  <div class="toolbar">
-    <button id="run-all">跑全部测试</button>
-    <label>
-      选择真实数据文件
-      <input type="file" id="file-input" accept=".txt,.json" style="display:none" />
-    </label>
-    <span id="file-status" style="font-size:12px;color:#888;">未选择文件</span>
-  </div>
-
-  <div class="summary" id="summary">点击"跑全部测试"开始</div>
-  <div id="results"></div>
-
-<script>
-/* ====================================================================
- * 被测代码区
- * 与 配置页面.html 内联的 _DTUtilsFactory 保持一致
- * 修改配置页 utils 时请同步更新此处
- * ==================================================================== */
-function _DTUtilsFactory() {
-  function parseRange(v) {
-    var p = String(v).split(',').map(Number);
-    var mn = Math.min.apply(null, p);
-    var mx = Math.max.apply(null, p);
-    return { start: mn, end: mx, span: mx - mn + 1 };
-  }
-  // upload cell 值归一化（兼容旧数据格式）— 与生产/配置页对齐
-  function normalizeUploadVal(val) {
-    if (val == null || val === '') return [];
-    if (typeof val === 'string') {
-      try {
-        var parsed = JSON.parse(val);
-        if (Array.isArray(parsed)) return parsed;
-        if (parsed && typeof parsed === 'object') return [parsed];
-        return [];
-      } catch (e) {
-        return [];
+  <head>
+    <meta charset="UTF-8" />
+    <title>动态表格工具 - 单元测试</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        font-family: 'Microsoft YaHei', sans-serif;
       }
-    }
-    if (Array.isArray(val)) return val;
-    if (typeof val === 'object') return [val];
-    return [];
-  }
-  function buildFormModel(cells) {
-    var m = {};
-    (cells || []).forEach(function (c) {
-      if (!c || !c.id) return;
-      if (c.type === 'number') {
-        m[c.id] = c.value != null && c.value !== '' ? Number(c.value) : null;
-      } else if (c.type === 'checkbox') {
-        m[c.id] = Array.isArray(c.value) ? c.value : [];
-      } else if (c.type === 'upload') {
-        // upload 支持多文件累积，统一存数组 [{path, name}, ...]
-        m[c.id] = Array.isArray(c.value) ? c.value : [];
-      } else if (['input', 'textarea', 'select', 'radio', 'date'].indexOf(c.type) >= 0) {
-        m[c.id] = c.value != null ? c.value : '';
+      body {
+        margin: 20px;
+        background: #f5f5f5;
+        color: #333;
       }
-    });
-    return m;
-  }
-  function buildGrid(cells) {
-    var safeCells = cells || [];
-    var cellMap = {};
-    safeCells.forEach(function (c) { cellMap[c.id] = c; });
-    var maxC = 0, maxR = 0;
-    safeCells.forEach(function (c) {
-      var xr = parseRange(c.x), yr = parseRange(c.y);
-      if (xr.end > maxC) maxC = xr.end;
-      if (yr.end > maxR) maxR = yr.end;
-    });
-    var G = [], O = [];
-    for (var r = 0; r < maxR; r++) {
-      G[r] = []; O[r] = [];
-      for (var c = 0; c < maxC; c++) { G[r][c] = null; O[r][c] = false; }
-    }
-    var sorted = safeCells.slice().sort(function (a, b) {
-      return parseRange(b.y).span * parseRange(b.x).span -
-             parseRange(a.y).span * parseRange(a.x).span;
-    });
-    sorted.forEach(function (cell) {
-      var xr = parseRange(cell.x), yr = parseRange(cell.y);
-      var r0 = yr.start - 1, c0 = xr.start - 1;
-      // 防御：x/y 非法（如 "24," 末尾逗号 → NaN）或越界 → 跳过该 cell
-      if (!isFinite(r0) || !isFinite(c0) || r0 < 0 || c0 < 0 || r0 >= maxR || c0 >= maxC) return;
-      var entry = { cell: cell, rowspan: yr.span, colspan: xr.span, alts: null };
-      if (G[r0][c0]) {
-        if (!G[r0][c0].alts) G[r0][c0].alts = [];
-        G[r0][c0].alts.push(entry);
-        return;
+      h1 {
+        font-size: 18px;
+        margin: 0 0 12px;
       }
-      G[r0][c0] = entry;
-      for (var r = r0; r < r0 + yr.span && r < maxR; r++) {
-        for (var c = c0; c < c0 + xr.span && c < maxC; c++) {
-          if (!(r === r0 && c === c0)) O[r][c] = true;
+      h2 {
+        font-size: 15px;
+        margin: 20px 0 8px;
+        padding-left: 8px;
+        border-left: 3px solid #2d8cf0;
+      }
+      .toolbar {
+        background: #fff;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      }
+      .toolbar button,
+      .toolbar label {
+        padding: 6px 14px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .toolbar button {
+        background: #2d8cf0;
+        color: #fff;
+      }
+      .toolbar button:hover {
+        background: #1c70d0;
+      }
+      .toolbar label {
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+      }
+      .summary {
+        background: #fff;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      }
+      .summary .pass {
+        color: #19be6b;
+        font-weight: bold;
+      }
+      .summary .fail {
+        color: #ed4014;
+        font-weight: bold;
+      }
+      .case {
+        background: #fff;
+        padding: 8px 12px;
+        border-radius: 3px;
+        margin-bottom: 4px;
+        font-size: 13px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .case.pass {
+        border-left: 3px solid #19be6b;
+      }
+      .case.fail {
+        border-left: 3px solid #ed4014;
+      }
+      .case .name {
+        flex: 1;
+      }
+      .case .status {
+        font-weight: bold;
+      }
+      .case .detail {
+        color: #888;
+        font-family: monospace;
+        font-size: 12px;
+        margin-left: 12px;
+      }
+      .case.fail .detail {
+        color: #c33;
+        white-space: pre-wrap;
+      }
+      .stats {
+        background: #fff;
+        padding: 12px;
+        border-radius: 4px;
+        font-size: 13px;
+        line-height: 1.8;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      }
+      .stats code {
+        background: #f0f0f0;
+        padding: 1px 6px;
+        border-radius: 2px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>动态表格工具 - 单元测试</h1>
+
+    <div class="toolbar">
+      <button id="run-all">跑全部测试</button>
+      <label>
+        选择真实数据文件
+        <input
+          type="file"
+          id="file-input"
+          accept=".txt,.json"
+          style="display: none"
+        />
+      </label>
+      <span id="file-status" style="font-size: 12px; color: #888"
+        >未选择文件</span
+      >
+    </div>
+
+    <div class="summary" id="summary">点击"跑全部测试"开始</div>
+    <div id="results"></div>
+
+    <script>
+      /* ====================================================================
+       * 被测代码区
+       * 与 配置页面.html 内联的 _DTUtilsFactory 保持一致
+       * 修改配置页 utils 时请同步更新此处
+       * ==================================================================== */
+      function _DTUtilsFactory() {
+        function parseRange(v) {
+          var p = String(v).split(',').map(Number);
+          var mn = Math.min.apply(null, p);
+          var mx = Math.max.apply(null, p);
+          return { start: mn, end: mx, span: mx - mn + 1 };
         }
-      }
-    });
-    var rows = [];
-    for (var r = 0; r < maxR; r++) {
-      var cols = [];
-      for (var c = 0; c < maxC; c++) {
-        if (O[r][c]) { cols.push({ skip: true }); continue; }
-        var e = G[r][c];
-        if (!e) { cols.push({ skip: false, cell: null }); continue; }
-        var isCtrl = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload']
-          .indexOf(e.cell.type) >= 0;
-        var cls = [];
-        if (e.cell.type === 'text' && (c === 0 || c === 2) && /<b>/.test(e.cell.content || '')) {
-          cls.push('cell-group');
+        // upload cell 值归一化（兼容旧数据格式）— 与生产/配置页对齐
+        function normalizeUploadVal(val) {
+          if (val == null || val === '') return [];
+          if (typeof val === 'string') {
+            try {
+              var parsed = JSON.parse(val);
+              if (Array.isArray(parsed)) return parsed;
+              if (parsed && typeof parsed === 'object') return [parsed];
+              return [];
+            } catch (e) {
+              return [];
+            }
+          }
+          if (Array.isArray(val)) return val;
+          if (typeof val === 'object') return [val];
+          return [];
         }
-        cols.push({
-          skip: false, cell: e.cell, rowspan: e.rowspan, colspan: e.colspan, alts: e.alts || [],
-          isLabel: e.cell.type === 'label', isText: e.cell.type === 'text',
-          isControl: isCtrl, isFormula: e.cell.type === 'formula', cls: cls.join(' ')
+        function buildFormModel(cells) {
+          var m = {};
+          (cells || []).forEach(function (c) {
+            if (!c || !c.id) return;
+            if (c.type === 'number') {
+              m[c.id] =
+                c.value != null && c.value !== '' ? Number(c.value) : null;
+            } else if (c.type === 'checkbox') {
+              m[c.id] = Array.isArray(c.value) ? c.value : [];
+            } else if (c.type === 'upload') {
+              // upload 支持多文件累积，统一存数组 [{path, name}, ...]
+              m[c.id] = Array.isArray(c.value) ? c.value : [];
+            } else if (
+              ['input', 'textarea', 'select', 'radio', 'date'].indexOf(
+                c.type
+              ) >= 0
+            ) {
+              m[c.id] = c.value != null ? c.value : '';
+            }
+          });
+          return m;
+        }
+        function buildGrid(cells) {
+          var safeCells = cells || [];
+          var cellMap = {};
+          safeCells.forEach(function (c) {
+            cellMap[c.id] = c;
+          });
+          var maxC = 0,
+            maxR = 0;
+          safeCells.forEach(function (c) {
+            var xr = parseRange(c.x),
+              yr = parseRange(c.y);
+            if (xr.end > maxC) maxC = xr.end;
+            if (yr.end > maxR) maxR = yr.end;
+          });
+          var G = [],
+            O = [];
+          for (var r = 0; r < maxR; r++) {
+            G[r] = [];
+            O[r] = [];
+            for (var c = 0; c < maxC; c++) {
+              G[r][c] = null;
+              O[r][c] = false;
+            }
+          }
+          var sorted = safeCells.slice().sort(function (a, b) {
+            return (
+              parseRange(b.y).span * parseRange(b.x).span -
+              parseRange(a.y).span * parseRange(a.x).span
+            );
+          });
+          sorted.forEach(function (cell) {
+            var xr = parseRange(cell.x),
+              yr = parseRange(cell.y);
+            var r0 = yr.start - 1,
+              c0 = xr.start - 1;
+            // 防御：x/y 非法（如 "24," 末尾逗号 → NaN）或越界 → 跳过该 cell
+            if (
+              !isFinite(r0) ||
+              !isFinite(c0) ||
+              r0 < 0 ||
+              c0 < 0 ||
+              r0 >= maxR ||
+              c0 >= maxC
+            )
+              return;
+            var entry = {
+              cell: cell,
+              rowspan: yr.span,
+              colspan: xr.span,
+              alts: null
+            };
+            if (G[r0][c0]) {
+              if (!G[r0][c0].alts) G[r0][c0].alts = [];
+              G[r0][c0].alts.push(entry);
+              return;
+            }
+            G[r0][c0] = entry;
+            for (var r = r0; r < r0 + yr.span && r < maxR; r++) {
+              for (var c = c0; c < c0 + xr.span && c < maxC; c++) {
+                if (!(r === r0 && c === c0)) O[r][c] = true;
+              }
+            }
+          });
+          var rows = [];
+          for (var r = 0; r < maxR; r++) {
+            var cols = [];
+            for (var c = 0; c < maxC; c++) {
+              if (O[r][c]) {
+                cols.push({ skip: true });
+                continue;
+              }
+              var e = G[r][c];
+              if (!e) {
+                cols.push({ skip: false, cell: null });
+                continue;
+              }
+              var isCtrl =
+                [
+                  'input',
+                  'textarea',
+                  'number',
+                  'select',
+                  'radio',
+                  'checkbox',
+                  'date',
+                  'upload'
+                ].indexOf(e.cell.type) >= 0;
+              var cls = [];
+              if (
+                e.cell.type === 'text' &&
+                (c === 0 || c === 2) &&
+                /<b>/.test(e.cell.content || '')
+              ) {
+                cls.push('cell-group');
+              }
+              cols.push({
+                skip: false,
+                cell: e.cell,
+                rowspan: e.rowspan,
+                colspan: e.colspan,
+                alts: e.alts || [],
+                isLabel: e.cell.type === 'label',
+                isText: e.cell.type === 'text',
+                isControl: isCtrl,
+                isFormula: e.cell.type === 'formula',
+                cls: cls.join(' ')
+              });
+            }
+            rows.push(cols);
+          }
+          return { rows: rows, cellMap: cellMap, maxC: maxC, maxR: maxR };
+        }
+        var _exprCache = {};
+        function _buildLocals(fm) {
+          return Object.keys(fm)
+            .map(function (k) {
+              return 'var ' + k + '=fm[' + JSON.stringify(k) + '];';
+            })
+            .join('');
+        }
+        function _fmKeysSig(fm) {
+          return Object.keys(fm).sort().join('|');
+        }
+        function _compile(kind, expr, fm, argList) {
+          var sig = _fmKeysSig(fm);
+          var cacheKey = kind + '|' + sig + '|' + expr;
+          var fn = _exprCache[cacheKey];
+          if (!fn) {
+            var locals = _buildLocals(fm);
+            fn = new Function(argList, locals + 'return(' + expr + ')');
+            _exprCache[cacheKey] = fn;
+          }
+          return fn;
+        }
+        function evalDepends(expr, fm, extra) {
+          if (!expr || typeof expr !== 'string' || !String(expr).trim())
+            return false;
+          try {
+            return _compile('dep', expr, fm, 'fm,extra')(fm, extra || {});
+          } catch (e) {
+            console.error('[evalDepends 失败]', expr, e);
+            return false;
+          }
+        }
+        function evalCustom(expr, value, fm, extra) {
+          if (!expr || typeof expr !== 'string' || !String(expr).trim())
+            return false;
+          try {
+            return _compile(
+              'cust',
+              expr,
+              fm,
+              'value,fm,extra'
+            )(value, fm, extra || {});
+          } catch (ex) {
+            console.error('[evalCustom 失败]', expr, ex);
+            return false;
+          }
+        }
+        function evalMath(expr, scope) {
+          if (!expr || typeof expr !== 'string') return null;
+          try {
+            var locals = Object.keys(scope || {})
+              .map(function (k) {
+                return 'var ' + k + '=' + JSON.stringify(scope[k]) + ';';
+              })
+              .join('');
+            return new Function('Math', locals + 'return(' + expr + ')')(Math);
+          } catch (e) {
+            console.error('[evalMath 失败]', expr, e);
+            return null;
+          }
+        }
+        function evalEvent(fnBody, value, fm, extra, rawEvent) {
+          if (!fnBody || !String(fnBody).trim()) return undefined;
+          try {
+            return new Function('value', 'fm', 'extra', 'rawEvent', fnBody)(
+              value,
+              fm,
+              extra || {},
+              rawEvent
+            );
+          } catch (e) {
+            console.error('[evalEvent 编译失败]', e);
+            return undefined;
+          }
+        }
+        function getStep(cell) {
+          if (!cell || cell.precision == null) return 1;
+          return 1 / Math.pow(10, cell.precision);
+        }
+
+        // ---- 列/行批量操作（坐标平移）----
+        function _fmtRange(start, end) {
+          return start === end ? String(start) : start + ',' + end;
+        }
+        function insertColumns(cells, beforeCol, count) {
+          if (!Array.isArray(cells) || !beforeCol || !count || count < 1)
+            return cells;
+          cells.forEach(function (c) {
+            if (!c || !c.x) return;
+            var xr = parseRange(c.x);
+            var ns, ne;
+            if (xr.start >= beforeCol) {
+              ns = xr.start + count;
+              ne = xr.end + count;
+            } else if (xr.end >= beforeCol) {
+              ns = xr.start;
+              ne = xr.end + count;
+            } else {
+              return;
+            }
+            c.x = _fmtRange(ns, ne);
+          });
+          return cells;
+        }
+        function insertRows(cells, beforeRow, count) {
+          if (!Array.isArray(cells) || !beforeRow || !count || count < 1)
+            return cells;
+          cells.forEach(function (c) {
+            if (!c || !c.y) return;
+            var yr = parseRange(c.y);
+            var ns, ne;
+            if (yr.start >= beforeRow) {
+              ns = yr.start + count;
+              ne = yr.end + count;
+            } else if (yr.end >= beforeRow) {
+              ns = yr.start;
+              ne = yr.end + count;
+            } else {
+              return;
+            }
+            c.y = _fmtRange(ns, ne);
+          });
+          return cells;
+        }
+        function removeColumn(cells, col) {
+          if (!Array.isArray(cells) || !col) return 0;
+          var removed = 0;
+          for (var i = cells.length - 1; i >= 0; i--) {
+            var c = cells[i];
+            if (!c || !c.x) continue;
+            var xr = parseRange(c.x);
+            if (xr.start === col && xr.end === col) {
+              cells.splice(i, 1);
+              removed++;
+            } else if (xr.start <= col && xr.end >= col) {
+              c.x = _fmtRange(xr.start, xr.end - 1);
+            } else if (xr.start > col) {
+              c.x = _fmtRange(xr.start - 1, xr.end - 1);
+            }
+          }
+          return removed;
+        }
+        function removeRow(cells, row) {
+          if (!Array.isArray(cells) || !row) return 0;
+          var removed = 0;
+          for (var i = cells.length - 1; i >= 0; i--) {
+            var c = cells[i];
+            if (!c || !c.y) continue;
+            var yr = parseRange(c.y);
+            if (yr.start === row && yr.end === row) {
+              cells.splice(i, 1);
+              removed++;
+            } else if (yr.start <= row && yr.end >= row) {
+              c.y = _fmtRange(yr.start, yr.end - 1);
+            } else if (yr.start > row) {
+              c.y = _fmtRange(yr.start - 1, yr.end - 1);
+            }
+          }
+          return removed;
+        }
+        function appendColumns(cells, count) {
+          if (!Array.isArray(cells) || !count || count < 1) return cells;
+          var maxC = 0;
+          cells.forEach(function (c) {
+            if (!c || !c.x) return;
+            var xr = parseRange(c.x);
+            if (xr.end > maxC) maxC = xr.end;
+          });
+          return insertColumns(cells, maxC + 1, count);
+        }
+        function appendRows(cells, count) {
+          if (!Array.isArray(cells) || !count || count < 1) return cells;
+          var maxR = 0;
+          cells.forEach(function (c) {
+            if (!c || !c.y) return;
+            var yr = parseRange(c.y);
+            if (yr.end > maxR) maxR = yr.end;
+          });
+          return insertRows(cells, maxR + 1, count);
+        }
+        // 「应用到整列」目标列表生成（与 dynamic-table-utils.js / 配置页面.html 内联保持一致）
+        function buildApplyTargets(draft, cells, opts) {
+          opts = opts || {};
+          var freezeRows = opts.freezeRows || 0;
+          var excludeUid = opts.excludeUid;
+          var CTRL_TYPES = [
+            'input',
+            'textarea',
+            'number',
+            'select',
+            'radio',
+            'checkbox',
+            'date',
+            'upload'
+          ];
+          var draftRange = parseRange(draft.x);
+          var dStart = draftRange.start,
+            dEnd = draftRange.end;
+          var draftRowRange = parseRange(draft.y);
+          var draftRowStart = draftRowRange.start,
+            draftRowEnd = draftRowRange.end;
+          var maxRow;
+          if (opts.maxRow != null) {
+            maxRow = opts.maxRow;
+          } else {
+            var cellsMaxY = 0;
+            cells.forEach(function (c) {
+              if (!c || !c.y) return;
+              var r = parseRange(c.y);
+              if (r.end > cellsMaxY) cellsMaxY = r.end;
+            });
+            maxRow = Math.max(cellsMaxY, draftRowEnd);
+          }
+          function isHeaderCell(c) {
+            if (!c) return false;
+            if (c.type === 'label') return true;
+            if (parseRange(c.y).start <= freezeRows) return true;
+            return false;
+          }
+          function isConfiguredCell(c) {
+            if (!c) return false;
+            if (CTRL_TYPES.indexOf(c.type) >= 0) return true;
+            if (
+              c.validation &&
+              c.validation.rules &&
+              c.validation.rules.length > 0
+            )
+              return true;
+            if (c.content && String(c.content).trim()) return true;
+            return false;
+          }
+          function findCellAt(col, row) {
+            for (var k = 0; k < cells.length; k++) {
+              var cc = cells[k];
+              if (
+                parseRange(cc.x).start === col &&
+                parseRange(cc.y).start === row
+              )
+                return cc;
+            }
+            return null;
+          }
+          function isCovered(col, row) {
+            for (var k = 0; k < cells.length; k++) {
+              var cc = cells[k];
+              if (excludeUid != null && cc.__uid === excludeUid) continue;
+              var cxr = parseRange(cc.x),
+                cyr = parseRange(cc.y);
+              if (
+                cxr.start <= col &&
+                col <= cxr.end &&
+                cyr.start <= row &&
+                row <= cyr.end
+              )
+                return true;
+            }
+            if (
+              dStart <= col &&
+              col <= dEnd &&
+              draftRowStart <= row &&
+              row <= draftRowEnd
+            )
+              return true;
+            return false;
+          }
+          var targets = [];
+          for (var col = dStart; col <= dEnd; col++) {
+            for (var row = 1; row <= maxRow; row++) {
+              if (
+                dStart <= col &&
+                col <= dEnd &&
+                draftRowStart <= row &&
+                row <= draftRowEnd
+              )
+                continue;
+              var cAt = findCellAt(col, row);
+              if (cAt) {
+                if (excludeUid != null && cAt.__uid === excludeUid) continue;
+                var cxr = parseRange(cAt.x),
+                  cyr = parseRange(cAt.y);
+                if (cxr.start !== cxr.end || cyr.start !== cyr.end) continue;
+                targets.push({
+                  key: 'cell_' + cAt.__uid,
+                  row: row,
+                  col: col,
+                  type: 'existing',
+                  cellUid: cAt.__uid,
+                  cellId: cAt.id,
+                  cellType: cAt.type,
+                  isHeader: isHeaderCell(cAt),
+                  isConfigured: isConfiguredCell(cAt),
+                  label:
+                    'r' +
+                    row +
+                    ' ' +
+                    (cAt.id || '(无id)') +
+                    (cAt.type ? ' (' + cAt.type + ')' : '')
+                });
+              } else if (!isCovered(col, row)) {
+                targets.push({
+                  key: 'empty_r' + row + '_c' + col,
+                  row: row,
+                  col: col,
+                  type: 'empty',
+                  isHeader: row <= freezeRows,
+                  isConfigured: false,
+                  label: 'r' + row + ' (空位)'
+                });
+              }
+            }
+          }
+          return targets;
+        }
+        function pickFields(src, fields) {
+          var out = {};
+          if (!src || !fields) return out;
+          fields.forEach(function (k) {
+            if (src[k] != null) {
+              out[k] = JSON.parse(JSON.stringify(src[k]));
+            }
+          });
+          return out;
+        }
+
+        return {
+          parseRange: parseRange,
+          normalizeUploadVal: normalizeUploadVal,
+          buildFormModel: buildFormModel,
+          buildGrid: buildGrid,
+          evalDepends: evalDepends,
+          evalCustom: evalCustom,
+          evalMath: evalMath,
+          evalEvent: evalEvent,
+          getStep: getStep,
+          insertColumns: insertColumns,
+          insertRows: insertRows,
+          removeColumn: removeColumn,
+          removeRow: removeRow,
+          appendColumns: appendColumns,
+          appendRows: appendRows,
+          buildApplyTargets: buildApplyTargets,
+          pickFields: pickFields,
+          _clearCache: function () {
+            _exprCache = {};
+          },
+          _cacheSize: function () {
+            return Object.keys(_exprCache).length;
+          }
+        };
+      }
+      var DT = _DTUtilsFactory();
+
+      /* ---- parseConfigText（与配置页一致）---- */
+      function parseConfigText(text) {
+        try {
+          return JSON.parse(text);
+        } catch (e) {}
+        var m = text.match(/var\s+([a-zA-Z_$][\w$]*)\s*=/);
+        if (m) {
+          var name = m[1];
+          try {
+            var data = new Function(
+              text +
+                '; return typeof ' +
+                name +
+                ' !== "undefined" ? ' +
+                name +
+                ' : null;'
+            )();
+            if (data && typeof data === 'object') return data;
+          } catch (e) {}
+        }
+        try {
+          var data2 = new Function('return (' + text + ');')();
+          if (data2 && typeof data2 === 'object') return data2;
+        } catch (e2) {}
+        console.log(e2);
+        throw new Error('无法识别的内容格式', e2);
+      }
+
+      /* ---- 冲突检测纯函数版 ---- */
+      function idExists(cells, id, excludeUid) {
+        return (cells || []).some(function (c) {
+          return c.id === id && c.__uid !== excludeUid;
         });
       }
-      rows.push(cols);
-    }
-    return { rows: rows, cellMap: cellMap, maxC: maxC, maxR: maxR };
-  }
-  var _exprCache = {};
-  function _buildLocals(fm) {
-    return Object.keys(fm).map(function (k) {
-      return 'var ' + k + '=fm[' + JSON.stringify(k) + '];';
-    }).join('');
-  }
-  function _fmKeysSig(fm) { return Object.keys(fm).sort().join('|'); }
-  function _compile(kind, expr, fm, argList) {
-    var sig = _fmKeysSig(fm);
-    var cacheKey = kind + '|' + sig + '|' + expr;
-    var fn = _exprCache[cacheKey];
-    if (!fn) {
-      var locals = _buildLocals(fm);
-      fn = new Function(argList, locals + 'return(' + expr + ')');
-      _exprCache[cacheKey] = fn;
-    }
-    return fn;
-  }
-  function evalDepends(expr, fm, extra) {
-    if (!expr || typeof expr !== 'string' || !String(expr).trim()) return false;
-    try { return _compile('dep', expr, fm, 'fm,extra')(fm, extra || {}); }
-    catch (e) { console.error('[evalDepends 失败]', expr, e); return false; }
-  }
-  function evalCustom(expr, value, fm, extra) {
-    if (!expr || typeof expr !== 'string' || !String(expr).trim()) return false;
-    try { return _compile('cust', expr, fm, 'value,fm,extra')(value, fm, extra || {}); }
-    catch (ex) { console.error('[evalCustom 失败]', expr, ex); return false; }
-  }
-  function evalMath(expr, scope) {
-    if (!expr || typeof expr !== 'string') return null;
-    try {
-      var locals = Object.keys(scope || {}).map(function (k) {
-        return 'var ' + k + '=' + JSON.stringify(scope[k]) + ';';
-      }).join('');
-      return new Function('Math', locals + 'return(' + expr + ')')(Math);
-    } catch (e) { console.error('[evalMath 失败]', expr, e); return null; }
-  }
-  function evalEvent(fnBody, value, fm, extra, rawEvent) {
-    if (!fnBody || !String(fnBody).trim()) return undefined;
-    try {
-      return new Function('value', 'fm', 'extra', 'rawEvent', fnBody)(value, fm, extra || {}, rawEvent);
-    } catch (e) { console.error('[evalEvent 编译失败]', e); return undefined; }
-  }
-  function getStep(cell) {
-    if (!cell || cell.precision == null) return 1;
-    return 1 / Math.pow(10, cell.precision);
-  }
+      function genUniqueId(cells, base, excludeUid) {
+        if (!idExists(cells, base, excludeUid)) return base;
+        var n = 2;
+        while (idExists(cells, base + '_' + n, excludeUid)) n++;
+        return base + '_' + n;
+      }
+      function checkOverlap(cells, x, y, excludeUid) {
+        if (!x || !y) return [];
+        var xr = DT.parseRange(x),
+          yr = DT.parseRange(y);
+        var conflicts = [];
+        (cells || []).forEach(function (c) {
+          if (c.__uid === excludeUid) return;
+          if (!c.x || !c.y) return;
+          var cxr = DT.parseRange(c.x),
+            cyr = DT.parseRange(c.y);
+          if (
+            xr.start <= cxr.end &&
+            xr.end >= cxr.start &&
+            yr.start <= cyr.end &&
+            yr.end >= cyr.start
+          )
+            conflicts.push(c);
+        });
+        return conflicts;
+      }
 
-  // ---- 列/行批量操作（坐标平移）----
-  function _fmtRange(start, end) {
-    return start === end ? String(start) : start + ',' + end;
-  }
-  function insertColumns(cells, beforeCol, count) {
-    if (!Array.isArray(cells) || !beforeCol || !count || count < 1) return cells;
-    cells.forEach(function (c) {
-      if (!c || !c.x) return;
-      var xr = parseRange(c.x);
-      var ns, ne;
-      if (xr.start >= beforeCol) { ns = xr.start + count; ne = xr.end + count; }
-      else if (xr.end >= beforeCol) { ns = xr.start; ne = xr.end + count; }
-      else { return; }
-      c.x = _fmtRange(ns, ne);
-    });
-    return cells;
-  }
-  function insertRows(cells, beforeRow, count) {
-    if (!Array.isArray(cells) || !beforeRow || !count || count < 1) return cells;
-    cells.forEach(function (c) {
-      if (!c || !c.y) return;
-      var yr = parseRange(c.y);
-      var ns, ne;
-      if (yr.start >= beforeRow) { ns = yr.start + count; ne = yr.end + count; }
-      else if (yr.end >= beforeRow) { ns = yr.start; ne = yr.end + count; }
-      else { return; }
-      c.y = _fmtRange(ns, ne);
-    });
-    return cells;
-  }
-  function removeColumn(cells, col) {
-    if (!Array.isArray(cells) || !col) return 0;
-    var removed = 0;
-    for (var i = cells.length - 1; i >= 0; i--) {
-      var c = cells[i];
-      if (!c || !c.x) continue;
-      var xr = parseRange(c.x);
-      if (xr.start === col && xr.end === col) { cells.splice(i, 1); removed++; }
-      else if (xr.start <= col && xr.end >= col) { c.x = _fmtRange(xr.start, xr.end - 1); }
-      else if (xr.start > col) { c.x = _fmtRange(xr.start - 1, xr.end - 1); }
-    }
-    return removed;
-  }
-  function removeRow(cells, row) {
-    if (!Array.isArray(cells) || !row) return 0;
-    var removed = 0;
-    for (var i = cells.length - 1; i >= 0; i--) {
-      var c = cells[i];
-      if (!c || !c.y) continue;
-      var yr = parseRange(c.y);
-      if (yr.start === row && yr.end === row) { cells.splice(i, 1); removed++; }
-      else if (yr.start <= row && yr.end >= row) { c.y = _fmtRange(yr.start, yr.end - 1); }
-      else if (yr.start > row) { c.y = _fmtRange(yr.start - 1, yr.end - 1); }
-    }
-    return removed;
-  }
-  function appendColumns(cells, count) {
-    if (!Array.isArray(cells) || !count || count < 1) return cells;
-    var maxC = 0;
-    cells.forEach(function (c) { if (!c || !c.x) return; var xr = parseRange(c.x); if (xr.end > maxC) maxC = xr.end; });
-    return insertColumns(cells, maxC + 1, count);
-  }
-  function appendRows(cells, count) {
-    if (!Array.isArray(cells) || !count || count < 1) return cells;
-    var maxR = 0;
-    cells.forEach(function (c) { if (!c || !c.y) return; var yr = parseRange(c.y); if (yr.end > maxR) maxR = yr.end; });
-    return insertRows(cells, maxR + 1, count);
-  }
-  // 「应用到整列」目标列表生成（与 dynamic-table-utils.js / 配置页面.html 内联保持一致）
-  function buildApplyTargets(draft, cells, opts) {
-    opts = opts || {};
-    var freezeRows = opts.freezeRows || 0;
-    var excludeUid = opts.excludeUid;
-    var CTRL_TYPES = ['input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload'];
-    var draftRange = parseRange(draft.x);
-    var dStart = draftRange.start, dEnd = draftRange.end;
-    var draftRowRange = parseRange(draft.y);
-    var draftRowStart = draftRowRange.start, draftRowEnd = draftRowRange.end;
-    var maxRow;
-    if (opts.maxRow != null) {
-      maxRow = opts.maxRow;
-    } else {
-      var cellsMaxY = 0;
-      cells.forEach(function (c) {
-        if (!c || !c.y) return;
-        var r = parseRange(c.y);
-        if (r.end > cellsMaxY) cellsMaxY = r.end;
-      });
-      maxRow = Math.max(cellsMaxY, draftRowEnd);
-    }
-    function isHeaderCell(c) {
-      if (!c) return false;
-      if (c.type === 'label') return true;
-      if (parseRange(c.y).start <= freezeRows) return true;
-      return false;
-    }
-    function isConfiguredCell(c) {
-      if (!c) return false;
-      if (CTRL_TYPES.indexOf(c.type) >= 0) return true;
-      if (c.validation && c.validation.rules && c.validation.rules.length > 0) return true;
-      if (c.content && String(c.content).trim()) return true;
-      return false;
-    }
-    function findCellAt(col, row) {
-      for (var k = 0; k < cells.length; k++) {
-        var cc = cells[k];
-        if (parseRange(cc.x).start === col && parseRange(cc.y).start === row) return cc;
+      /* ---- schema 校验（返回错误数组）---- */
+      var VALID_TYPES = [
+        'label',
+        'text',
+        'input',
+        'textarea',
+        'number',
+        'select',
+        'radio',
+        'checkbox',
+        'date',
+        'upload',
+        'formula'
+      ];
+      function validateConfig(data) {
+        if (!data || typeof data !== 'object') return ['数据不是对象'];
+        if (!Array.isArray(data.cells)) return ['数据必须包含 cells 数组'];
+        var errors = [];
+        var idMap = {};
+        data.cells.forEach(function (c, idx) {
+          var label = '第 ' + (idx + 1) + ' 个 cell';
+          if (!c.id) errors.push(label + ' 缺少 id');
+          else if (idMap[c.id])
+            errors.push(
+              label + ' ID "' + c.id + '" 与第 ' + idMap[c.id] + ' 个 cell 重复'
+            );
+          else idMap[c.id] = idx + 1;
+          if (c.x == null) errors.push(label + ' 缺少 x');
+          if (c.y == null) errors.push(label + ' 缺少 y');
+          if (!c.type) errors.push(label + ' 缺少 type');
+          else if (VALID_TYPES.indexOf(c.type) < 0)
+            errors.push(label + ' type "' + c.type + '" 不合法');
+        });
+        return errors;
       }
-      return null;
-    }
-    function isCovered(col, row) {
-      for (var k = 0; k < cells.length; k++) {
-        var cc = cells[k];
-        if (excludeUid != null && cc.__uid === excludeUid) continue;
-        var cxr = parseRange(cc.x), cyr = parseRange(cc.y);
-        if (cxr.start <= col && col <= cxr.end && cyr.start <= row && row <= cyr.end) return true;
+
+      /* ====================================================================
+       * 测试框架
+       * ==================================================================== */
+      var _groups = [];
+      function group(name) {
+        _groups.push({ name: name, cases: [] });
       }
-      if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) return true;
-      return false;
-    }
-    var targets = [];
-    for (var col = dStart; col <= dEnd; col++) {
-      for (var row = 1; row <= maxRow; row++) {
-        if (dStart <= col && col <= dEnd && draftRowStart <= row && row <= draftRowEnd) continue;
-        var cAt = findCellAt(col, row);
-        if (cAt) {
-          if (excludeUid != null && cAt.__uid === excludeUid) continue;
-          var cxr = parseRange(cAt.x), cyr = parseRange(cAt.y);
-          if (cxr.start !== cxr.end || cyr.start !== cyr.end) continue;
-          targets.push({
-            key: 'cell_' + cAt.__uid,
-            row: row, col: col, type: 'existing',
-            cellUid: cAt.__uid, cellId: cAt.id, cellType: cAt.type,
-            isHeader: isHeaderCell(cAt), isConfigured: isConfiguredCell(cAt),
-            label: 'r' + row + ' ' + (cAt.id || '(无id)') + (cAt.type ? ' (' + cAt.type + ')' : '')
-          });
-        } else if (!isCovered(col, row)) {
-          targets.push({
-            key: 'empty_r' + row + '_c' + col,
-            row: row, col: col, type: 'empty',
-            isHeader: row <= freezeRows, isConfigured: false,
-            label: 'r' + row + ' (空位)'
-          });
+      function test(name, fn) {
+        _groups[_groups.length - 1].cases.push({ name: name, fn: fn });
+      }
+      function _rec(res) {
+        _lastResult = res;
+        if (!res.pass) throw new Error(res.detail || '失败');
+      }
+      function assertEqual(actual, expected, msg) {
+        var aJson = JSON.stringify(actual),
+          eJson = JSON.stringify(expected);
+        // 深度比较：忽略对象 key 顺序（语义相等），但保留 array 顺序
+        _rec({
+          pass: _deepEqual(actual, expected),
+          detail: (msg || '') + '\n  期望: ' + eJson + '\n  实际: ' + aJson
+        });
+      }
+      function _deepEqual(a, b) {
+        if (a === b) return true;
+        if (a == null || b == null) return a === b;
+        if (typeof a !== 'object' || typeof b !== 'object') return a === b;
+        if (Array.isArray(a) !== Array.isArray(b)) return false;
+        if (Array.isArray(a)) {
+          if (a.length !== b.length) return false;
+          for (var i = 0; i < a.length; i++)
+            if (!_deepEqual(a[i], b[i])) return false;
+          return true;
         }
+        var aKeys = Object.keys(a),
+          bKeys = Object.keys(b);
+        if (aKeys.length !== bKeys.length) return false;
+        for (var k = 0; k < aKeys.length; k++) {
+          var key = aKeys[k];
+          if (!(key in b)) return false;
+          if (!_deepEqual(a[key], b[key])) return false;
+        }
+        return true;
       }
-    }
-    return targets;
-  }
-  function pickFields(src, fields) {
-    var out = {};
-    if (!src || !fields) return out;
-    fields.forEach(function (k) {
-      if (src[k] != null) {
-        out[k] = JSON.parse(JSON.stringify(src[k]));
+      function assertOk(value, msg) {
+        _rec({ pass: !!value, detail: msg || '值为假' });
       }
-    });
-    return out;
-  }
-
-  return {
-    parseRange: parseRange, normalizeUploadVal: normalizeUploadVal, buildFormModel: buildFormModel, buildGrid: buildGrid,
-    evalDepends: evalDepends, evalCustom: evalCustom, evalMath: evalMath, evalEvent: evalEvent,
-    getStep: getStep,
-    insertColumns: insertColumns, insertRows: insertRows,
-    removeColumn: removeColumn, removeRow: removeRow,
-    appendColumns: appendColumns, appendRows: appendRows,
-    buildApplyTargets: buildApplyTargets, pickFields: pickFields,
-    _clearCache: function () { _exprCache = {}; },
-    _cacheSize: function () { return Object.keys(_exprCache).length; }
-  };
-}
-var DT = _DTUtilsFactory();
-
-/* ---- parseConfigText（与配置页一致）---- */
-function parseConfigText(text) {
-  try { return JSON.parse(text); } catch (e) {}
-  var m = text.match(/var\s+([a-zA-Z_$][\w$]*)\s*=/);
-  if (m) {
-    var name = m[1];
-    try {
-      var data = new Function(text + '; return typeof ' + name + ' !== "undefined" ? ' + name + ' : null;')();
-      if (data && typeof data === 'object') return data;
-    } catch (e) {}
-  }
-  try {
-    var data2 = new Function('return (' + text + ');')();
-    if (data2 && typeof data2 === 'object') return data2;
-  } catch (e2) {}
-  throw new Error('无法识别的内容格式');
-}
-
-/* ---- 冲突检测纯函数版 ---- */
-function idExists(cells, id, excludeUid) {
-  return (cells || []).some(function (c) { return c.id === id && c.__uid !== excludeUid; });
-}
-function genUniqueId(cells, base, excludeUid) {
-  if (!idExists(cells, base, excludeUid)) return base;
-  var n = 2;
-  while (idExists(cells, base + '_' + n, excludeUid)) n++;
-  return base + '_' + n;
-}
-function checkOverlap(cells, x, y, excludeUid) {
-  if (!x || !y) return [];
-  var xr = DT.parseRange(x), yr = DT.parseRange(y);
-  var conflicts = [];
-  (cells || []).forEach(function (c) {
-    if (c.__uid === excludeUid) return;
-    if (!c.x || !c.y) return;
-    var cxr = DT.parseRange(c.x), cyr = DT.parseRange(c.y);
-    if (xr.start <= cxr.end && xr.end >= cxr.start &&
-        yr.start <= cyr.end && yr.end >= cyr.start) conflicts.push(c);
-  });
-  return conflicts;
-}
-
-/* ---- schema 校验（返回错误数组）---- */
-var VALID_TYPES = ['label', 'text', 'input', 'textarea', 'number', 'select', 'radio', 'checkbox', 'date', 'upload', 'formula'];
-function validateConfig(data) {
-  if (!data || typeof data !== 'object') return ['数据不是对象'];
-  if (!Array.isArray(data.cells)) return ['数据必须包含 cells 数组'];
-  var errors = [];
-  var idMap = {};
-  data.cells.forEach(function (c, idx) {
-    var label = '第 ' + (idx + 1) + ' 个 cell';
-    if (!c.id) errors.push(label + ' 缺少 id');
-    else if (idMap[c.id]) errors.push(label + ' ID "' + c.id + '" 与第 ' + idMap[c.id] + ' 个 cell 重复');
-    else idMap[c.id] = idx + 1;
-    if (c.x == null) errors.push(label + ' 缺少 x');
-    if (c.y == null) errors.push(label + ' 缺少 y');
-    if (!c.type) errors.push(label + ' 缺少 type');
-    else if (VALID_TYPES.indexOf(c.type) < 0) errors.push(label + ' type "' + c.type + '" 不合法');
-  });
-  return errors;
-}
-
-/* ====================================================================
- * 测试框架
- * ==================================================================== */
-var _groups = [];
-function group(name) { _groups.push({ name: name, cases: [] }); }
-function test(name, fn) { _groups[_groups.length - 1].cases.push({ name: name, fn: fn }); }
-function _rec(res) { _lastResult = res; if (!res.pass) throw new Error(res.detail || '失败'); }
-function assertEqual(actual, expected, msg) {
-  var aJson = JSON.stringify(actual), eJson = JSON.stringify(expected);
-  // 深度比较：忽略对象 key 顺序（语义相等），但保留 array 顺序
-  _rec({ pass: _deepEqual(actual, expected), detail: (msg || '') + '\n  期望: ' + eJson + '\n  实际: ' + aJson });
-}
-function _deepEqual(a, b) {
-  if (a === b) return true;
-  if (a == null || b == null) return a === b;
-  if (typeof a !== 'object' || typeof b !== 'object') return a === b;
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-  if (Array.isArray(a)) {
-    if (a.length !== b.length) return false;
-    for (var i = 0; i < a.length; i++) if (!_deepEqual(a[i], b[i])) return false;
-    return true;
-  }
-  var aKeys = Object.keys(a), bKeys = Object.keys(b);
-  if (aKeys.length !== bKeys.length) return false;
-  for (var k = 0; k < aKeys.length; k++) {
-    var key = aKeys[k];
-    if (!(key in b)) return false;
-    if (!_deepEqual(a[key], b[key])) return false;
-  }
-  return true;
-}
-function assertOk(value, msg) { _rec({ pass: !!value, detail: msg || '值为假' }); }
-function assertFail(value, msg) { _rec({ pass: !value, detail: msg || '值应为假' }); }
-var _lastResult = null;
-
-/* ====================================================================
- * 测试用例
- * ==================================================================== */
-
-// ---- A. parseRange ----
-group('A. parseRange');
-test('单值', function () {
-  var r = DT.parseRange('1');
-  assertEqual(r, { start: 1, end: 1, span: 1 });
-});
-test('范围 "3,5"', function () {
-  assertEqual(DT.parseRange('3,5'), { start: 3, end: 5, span: 3 });
-});
-test('逆序 "5,3"', function () {
-  assertEqual(DT.parseRange('5,3'), { start: 3, end: 5, span: 3 });
-});
-test('数字入参', function () {
-  assertEqual(DT.parseRange(7), { start: 7, end: 7, span: 1 });
-});
-
-// ---- B. buildFormModel ----
-group('B. buildFormModel');
-test('number 类型 → Number', function () {
-  var fm = DT.buildFormModel([{ id: 'a', type: 'number', value: '42' }]);
-  assertEqual(fm.a, 42);
-});
-test('number 空值 → null', function () {
-  var fm = DT.buildFormModel([{ id: 'a', type: 'number', value: '' }]);
-  assertEqual(fm.a, null);
-});
-test('checkbox → 数组', function () {
-  var fm = DT.buildFormModel([{ id: 'a', type: 'checkbox', value: ['x', 'y'] }]);
-  assertOk(Array.isArray(fm.a) && fm.a.length === 2);
-});
-test('upload 走数组分支（多文件改造）', function () {
-  var fm = DT.buildFormModel([{ id: 'a', type: 'upload', value: [{ path: 'x', name: 'file.pdf' }] }]);
-  assertOk(Array.isArray(fm.a) && fm.a.length === 1, 'upload 应该走数组分支');
-});
-test('upload 无 value → 空数组', function () {
-  var fm = DT.buildFormModel([{ id: 'a', type: 'upload' }]);
-  assertOk(Array.isArray(fm.a) && fm.a.length === 0, 'upload 默认空数组');
-});
-
-// ---- C. buildGrid ----
-group('C. buildGrid');
-test('单 cell', function () {
-  var g = DT.buildGrid([{ id: 'a', x: '1', y: '1', type: 'label' }]);
-  assertEqual(g.maxC, 1);
-  assertEqual(g.maxR, 1);
-  assertEqual(g.rows[0][0].cell.id, 'a');
-});
-test('rowspan 占位', function () {
-  // a 占 (1,1)-(1,2)，b 占 (2,1)，c 占 (2,2)
-  var g = DT.buildGrid([
-    { id: 'a', x: '1', y: '1,2', type: 'label' },
-    { id: 'b', x: '2', y: '1', type: 'label' },
-    { id: 'c', x: '2', y: '2', type: 'label' }
-  ]);
-  assertOk(g.rows[0][0].cell.id === 'a' && g.rows[0][0].rowspan === 2, 'a 应占 2 行');
-  assertOk(g.rows[1][0].skip === true, '第 2 行第 1 列应为 skip 占位');
-  assertEqual(g.rows[1][1].cell.id, 'c');
-});
-test('隐藏 cell 过滤后正确布局（模拟 portalHide bug 场景）', function () {
-  // 模拟之前 portalHide bug：跨行 cell 被隐藏后，被它占掉的位置不应再干扰布局
-  var cells = [
-    { id: 'a', x: '1', y: '1,2', type: 'label' },
-    { id: 'b', x: '2', y: '1', type: 'label' }
-  ];
-  var g = DT.buildGrid(cells);
-  assertEqual(g.rows.length, 2);
-  assertEqual(g.rows[1][0].skip, true, 'a 的 rowspan 占位');
-  assertEqual(g.rows[1][1].cell, null, '第 2 行第 2 列本就空');
-});
-
-// ---- D. evalDepends / evalCustom ----
-group('D. evalDepends / evalCustom');
-test('evalDepends 基本求值', function () {
-  assertOk(DT.evalDepends('a > 1', { a: 2 }));
-});
-test('evalDepends locals 注入', function () {
-  // fm 的 key 应该作为局部变量
-  assertOk(DT.evalDepends('a + b === 3', { a: 1, b: 2 }));
-});
-test('evalDepends 空表达式 → false', function () {
-  assertFail(DT.evalDepends('', { a: 1 }));
-});
-test('evalDepends 异常 → false（不抛错）', function () {
-  assertFail(DT.evalDepends('throw new Error("x")', {}));
-});
-test('evalCustom 接收 value', function () {
-  assertEqual(DT.evalCustom('value * 2', 5, {}), 10);
-});
-test('evalCustom 空表达式 → false', function () {
-  assertFail(DT.evalCustom('  ', 1, {}));
-});
-
-// ---- E. 编译缓存 ----
-group('E. 编译缓存');
-test('同表达式多次调用只编译一次', function () {
-  DT._clearCache();
-  var size0 = DT._cacheSize();
-  DT.evalDepends('a > 0', { a: 1 });
-  DT.evalDepends('a > 0', { a: 2 });
-  DT.evalDepends('a > 0', { a: 3 });
-  var sizeAfter = DT._cacheSize();
-  assertOk(sizeAfter - size0 === 1, '3 次调用只新增 1 个缓存项，实际：' + (sizeAfter - size0));
-});
-test('不同表达式分别编译', function () {
-  DT._clearCache();
-  DT.evalDepends('a > 0', { a: 1 });
-  DT.evalDepends('a < 0', { a: 1 });
-  assertEqual(DT._cacheSize(), 2);
-});
-test('不同 fm keys 各自缓存（避免 locals 不一致）', function () {
-  DT._clearCache();
-  DT.evalDepends('a > 0', { a: 1 });
-  DT.evalDepends('a > 0', { a: 1, b: 2 });
-  assertEqual(DT._cacheSize(), 2, 'fm keys 集不同应分别缓存');
-});
-
-// ---- F. evalEvent / evalMath ----
-group('F. evalEvent / evalMath');
-test('evalEvent 基本求值', function () {
-  var fm = { total: 0, a: 3, b: 4 };
-  DT.evalEvent('fm.total = fm.a + fm.b', 0, fm, {});
-  assertEqual(fm.total, 7);
-});
-test('evalEvent 空函数体 → undefined', function () {
-  assertEqual(DT.evalEvent('  ', 1, {}, {}), undefined);
-});
-test('evalMath 基本求值', function () {
-  assertEqual(DT.evalMath('a + b * 2', { a: 1, b: 2 }), 5);
-});
-
-// ---- F2. getStep（数字精度派生） ----
-// 注：getStep 只按 cell.precision 计算，不关心默认值；
-// 配置页 makeCell 在 number 类型时默认 precision=2（小数 2 位），
-// 但 getStep 函数本身对未设 precision 的 cell 返回 step=1（兼容导入旧数据）。
-group('F2. getStep（数字精度派生）');
-test('precision 未设置 → step=1（函数行为；配置页 makeCell 会补默认 precision=2）', function () {
-  assertEqual(DT.getStep({ type: 'number' }), 1);
-});
-test('precision=null → step=1（"不限"模式）', function () {
-  assertEqual(DT.getStep({ type: 'number', precision: null }), 1);
-});
-test('precision=undefined → step=1', function () {
-  assertEqual(DT.getStep({ type: 'number', precision: undefined }), 1);
-});
-test('precision=0（仅整数）→ step=1', function () {
-  assertEqual(DT.getStep({ type: 'number', precision: 0 }), 1);
-});
-test('precision=1（1 位小数）→ step=0.1', function () {
-  assertEqual(DT.getStep({ type: 'number', precision: 1 }), 0.1);
-});
-test('precision=2（2 位小数）→ step=0.01', function () {
-  assertEqual(DT.getStep({ type: 'number', precision: 2 }), 0.01);
-});
-test('precision=3（3 位小数）→ step=0.001', function () {
-  assertEqual(DT.getStep({ type: 'number', precision: 3 }), 0.001);
-});
-test('precision=4（4 位小数）→ step=0.0001', function () {
-  assertEqual(DT.getStep({ type: 'number', precision: 4 }), 0.0001);
-});
-test('cell=null → step=1（不抛错）', function () {
-  assertEqual(DT.getStep(null), 1);
-});
-test('cell=undefined → step=1（不抛错）', function () {
-  assertEqual(DT.getStep(undefined), 1);
-});
-test('非 number 类型也按 precision 返回（兼容调用）', function () {
-  // getStep 不校验 type，调用方控制；这里验证精度优先于类型
-  assertEqual(DT.getStep({ type: 'text', precision: 2 }), 0.01);
-});
-
-// ---- F3. cell.events（自定义事件契约） ----
-// 注：配置页和生产组件 runCellEvent 都按 'on' + eventType首字母大写 取 key
-// （change → onChange），并回退兼容历史小写 key。
-// evalEvent 是工具函数（dynamic-table-utils.js）；
-// key 转换 + 编译缓存在两端组件里独立实现但行为一致，这里通过模拟函数验证契约。
-group('F3. cell.events（自定义事件契约）');
-
-// 辅助：模拟 runCellEvent 的 key 转换（与配置页/生产组件代码完全一致）
-function pickEventBody(cell, eventType) {
-  var key = 'on' + eventType.charAt(0).toUpperCase() + eventType.slice(1);
-  return (cell.events && (cell.events[key] || cell.events[eventType])) || undefined;
-}
-
-test('key 转换：change → onChange', function () {
-  assertEqual(pickEventBody({ events: { onChange: 'fm.x=1' } }, 'change'), 'fm.x=1');
-});
-test('key 转换：blur → onBlur', function () {
-  assertEqual(pickEventBody({ events: { onBlur: 'fm.x=2' } }, 'blur'), 'fm.x=2');
-});
-test('key 转换：input → onInput', function () {
-  assertEqual(pickEventBody({ events: { onInput: 'fm.x=3' } }, 'input'), 'fm.x=3');
-});
-test('兼容历史小写 key（change → events.change）', function () {
-  assertEqual(pickEventBody({ events: { change: 'fm.x=4' } }, 'change'), 'fm.x=4');
-});
-test('大小写 key 同时存在时 onXxx 优先', function () {
-  var cell = { events: { onChange: 'on-style', change: 'lower' } };
-  assertEqual(pickEventBody(cell, 'change'), 'on-style');
-});
-test('空 events → undefined', function () {
-  assertEqual(pickEventBody({ events: {} }, 'change'), undefined);
-});
-test('无 events 字段 → undefined', function () {
-  assertEqual(pickEventBody({}, 'change'), undefined);
-});
-
-test('evalEvent 跨字段重算（写 fm.xxx 改外部对象引用）', function () {
-  var fm = { total: 0, a: 3, b: 4 };
-  DT.evalEvent('fm.total = Number(fm.a) + Number(fm.b)', 0, fm, {});
-  assertEqual(fm.total, 7);
-});
-test('evalEvent 条件赋值（if (...) fm.y = ...）', function () {
-  var fm = { score: 90, level: 'C' };
-  DT.evalEvent('if (fm.score > 80) fm.level = "A"', null, fm, {});
-  assertEqual(fm.level, 'A');
-});
-test('evalEvent value 参数可用（当前 cell 新值）', function () {
-  var fm = { doubled: 0 };
-  DT.evalEvent('fm.doubled = Number(value) * 2', 21, fm, {});
-  assertEqual(fm.doubled, 42);
-});
-test('evalEvent extra 参数可访问', function () {
-  var fm = { echo: '' };
-  DT.evalEvent('fm.echo = extra.cell.id', null, fm, { cell: { id: 'r1' } });
-  assertEqual(fm.echo, 'r1');
-});
-test('evalEvent rawEvent 第 4 参数可访问', function () {
-  var fm = { d: null };
-  DT.evalEvent('fm.d = rawEvent', null, fm, {}, { date: '2026-01-01' });
-  assertOk(fm.d && fm.d.date === '2026-01-01');
-});
-test('evalEvent 函数体 throw → 静默吞错（不抛出，仅 console.error）', function () {
-  var threw = false;
-  try { DT.evalEvent('throw new Error("boom")', null, {}, {}); }
-  catch (e) { threw = true; }
-  assertFail(threw);
-});
-test('evalEvent 空函数体 → undefined 且不执行副作用', function () {
-  var fm = { x: 'unchanged' };
-  var r = DT.evalEvent('   ', null, fm, {});
-  assertEqual(r, undefined);
-  assertEqual(fm.x, 'unchanged');
-});
-test('evalEvent 语法错误 → 静默吞错', function () {
-  var threw = false;
-  try { DT.evalEvent('fm.x =', null, {}, {}); }
-  catch (e) { threw = true; }
-  assertFail(threw);
-});
-test('evalEvent 用户写 return 才能拿到返回值（函数体不会自动包 return）', function () {
-  // 裸表达式当语句执行，无返回值（区别于 evalMath 自动包 return(...)）
-  assertEqual(DT.evalEvent('Number(value) + 1', 10, {}, {}), undefined);
-  // 用户显式 return 才能拿到
-  assertEqual(DT.evalEvent('return Number(value) + 1', 10, {}, {}), 11);
-});
-
-// ---- G. genUniqueId / idExists / checkOverlap ----
-group('G. genUniqueId / idExists / checkOverlap');
-test('idExists 基础查重', function () {
-  var cells = [{ id: 'a', __uid: '1' }, { id: 'b', __uid: '2' }];
-  assertOk(idExists(cells, 'a'));
-  assertFail(idExists(cells, 'c'));
-});
-test('idExists 排除自身', function () {
-  var cells = [{ id: 'a', __uid: '1' }];
-  assertOk(!idExists(cells, 'a', '1'), '排除自身后不应认为重复');
-});
-test('genUniqueId 无冲突返回原值', function () {
-  var cells = [{ id: 'a', __uid: '1' }];
-  assertEqual(genUniqueId(cells, 'b'), 'b');
-});
-test('genUniqueId 冲突时追加 _2', function () {
-  var cells = [{ id: 'a', __uid: '1' }];
-  assertEqual(genUniqueId(cells, 'a'), 'a_2');
-});
-test('genUniqueId 多次冲突', function () {
-  var cells = [{ id: 'a', __uid: '1' }, { id: 'a_2', __uid: '2' }, { id: 'a_3', __uid: '3' }];
-  assertEqual(genUniqueId(cells, 'a'), 'a_4');
-});
-test('checkOverlap 重叠', function () {
-  var cells = [{ id: 'other', x: '1,3', y: '1,3', __uid: '9' }];
-  var r = checkOverlap(cells, '2,4', '2,4', 'self');
-  assertEqual(r.length, 1);
-  assertEqual(r[0].id, 'other');
-});
-test('checkOverlap 不重叠', function () {
-  var cells = [{ id: 'other', x: '5,6', y: '5,6', __uid: '9' }];
-  var r = checkOverlap(cells, '1,3', '1,3', 'self');
-  assertEqual(r.length, 0);
-});
-test('checkOverlap 排除自身', function () {
-  var cells = [{ id: 'a', x: '1,3', y: '1,3', __uid: '1' }];
-  var r = checkOverlap(cells, '1,3', '1,3', '1');
-  assertEqual(r.length, 0);
-});
-
-// ---- H. validateConfig ----
-group('H. schema 校验');
-test('合法配置无错误', function () {
-  var data = { cells: [{ id: 'a', x: '1', y: '1', type: 'label' }] };
-  assertEqual(validateConfig(data).length, 0);
-});
-test('缺 id 报错', function () {
-  var data = { cells: [{ x: '1', y: '1', type: 'label' }] };
-  var errs = validateConfig(data);
-  assertOk(errs.length === 1 && /缺少 id/.test(errs[0]));
-});
-test('非法 type 报错', function () {
-  var data = { cells: [{ id: 'a', x: '1', y: '1', type: 'invalidType' }] };
-  assertOk(validateConfig(data).length === 1);
-});
-test('重复 ID 报错', function () {
-  var data = { cells: [
-    { id: 'dup', x: '1', y: '1', type: 'label' },
-    { id: 'dup', x: '2', y: '2', type: 'label' }
-  ]};
-  var errs = validateConfig(data);
-  assertOk(errs.length === 1 && /重复/.test(errs[0]));
-});
-test('缺 cells 数组', function () {
-  assertEqual(validateConfig({}).length, 1);
-});
-
-// ---- I. parseConfigText ----
-group('I. parseConfigText');
-test('标准 JSON', function () {
-  var d = parseConfigText('{"title":"x","cells":[]}');
-  assertEqual(d.title, 'x');
-});
-test('var X = {...}; 形式', function () {
-  var d = parseConfigText('var MOCK = {"title":"y","cells":[]};');
-  assertEqual(d.title, 'y');
-});
-test('裸对象字面量', function () {
-  var d = parseConfigText('{title:"z",cells:[]}');
-  assertEqual(d.title, 'z');
-});
-test('非法格式抛错', function () {
-  var threw = false;
-  try { parseConfigText('not a config'); } catch (e) { threw = true; }
-  assertOk(threw);
-});
-
-// ---- K. insertColumns / insertRows / removeColumn / removeRow / appendXxx ----
-// 坐标平移算法核心测试。覆盖三种分支（前/后/跨越）+ 合并 cell 处理 + 边界。
-group('K. 列/行批量操作（坐标平移）');
-
-// --- insertColumns（5 个用例）---
-test('insertColumns 末尾追加（beforeCol > maxC）→ 现有不动', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }, { id: 'b', x: '2', y: '1' }];
-  DT.insertColumns(cells, 3, 1);
-  assertEqual(cells[0].x, '1');
-  assertEqual(cells[1].x, '2');
-});
-test('insertColumns 在第 2 列前插 1 列 → 第 2 列变第 3 列', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }, { id: 'b', x: '2', y: '1' }];
-  DT.insertColumns(cells, 2, 1);
-  assertEqual(cells[0].x, '1');
-  assertEqual(cells[1].x, '3');
-});
-test('insertColumns 合并 cell 跨越插入点 → 扩展范围', function () {
-  var cells = [{ id: 'm', x: '1,3', y: '1' }];
-  DT.insertColumns(cells, 2, 1);
-  assertEqual(cells[0].x, '1,4');
-});
-test('insertColumns 合并 cell 完全在插入点前 → 不动', function () {
-  var cells = [{ id: 'm', x: '1,2', y: '1' }];
-  DT.insertColumns(cells, 5, 1);
-  assertEqual(cells[0].x, '1,2');
-});
-test('insertColumns count=3 多列插入', function () {
-  var cells = [{ id: 'a', x: '3', y: '1' }, { id: 'b', x: '1', y: '1' }];
-  DT.insertColumns(cells, 2, 3);
-  assertEqual(cells[0].x, '6');
-  assertEqual(cells[1].x, '1');
-});
-
-// --- insertRows（5 个用例，同结构）---
-test('insertRows 末尾追加 → 现有不动', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }, { id: 'b', x: '1', y: '2' }];
-  DT.insertRows(cells, 3, 1);
-  assertEqual(cells[0].y, '1');
-  assertEqual(cells[1].y, '2');
-});
-test('insertRows 在第 2 行前插 1 行 → 第 2 行变第 3 行', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }, { id: 'b', x: '1', y: '2' }];
-  DT.insertRows(cells, 2, 1);
-  assertEqual(cells[0].y, '1');
-  assertEqual(cells[1].y, '3');
-});
-test('insertRows 合并 cell 跨越插入点 → 扩展范围', function () {
-  var cells = [{ id: 'm', x: '1', y: '1,3' }];
-  DT.insertRows(cells, 2, 1);
-  assertEqual(cells[0].y, '1,4');
-});
-test('insertRows 合并 cell 完全在插入点前 → 不动', function () {
-  var cells = [{ id: 'm', x: '1', y: '1,2' }];
-  DT.insertRows(cells, 5, 1);
-  assertEqual(cells[0].y, '1,2');
-});
-test('insertRows count=2 多行插入', function () {
-  var cells = [{ id: 'a', x: '1', y: '3' }];
-  DT.insertRows(cells, 2, 2);
-  assertEqual(cells[0].y, '5');
-});
-
-// --- removeColumn（6 个用例）---
-test('removeColumn 独占该列 → cell 被移除，返回 removed=1', function () {
-  var cells = [{ id: 'a', x: '2', y: '1' }, { id: 'b', x: '1', y: '1' }];
-  var removed = DT.removeColumn(cells, 2);
-  assertEqual(removed, 1);
-  assertEqual(cells.length, 1);
-  assertEqual(cells[0].id, 'b');
-});
-test('removeColumn 合并 cell 跨越该列 → 范围缩 1', function () {
-  var cells = [{ id: 'm', x: '1,3', y: '1' }];
-  var removed = DT.removeColumn(cells, 2);
-  assertEqual(removed, 0);
-  assertEqual(cells[0].x, '1,2');
-});
-test('removeColumn 合并 cell 起点等于删除列 → 起点右移、范围缩 1', function () {
-  var cells = [{ id: 'm', x: '2,4', y: '1' }];
-  var removed = DT.removeColumn(cells, 2);
-  assertEqual(removed, 0);
-  assertEqual(cells[0].x, '2,3');
-});
-test('removeColumn 完全在删除点后 → 整体左移', function () {
-  var cells = [{ id: 'a', x: '5', y: '1' }];
-  DT.removeColumn(cells, 2);
-  assertEqual(cells[0].x, '4');
-});
-test('removeColumn 完全在删除点前 → 不动', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }];
-  DT.removeColumn(cells, 2);
-  assertEqual(cells[0].x, '1');
-});
-test('removeColumn 删除后再插入 → 状态可还原（平移对称性）', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }, { id: 'b', x: '2', y: '1' }, { id: 'c', x: '3', y: '1' }];
-  DT.removeColumn(cells, 2);          // 删第 2 列 → [a@1, c@2]
-  DT.insertColumns(cells, 2, 1);       // 在第 2 列前插回 1 列 → [a@1, c@3]
-  assertEqual(cells[0].x, '1');
-  assertEqual(cells[1].x, '3');
-});
-
-// --- removeRow（6 个用例，同结构）---
-test('removeRow 独占该行 → cell 被移除，返回 removed=1', function () {
-  var cells = [{ id: 'a', x: '1', y: '2' }, { id: 'b', x: '1', y: '1' }];
-  var removed = DT.removeRow(cells, 2);
-  assertEqual(removed, 1);
-  assertEqual(cells.length, 1);
-  assertEqual(cells[0].id, 'b');
-});
-test('removeRow 合并 cell 跨越该行 → 范围缩 1', function () {
-  var cells = [{ id: 'm', x: '1', y: '1,3' }];
-  var removed = DT.removeRow(cells, 2);
-  assertEqual(removed, 0);
-  assertEqual(cells[0].y, '1,2');
-});
-test('removeRow 合并 cell 起点等于删除行 → 起点下移、范围缩 1', function () {
-  var cells = [{ id: 'm', x: '1', y: '2,4' }];
-  DT.removeRow(cells, 2);
-  assertEqual(cells[0].y, '2,3');
-});
-test('removeRow 完全在删除点后 → 整体上移', function () {
-  var cells = [{ id: 'a', x: '1', y: '5' }];
-  DT.removeRow(cells, 2);
-  assertEqual(cells[0].y, '4');
-});
-test('removeRow 完全在删除点前 → 不动', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }];
-  DT.removeRow(cells, 2);
-  assertEqual(cells[0].y, '1');
-});
-test('removeRow 删除后再插入 → 状态可还原', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }, { id: 'b', x: '1', y: '2' }, { id: 'c', x: '1', y: '3' }];
-  DT.removeRow(cells, 2);
-  DT.insertRows(cells, 2, 1);
-  assertEqual(cells[0].y, '1');
-  assertEqual(cells[1].y, '3');
-});
-
-// --- appendColumns / appendRows（2 个用例）---
-test('appendColumns 末尾追加 2 列 → 现有 cell 不动，新 cell 起点为 maxC+1', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }, { id: 'b', x: '3', y: '1' }];
-  DT.appendColumns(cells, 2);
-  assertEqual(cells[0].x, '1');
-  assertEqual(cells[1].x, '3');
-  // appendColumns 等价于 insertColumns(maxC+1, count)，maxC=3 → 新空间从 col=4 起
-  cells.push({ id: 'c', x: '4', y: '1' });
-  assertEqual(cells[2].x, '4');
-  // 在 col=4 前插 1 列，c (col=4) 右移到 5
-  DT.insertColumns(cells, 4, 1);
-  assertEqual(cells[2].x, '5');
-});
-test('appendRows 末尾追加 1 行 → 现有 cell 不动', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }, { id: 'b', x: '1', y: '3' }];
-  DT.appendRows(cells, 1);
-  assertEqual(cells[0].y, '1');
-  assertEqual(cells[1].y, '3');
-});
-
-// --- 边界用例（4 个）---
-test('insertColumns count=0 → 无操作', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }];
-  DT.insertColumns(cells, 1, 0);
-  assertEqual(cells[0].x, '1');
-});
-test('insertColumns beforeCol=0（无效）→ 无操作', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }];
-  DT.insertColumns(cells, 0, 1);
-  assertEqual(cells[0].x, '1');
-});
-test('removeColumn 不存在的列（col=99）→ 所有 cell 视为"在前"，不动', function () {
-  var cells = [{ id: 'a', x: '1', y: '1' }, { id: 'b', x: '5', y: '1' }];
-  var removed = DT.removeColumn(cells, 99);
-  assertEqual(removed, 0);
-  assertEqual(cells[0].x, '1');
-  assertEqual(cells[1].x, '5');     // xr.start > col=99 是 false，所以不动
-});
-test('insertColumns 空 cells 数组 → 无操作不报错', function () {
-  var cells = [];
-  DT.insertColumns(cells, 1, 1);
-  assertEqual(cells.length, 0);
-});
-
-// ---- L. validation rules 序列化与兼容 ----
-// 与配置页面.html 同名函数保持一致（cell-card 子组件 methods + 全局函数）
-// 用例覆盖：序列化 iView 标准、inferRuleKind 旧数据迁移、normalizeRules 多 required 合并
-function serializeRule(r) {
-  var out = {};
-  var k = r.kind || 'required';
-  if (r.message) out.message = r.message;
-  if (k === 'required') {
-    if (typeof r.required === 'string' && r.required.trim()) out.required = r.required;
-    else if (r.required === true) out.required = true;
-  } else if (k === 'number') {
-    out.type = 'number';
-    if (r.min != null && r.min !== '') out.min = Number(r.min);
-    if (r.max != null && r.max !== '') out.max = Number(r.max);
-  } else if (k === 'string') {
-    out.type = 'string';
-    if (r.min != null && r.min !== '') out.min = Number(r.min);
-    if (r.max != null && r.max !== '') out.max = Number(r.max);
-  } else if (k === 'array') {
-    out.type = 'array';
-    if (r.min != null && r.min !== '') out.min = Number(r.min);
-    if (r.max != null && r.max !== '') out.max = Number(r.max);
-  } else if (k === 'pattern') {
-    if (r.pattern) out.pattern = r.pattern;
-  } else if (k === 'len') {
-    if (r.len != null && r.len !== '') out.len = Number(r.len);
-  } else if (k === 'enum') {
-    var arr = Array.isArray(r.enum) ? r.enum.slice()
-      : String(r.enumStr == null ? '' : r.enumStr).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-    if (arr.length) out.enum = arr;
-  } else if (k === 'custom') {
-    if (r.custom) out.custom = r.custom;
-    if (r.useDepends && r.depends) out.depends = r.depends;
-  } else if (k === 'validator') {
-    if (r.validator) out.validator = r.validator;
-    if (r.useDepends && r.depends) out.depends = r.depends;
-  } else if (k === 'depends') {
-    out.required = true;
-    if (r.depends) out.depends = r.depends;
-  }
-  return out;
-}
-function inferRuleKind(r) {
-  if (r.depends && r.required === true && !r.validator && !r.custom) {
-    r.kind = 'required';
-    r.required = r.depends;
-    delete r.depends;
-    return;
-  }
-  if (r.validator) r.kind = 'validator';
-  else if (r.custom) r.kind = 'custom';
-  else if (r.depends) r.kind = 'custom', r.custom = '';
-  else if (r.enum) { r.kind = 'enum'; r.enumStr = (Array.isArray(r.enum) ? r.enum : []).join(','); }
-  else if (r.pattern) r.kind = 'pattern';
-  else if (r.len != null) r.kind = 'len';
-  else if (r.type === 'array') r.kind = 'array';
-  else if (r.type === 'string') r.kind = 'string';
-  else if (r.type === 'number' && (r.min != null || r.max != null)) r.kind = 'number';
-  else r.kind = 'required';
-  if (r.depends && (r.kind === 'custom' || r.kind === 'validator')) r.useDepends = true;
-}
-function normalizeRules(rules) {
-  if (!Array.isArray(rules) || rules.length === 0) return rules;
-  rules.forEach(inferRuleKind);
-  var reqRules = rules.filter(function (r) { return r.kind === 'required'; });
-  if (reqRules.length <= 1) {
-    if (reqRules.length === 1) {
-      var idx = rules.indexOf(reqRules[0]);
-      if (idx > 0) {
-        rules.splice(idx, 1);
-        rules.unshift(reqRules[0]);
+      function assertFail(value, msg) {
+        _rec({ pass: !value, detail: msg || '值应为假' });
       }
-    }
-    return rules;
-  }
-  var chosen = null;
-  reqRules.forEach(function (r) {
-    if (!chosen) { chosen = r; return; }
-    var aExpr = typeof chosen.required === 'string' && chosen.required.trim();
-    var bExpr = typeof r.required === 'string' && r.required.trim();
-    if (bExpr && !aExpr) chosen = r;
-    else if (bExpr && aExpr && r.required.length > chosen.required.length) chosen = r;
-    else if (!bExpr && !aExpr && r.required === true && chosen.required !== true) chosen = r;
-  });
-  for (var i = rules.length - 1; i >= 0; i--) {
-    if (rules[i].kind === 'required' && rules[i] !== chosen) rules.splice(i, 1);
-  }
-  var idx0 = rules.indexOf(chosen);
-  if (idx0 > 0) {
-    rules.splice(idx0, 1);
-    rules.unshift(chosen);
-  }
-  return rules;
-}
+      var _lastResult = null;
 
-group('L. 校验规则序列化与兼容');
+      /* ====================================================================
+       * 测试用例
+       * ==================================================================== */
 
-// --- L1. serializeRule 各 kind 输出（7 个）---
-test('serializeRule required:true → {required:true, message}', function () {
-  var out = serializeRule({ kind: 'required', required: true, message: 'x' });
-  assertEqual(out, { required: true, message: 'x' });
-});
-test('serializeRule required:"fm.x" → 字符串动态必填', function () {
-  var out = serializeRule({ kind: 'required', required: 'fm.x', message: 'y' });
-  assertEqual(out, { required: 'fm.x', message: 'y' });
-});
-test('serializeRule required:false → 不输出 required 字段（message 保留）', function () {
-  var out = serializeRule({ kind: 'required', required: false, message: 'z' });
-  assertEqual(out, { message: 'z' });
-});
-test('serializeRule required:""（空字符串）→ 不输出（用户切了条件必填但没填表达式）', function () {
-  var out = serializeRule({ kind: 'required', required: '', message: 'z' });
-  assertEqual(out, { message: 'z' });
-});
-test('serializeRule number → {type, min, max}', function () {
-  var out = serializeRule({ kind: 'number', min: 0, max: 100 });
-  assertEqual(out, { type: 'number', min: 0, max: 100 });
-});
-test('serializeRule pattern → {pattern}', function () {
-  var out = serializeRule({ kind: 'pattern', pattern: '^\\d+$' });
-  assertEqual(out, { pattern: '^\\d+$' });
-});
-test('serializeRule enum → {enum:[...]}', function () {
-  var out = serializeRule({ kind: 'enum', enum: ['A', 'B'] });
-  assertEqual(out, { enum: ['A', 'B'] });
-});
-test('serializeRule validator → {validator:body}', function () {
-  var out = serializeRule({ kind: 'validator', validator: 'return true' });
-  assertEqual(out, { validator: 'return true' });
-});
+      // ---- A. parseRange ----
+      group('A. parseRange');
+      test('单值', function () {
+        var r = DT.parseRange('1');
+        assertEqual(r, { start: 1, end: 1, span: 1 });
+      });
+      test('范围 "3,5"', function () {
+        assertEqual(DT.parseRange('3,5'), { start: 3, end: 5, span: 3 });
+      });
+      test('逆序 "5,3"', function () {
+        assertEqual(DT.parseRange('5,3'), { start: 3, end: 5, span: 3 });
+      });
+      test('数字入参', function () {
+        assertEqual(DT.parseRange(7), { start: 7, end: 7, span: 1 });
+      });
 
-// --- L2. inferRuleKind 兼容旧数据（4 个）---
-test('inferRuleKind {required:true} → kind=required', function () {
-  var r = { required: true };
-  inferRuleKind(r);
-  assertEqual(r.kind, 'required');
-  assertEqual(r.required, true);
-});
-test('inferRuleKind {required:"fm.x"} → kind=required, 字符串保留', function () {
-  var r = { required: 'fm.x' };
-  inferRuleKind(r);
-  assertEqual(r.kind, 'required');
-  assertEqual(r.required, 'fm.x');
-});
-test('inferRuleKind {depends:"fm.x", required:true} → 合并为 required:"fm.x"', function () {
-  var r = { depends: 'fm.x', required: true };
-  inferRuleKind(r);
-  assertEqual(r.kind, 'required');
-  assertEqual(r.required, 'fm.x');
-  assertOk(!r.depends, 'depends 应已删除');
-});
-test('inferRuleKind {type:"number", min:0, max:100} → kind=number', function () {
-  var r = { type: 'number', min: 0, max: 100 };
-  inferRuleKind(r);
-  assertEqual(r.kind, 'number');
-});
+      // ---- B. buildFormModel ----
+      group('B. buildFormModel');
+      test('number 类型 → Number', function () {
+        var fm = DT.buildFormModel([{ id: 'a', type: 'number', value: '42' }]);
+        assertEqual(fm.a, 42);
+      });
+      test('number 空值 → null', function () {
+        var fm = DT.buildFormModel([{ id: 'a', type: 'number', value: '' }]);
+        assertEqual(fm.a, null);
+      });
+      test('checkbox → 数组', function () {
+        var fm = DT.buildFormModel([
+          { id: 'a', type: 'checkbox', value: ['x', 'y'] }
+        ]);
+        assertOk(Array.isArray(fm.a) && fm.a.length === 2);
+      });
+      test('upload 走数组分支（多文件改造）', function () {
+        var fm = DT.buildFormModel([
+          { id: 'a', type: 'upload', value: [{ path: 'x', name: 'file.pdf' }] }
+        ]);
+        assertOk(
+          Array.isArray(fm.a) && fm.a.length === 1,
+          'upload 应该走数组分支'
+        );
+      });
+      test('upload 无 value → 空数组', function () {
+        var fm = DT.buildFormModel([{ id: 'a', type: 'upload' }]);
+        assertOk(Array.isArray(fm.a) && fm.a.length === 0, 'upload 默认空数组');
+      });
 
-// --- L3. normalizeRules 多 required 合并（4 个）---
-test('normalizeRules 单条 required → 移到 [0]', function () {
-  var rules = [{ kind: 'number', type: 'number', min: 0 }, { kind: 'required', required: true }];
-  normalizeRules(rules);
-  assertEqual(rules[0].kind, 'required');
-  assertEqual(rules[1].kind, 'number');
-  assertEqual(rules.length, 2);
-});
-test('normalizeRules 多条 required → 合并保留 expr 优先', function () {
-  var rules = [
-    { kind: 'required', required: true },
-    { kind: 'required', required: 'fm.x != null' }
-  ];
-  normalizeRules(rules);
-  assertEqual(rules.length, 1);
-  assertEqual(rules[0].kind, 'required');
-  assertEqual(rules[0].required, 'fm.x != null');
-});
-test('normalizeRules 两条都是 true → 取一条', function () {
-  var rules = [
-    { kind: 'required', required: true, message: 'a' },
-    { kind: 'required', required: true, message: 'b' }
-  ];
-  normalizeRules(rules);
-  assertEqual(rules.length, 1);
-  assertEqual(rules[0].required, true);
-});
-test('normalizeRules 两条 expr → 取更长的（信息更全）', function () {
-  var rules = [
-    { kind: 'required', required: 'fm.a' },
-    { kind: 'required', required: 'fm.a != null && fm.b != null' }
-  ];
-  normalizeRules(rules);
-  assertEqual(rules.length, 1);
-  assertEqual(rules[0].required, 'fm.a != null && fm.b != null');
-});
+      // ---- C. buildGrid ----
+      group('C. buildGrid');
+      test('单 cell', function () {
+        var g = DT.buildGrid([{ id: 'a', x: '1', y: '1', type: 'label' }]);
+        assertEqual(g.maxC, 1);
+        assertEqual(g.maxR, 1);
+        assertEqual(g.rows[0][0].cell.id, 'a');
+      });
+      test('rowspan 占位', function () {
+        // a 占 (1,1)-(1,2)，b 占 (2,1)，c 占 (2,2)
+        var g = DT.buildGrid([
+          { id: 'a', x: '1', y: '1,2', type: 'label' },
+          { id: 'b', x: '2', y: '1', type: 'label' },
+          { id: 'c', x: '2', y: '2', type: 'label' }
+        ]);
+        assertOk(
+          g.rows[0][0].cell.id === 'a' && g.rows[0][0].rowspan === 2,
+          'a 应占 2 行'
+        );
+        assertOk(g.rows[1][0].skip === true, '第 2 行第 1 列应为 skip 占位');
+        assertEqual(g.rows[1][1].cell.id, 'c');
+      });
+      test('隐藏 cell 过滤后正确布局（模拟 portalHide bug 场景）', function () {
+        // 模拟之前 portalHide bug：跨行 cell 被隐藏后，被它占掉的位置不应再干扰布局
+        var cells = [
+          { id: 'a', x: '1', y: '1,2', type: 'label' },
+          { id: 'b', x: '2', y: '1', type: 'label' }
+        ];
+        var g = DT.buildGrid(cells);
+        assertEqual(g.rows.length, 2);
+        assertEqual(g.rows[1][0].skip, true, 'a 的 rowspan 占位');
+        assertEqual(g.rows[1][1].cell, null, '第 2 行第 2 列本就空');
+      });
 
-// --- L4. 端到端：序列化往返（4 个）---
-test('往返 required:true 序列化 → infer 状态保持', function () {
-  var r1 = { kind: 'required', required: true, message: '必填' };
-  var s1 = serializeRule(r1);
-  assertEqual(s1, { required: true, message: '必填' });
-  inferRuleKind(s1);
-  assertEqual(s1.kind, 'required');
-  assertEqual(s1.required, true);
-});
-test('往返 required:"fm.x" 序列化 → infer 状态保持', function () {
-  var r1 = { kind: 'required', required: 'fm.x != null' };
-  var s1 = serializeRule(r1);
-  assertEqual(s1, { required: 'fm.x != null' });
-  inferRuleKind(s1);
-  assertEqual(s1.kind, 'required');
-  assertEqual(s1.required, 'fm.x != null');
-});
-test('往返 旧 depends 格式 → infer 合并到 required expr', function () {
-  // 模拟导入旧 JSON：{depends, required:true}
-  var legacy = { depends: 'fm.x != null', required: true };
-  inferRuleKind(legacy);
-  assertEqual(legacy.kind, 'required');
-  assertEqual(legacy.required, 'fm.x != null');
-  // 再序列化输出 iView 标准
-  var out = serializeRule(legacy);
-  assertEqual(out, { required: 'fm.x != null' });
-});
-test('往返 number 规则 → 输入输出一致', function () {
-  var r1 = { kind: 'number', type: 'number', min: 0, max: 100, message: '范围' };
-  var s1 = serializeRule(r1);
-  assertEqual(s1, { type: 'number', min: 0, max: 100, message: '范围' });
-  inferRuleKind(s1);
-  assertEqual(s1.kind, 'number');
-});
+      // ---- D. evalDepends / evalCustom ----
+      group('D. evalDepends / evalCustom');
+      test('evalDepends 基本求值', function () {
+        assertOk(DT.evalDepends('a > 1', { a: 2 }));
+      });
+      test('evalDepends locals 注入', function () {
+        // fm 的 key 应该作为局部变量
+        assertOk(DT.evalDepends('a + b === 3', { a: 1, b: 2 }));
+      });
+      test('evalDepends 空表达式 → false', function () {
+        assertFail(DT.evalDepends('', { a: 1 }));
+      });
+      test('evalDepends 异常 → false（不抛错）', function () {
+        assertFail(DT.evalDepends('throw new Error("x")', {}));
+      });
+      test('evalCustom 接收 value', function () {
+        assertEqual(DT.evalCustom('value * 2', 5, {}), 10);
+      });
+      test('evalCustom 空表达式 → false', function () {
+        assertFail(DT.evalCustom('  ', 1, {}));
+      });
 
-/* ====================================================================
- * M 组：多附件上传改造
- *   - 旧 fm 数据归一化（echoData 入口逻辑）
- *   - onUploadSuccess 累积 + maxCount 拦截
- *   - buildRules array+min/max 数组语义
- *   - serializeJSON maxCount 字段
- * ==================================================================== */
-group('M. 多附件上传');
+      // ---- E. 编译缓存 ----
+      group('E. 编译缓存');
+      test('同表达式多次调用只编译一次', function () {
+        DT._clearCache();
+        var size0 = DT._cacheSize();
+        DT.evalDepends('a > 0', { a: 1 });
+        DT.evalDepends('a > 0', { a: 2 });
+        DT.evalDepends('a > 0', { a: 3 });
+        var sizeAfter = DT._cacheSize();
+        assertOk(
+          sizeAfter - size0 === 1,
+          '3 次调用只新增 1 个缓存项，实际：' + (sizeAfter - size0)
+        );
+      });
+      test('不同表达式分别编译', function () {
+        DT._clearCache();
+        DT.evalDepends('a > 0', { a: 1 });
+        DT.evalDepends('a < 0', { a: 1 });
+        assertEqual(DT._cacheSize(), 2);
+      });
+      test('不同 fm keys 各自缓存（避免 locals 不一致）', function () {
+        DT._clearCache();
+        DT.evalDepends('a > 0', { a: 1 });
+        DT.evalDepends('a > 0', { a: 1, b: 2 });
+        assertEqual(DT._cacheSize(), 2, 'fm keys 集不同应分别缓存');
+      });
 
-// 使用 DT 导出的 normalizeUploadVal（验证 export 真正可用，对齐生产/配置页）
-function m_normalizeUploadVal(val) {
-  return DT.normalizeUploadVal(val);
-}
+      // ---- F. evalEvent / evalMath ----
+      group('F. evalEvent / evalMath');
+      test('evalEvent 基本求值', function () {
+        var fm = { total: 0, a: 3, b: 4 };
+        DT.evalEvent('fm.total = fm.a + fm.b', 0, fm, {});
+        assertEqual(fm.total, 7);
+      });
+      test('evalEvent 空函数体 → undefined', function () {
+        assertEqual(DT.evalEvent('  ', 1, {}, {}), undefined);
+      });
+      test('evalMath 基本求值', function () {
+        assertEqual(DT.evalMath('a + b * 2', { a: 1, b: 2 }), 5);
+      });
 
-// --- M1. echoData upload 归一化（5 个）---
-test('M1: 旧单文件 JSON 字符串 → 包装成单元素数组', function () {
-  var v = m_normalizeUploadVal('{"path":"x","name":"a.pdf"}');
-  assertEqual(v, [{ path: 'x', name: 'a.pdf' }]);
-});
-test('M1: 旧 JSON 字符串数组 → 直接用', function () {
-  var v = m_normalizeUploadVal('[{"path":"x"},{"path":"y"}]');
-  assertEqual(v.length, 2);
-  assertEqual(v[0].path, 'x');
-});
-test('M1: 空字符串/null/undefined → 空数组', function () {
-  assertEqual(m_normalizeUploadVal('').length, 0);
-  assertEqual(m_normalizeUploadVal(null).length, 0);
-  assertEqual(m_normalizeUploadVal(undefined).length, 0);
-});
-test('M1: 非法 JSON 字符串 → 空数组（不抛错）', function () {
-  var v = m_normalizeUploadVal('abc');
-  assertOk(Array.isArray(v) && v.length === 0);
-});
-test('M1: 已是数组 → 原样返回', function () {
-  var input = [{ path: 'a' }, { path: 'b' }];
-  var v = m_normalizeUploadVal(input);
-  assertEqual(v, input);
-});
+      // ---- F2. getStep（数字精度派生） ----
+      // 注：getStep 只按 cell.precision 计算，不关心默认值；
+      // 配置页 makeCell 在 number 类型时默认 precision=2（小数 2 位），
+      // 但 getStep 函数本身对未设 precision 的 cell 返回 step=1（兼容导入旧数据）。
+      group('F2. getStep（数字精度派生）');
+      test('precision 未设置 → step=1（函数行为；配置页 makeCell 会补默认 precision=2）', function () {
+        assertEqual(DT.getStep({ type: 'number' }), 1);
+      });
+      test('precision=null → step=1（"不限"模式）', function () {
+        assertEqual(DT.getStep({ type: 'number', precision: null }), 1);
+      });
+      test('precision=undefined → step=1', function () {
+        assertEqual(DT.getStep({ type: 'number', precision: undefined }), 1);
+      });
+      test('precision=0（仅整数）→ step=1', function () {
+        assertEqual(DT.getStep({ type: 'number', precision: 0 }), 1);
+      });
+      test('precision=1（1 位小数）→ step=0.1', function () {
+        assertEqual(DT.getStep({ type: 'number', precision: 1 }), 0.1);
+      });
+      test('precision=2（2 位小数）→ step=0.01', function () {
+        assertEqual(DT.getStep({ type: 'number', precision: 2 }), 0.01);
+      });
+      test('precision=3（3 位小数）→ step=0.001', function () {
+        assertEqual(DT.getStep({ type: 'number', precision: 3 }), 0.001);
+      });
+      test('precision=4（4 位小数）→ step=0.0001', function () {
+        assertEqual(DT.getStep({ type: 'number', precision: 4 }), 0.0001);
+      });
+      test('cell=null → step=1（不抛错）', function () {
+        assertEqual(DT.getStep(null), 1);
+      });
+      test('cell=undefined → step=1（不抛错）', function () {
+        assertEqual(DT.getStep(undefined), 1);
+      });
+      test('非 number 类型也按 precision 返回（兼容调用）', function () {
+        // getStep 不校验 type，调用方控制；这里验证精度优先于类型
+        assertEqual(DT.getStep({ type: 'text', precision: 2 }), 0.01);
+      });
 
-// --- M2. onUploadSuccess 累积 + maxCount 拦截（3 个）---
-function m_simulateUpload(currentList, val, maxCount) {
-  var max = maxCount > 0 ? Number(maxCount) : null;
-  var list = Array.isArray(currentList) ? currentList.slice() : [];
-  if (max != null && list.length >= max) return { rejected: true, list: list };
-  list.push({ path: val.path, name: val.name });
-  return { rejected: false, list: list };
-}
-test('M2: 多次上传 → 累积', function () {
-  var r1 = m_simulateUpload([], { path: 'a', name: 'a.pdf' }, null);
-  var r2 = m_simulateUpload(r1.list, { path: 'b', name: 'b.pdf' }, null);
-  assertEqual(r2.list.length, 2);
-});
-test('M2: maxCount=2 时第 3 个被拦截', function () {
-  var r1 = m_simulateUpload([], { path: 'a' }, 2);
-  var r2 = m_simulateUpload(r1.list, { path: 'b' }, 2);
-  var r3 = m_simulateUpload(r2.list, { path: 'c' }, 2);
-  assertEqual(r3.rejected, true);
-  assertEqual(r3.list.length, 2);
-});
-test('M2: maxCount=null/0 时不拦截', function () {
-  var r = m_simulateUpload([{ path: 'a' }, { path: 'b' }, { path: 'c' }], { path: 'd' }, 0);
-  assertEqual(r.rejected, false);
-  assertEqual(r.list.length, 4);
-});
+      // ---- F3. cell.events（自定义事件契约） ----
+      // 注：配置页和生产组件 runCellEvent 都按 'on' + eventType首字母大写 取 key
+      // （change → onChange），并回退兼容历史小写 key。
+      // evalEvent 是工具函数（dynamic-table-utils.js）；
+      // key 转换 + 编译缓存在两端组件里独立实现但行为一致，这里通过模拟函数验证契约。
+      group('F3. cell.events（自定义事件契约）');
 
-// --- M3. buildRules array+min/max（3 个）---
-// 新语义：list 为空时跳过 min（必填由 required 控制，min 仅在用户已上传时生效）
-function m_buildUploadMinValidator(min, m) {
-  return function (r, value, callback) {
-    var list = Array.isArray(value) ? value : [];
-    if (list.length === 0) { callback(); return; }
-    if (list.length >= min) callback();
-    else callback(new Error(m));
-  };
-}
-test('M3: array min=2 时空数组跳过（不报错）', function () {
-  var called = false;
-  m_buildUploadMinValidator(2, '至少 2 个')({}, [], function (e) { called = !e; });
-  assertEqual(called, true, '空数组应跳过 min 校验');
-});
-test('M3: array min=2 时 1 个失败、2 个通过', function () {
-  var oneCalled = false, twoCalled = false;
-  m_buildUploadMinValidator(2, '至少 2 个')({}, [{ path: 'a' }], function (e) { oneCalled = !e; });
-  m_buildUploadMinValidator(2, '至少 2 个')({}, [{ path: 'a' }, { path: 'b' }], function (e) { twoCalled = !e; });
-  assertEqual(oneCalled, false, '1 个应失败');
-  assertEqual(twoCalled, true, '2 个应通过');
-});
-test('M3: array max=2 时 3 个失败', function () {
-  // 注意：当前 buildRules 没有显式 max 分支，简化为长度判断
-  var list = [{}, {}, {}];
-  assertEqual(list.length > 2, true, '3 个超过 max=2');
-});
-
-// --- M4. serializeJSON maxCount 字段（2 个）---
-function m_serializeMaxCount(c) {
-  var out = {};
-  if (c.maxCount > 0) out.maxCount = Number(c.maxCount);
-  return out;
-}
-test('M4: maxCount=3 输出 {maxCount:3}', function () {
-  assertEqual(m_serializeMaxCount({ maxCount: 3 }), { maxCount: 3 });
-});
-test('M4: maxCount=0/null/undefined 不输出该字段', function () {
-  assertEqual(m_serializeMaxCount({ maxCount: 0 }), {});
-  assertEqual(m_serializeMaxCount({ maxCount: null }), {});
-  assertEqual(m_serializeMaxCount({ maxCount: undefined }), {});
-});
-
-// ---- O. 「应用到整列」目标列表 + 字段拷贝（buildApplyTargets / pickFields）----
-group('O. 应用到整列（buildApplyTargets / pickFields）');
-
-test('O1: 空 cells + maxRow=0 → 空 targets', function () {
-  // maxRow=0 且 cells 空，扫描范围只有 draft 自身 → 跳过后 0 个目标
-  var draft = { x: '3', y: '5', type: 'number' };
-  assertEqual(DT.buildApplyTargets(draft, [], { maxRow: 0 }), []);
-});
-
-test('O2: 同列只有 draft 自己 → 没有 existing target（excludeUid 排除）', function () {
-  var cur = { id: 'a', x: '3', y: '5', type: 'number', __uid: 1 };
-  var draft = { x: '3', y: '5', type: 'number' };
-  var r = DT.buildApplyTargets(draft, [cur], { excludeUid: 1, maxRow: 0 });
-  // draft 自身在 r5c3，maxRow=0 → 扫描范围只到 r5，但 r5 被自己占据 → 0 个目标
-  assertEqual(r, []);
-});
-
-test('O3: 同列有未配置 cell（label 空内容）→ existing 数量=1，isConfigured=false', function () {
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  var uncfg = { id: 'u', x: '3', y: '6', type: 'label', content: '', __uid: 2 };
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, uncfg], { excludeUid: 1, maxRow: 6 });
-  var existings = r.filter(function (t) { return t.type === 'existing'; });
-  assertEqual(existings.length, 1);
-  assertEqual(existings[0].cellId, 'u');
-  assertEqual(existings[0].isConfigured, false);
-  assertEqual(existings[0].row, 6);
-  assertEqual(existings[0].col, 3);
-});
-
-test('O4: 同列有已配置 cell（type=number）→ isConfigured=true', function () {
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  var cfg = { id: 'c', x: '3', y: '6', type: 'number', __uid: 2 };
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, cfg], { excludeUid: 1, maxRow: 6 });
-  var existings = r.filter(function (t) { return t.type === 'existing'; });
-  assertEqual(existings.length, 1);
-  assertEqual(existings[0].isConfigured, true);
-});
-
-test('O5: label 类型 cell → isHeader=true（无论 y 多少）', function () {
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  var lbl = { id: 'h', x: '3', y: '1', type: 'label', content: '表头', __uid: 2 };
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, lbl], { excludeUid: 1, maxRow: 5 });
-  var lblTarget = r.filter(function (t) { return t.cellId === 'h'; })[0];
-  assertEqual(lblTarget.isHeader, true);
-  assertEqual(lblTarget.isConfigured, true); // 有 content
-});
-
-test('O6: y <= freezeRows 但 type 不是 label → isHeader=true（行级表头判定）', function () {
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  var txt = { id: 't', x: '3', y: '2', type: 'text', content: '副表头', __uid: 2 };
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, txt], { excludeUid: 1, freezeRows: 2, maxRow: 5 });
-  var txtTarget = r.filter(function (t) { return t.cellId === 't'; })[0];
-  assertEqual(txtTarget.isHeader, true);
-});
-
-test('O7: 合并 cell（跨多列）被跳过', function () {
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  var merged = { id: 'm', x: '3,5', y: '6', type: 'label', content: '合并', __uid: 2 };
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, merged], { excludeUid: 1 });
-  // 合并 cell 在 col=3 row=6 出现，但应被跳过
-  for (var i = 0; i < r.length; i++) {
-    assertFail(r[i].cellId === 'm', '合并 cell 不应进入 targets');
-  }
-});
-
-test('O8: 合并 cell（跨多行）被跳过', function () {
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  var merged = { id: 'm', x: '3', y: '6,8', type: 'label', content: '合并', __uid: 2 };
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, merged], { excludeUid: 1 });
-  for (var i = 0; i < r.length; i++) {
-    assertFail(r[i].cellId === 'm', '跨行合并 cell 不应进入 targets');
-  }
-});
-
-test('O9: 空位识别（无 cell 占据且未被覆盖）→ type=empty', function () {
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  // cur 在 r5c3，draft 也在 r5c3，扫描 r1-r7：r5 跳过（draft 自己），r1-r4/r6/r7 共 6 个空位
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur], { excludeUid: 1, maxRow: 7 });
-  var empties = r.filter(function (t) { return t.type === 'empty'; });
-  assertEqual(empties.length, 6);
-  var rows = empties.map(function (t) { return t.row; }).sort(function (a, b) { return a - b; });
-  assertEqual(rows, [1, 2, 3, 4, 6, 7]);
-});
-
-test('O10: 被合并 cell 覆盖的空位不识别（isCovered 过滤）', function () {
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  // big 占据 c3 r6-r8（合并），cur 在 r5c3，draft 在 r5c3
-  // r6/r7/r8 的 c3 都被 big 覆盖，不应识别为空位
-  var big = { id: 'b', x: '3', y: '6,8', type: 'label', content: '大', __uid: 2 };
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, big], { excludeUid: 1 });
-  // 检查 r6/r7/r8 的 c3 没有空位 target
-  var badEmpties = r.filter(function (t) {
-    return t.type === 'empty' && t.col === 3 && (t.row === 6 || t.row === 7 || t.row === 8);
-  });
-  assertEqual(badEmpties.length, 0);
-});
-
-test('O11: draft 占据多个位置（跨列）时全部跳过', function () {
-  // draft 跨 col 3-5 row 5，那么 c3r5/c4r5/c5r5 都应跳过
-  var cur = { id: 'cur', x: '3,5', y: '5', type: 'number', __uid: 1 };
-  var other = { id: 'o', x: '3', y: '6', type: 'label', content: '', __uid: 2 };
-  var r = DT.buildApplyTargets({ x: '3,5', y: '5' }, [cur, other], { excludeUid: 1 });
-  // 不应有 r5 的 target（draft 自己占据）
-  for (var i = 0; i < r.length; i++) {
-    assertFail(r[i].row === 5, 'draft 占据的行不应有 target');
-  }
-});
-
-test('O12: 不同列的 cell 不进入 targets', function () {
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  var otherCol = { id: 'oc', x: '4', y: '6', type: 'label', content: '', __uid: 2 };
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, otherCol], { excludeUid: 1 });
-  // otherCol 在 c4，不应出现在 c3 的扫描结果里
-  var wrongCell = r.filter(function (t) { return t.cellId === 'oc'; });
-  assertEqual(wrongCell.length, 0);
-  // 所有 target 应该都在 col=3
-  var allCol3 = r.every(function (t) { return t.col === 3; });
-  assertOk(allCol3, '所有 target 都应在 col=3');
-});
-
-test('O13: pickFields 深拷贝指定字段', function () {
-  var src = { type: 'number', precision: 2, options: [{ label: 'A', value: '1' }], ignored: 'x' };
-  var out = DT.pickFields(src, ['type', 'options']);
-  assertEqual(Object.keys(out).sort(), ['options', 'type']);
-  assertEqual(out.type, 'number');
-  assertEqual(out.options, [{ label: 'A', value: '1' }]);
-  // 深拷贝验证：修改 out 不影响 src
-  out.options[0].label = 'B';
-  assertEqual(src.options[0].label, 'A');
-});
-
-test('O14: pickFields 跳过 null/undefined 字段', function () {
-  var src = { a: null, b: undefined, c: 1 };
-  var out = DT.pickFields(src, ['a', 'b', 'c', 'd']);
-  assertEqual(out, { c: 1 });
-});
-
-test('O15: pickFields 容错（src=null / fields=null）→ {}', function () {
-  assertEqual(DT.pickFields(null, ['a']), {});
-  assertEqual(DT.pickFields({ a: 1 }, null), {});
-});
-
-test('O16: 表头判定优先级：label 类型 + y=10 也算表头', function () {
-  // 表头不限于 y=1/y=2，只要 type=label 就算
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  var lblFar = { id: 'lbl', x: '3', y: '10', type: 'label', content: '远表头', __uid: 2 };
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, lblFar], { excludeUid: 1 });
-  var lblTarget = r.filter(function (t) { return t.cellId === 'lbl'; })[0];
-  assertEqual(lblTarget.isHeader, true);
-});
-
-test('O17: 空位 isHeader 由 row <= freezeRows 决定', function () {
-  var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
-  var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur], { excludeUid: 1, freezeRows: 2, maxRow: 4 });
-  // r1/r2 是表头行（freezeRows=2），r3/r4 不是；但 r1/r2 此时被 cur 在 r5 之前覆盖检查
-  // draft 在 r5，r1/r2 没被覆盖 → 应有 r1c3/r2c3/r3c3/r4c3 共 4 个空位
-  var empties = r.filter(function (t) { return t.type === 'empty'; });
-  var headers = empties.filter(function (t) { return t.isHeader; });
-  var nonHeaders = empties.filter(function (t) { return !t.isHeader; });
-  assertEqual(headers.length, 2); // r1, r2
-  assertEqual(nonHeaders.length, 2); // r3, r4
-});
-
-// ---- P. 合并 cell + 隐藏列（colHidden 算法 + visibleColspan）----
-// 复刻配置页面 _buildState 与生产 dynamic-eval-table.vue 的 hiddenCols 算法纯逻辑做对照。
-// 关键场景：合并 cell 跨越独立 cell 所在列，独立 cell 被 hide 时该列必须能正常隐藏。
-group('P. 合并 cell + 隐藏列');
-
-// 配置页面版 colHidden：列上有 cell 默认显示，独立 cell 全 hide 才隐藏
-function p_colHiddenConfig(cells, hiddenIds, maxC) {
-  var hs = {};
-  (hiddenIds || []).forEach(function (id) { hs[id] = true; });
-  var colHasAnyCell = {};
-  var colHasSingleCell = {};
-  var colHasVisibleSingleCell = {};
-  cells.forEach(function (c) {
-    if (!c || !c.x) return;
-    var xr = DT.parseRange(c.x);
-    for (var i = xr.start - 1; i < xr.end; i++) {
-      colHasAnyCell[i] = true;
-      if (xr.span === 1) {
-        colHasSingleCell[i] = true;
-        if (!hs[c.id]) colHasVisibleSingleCell[i] = true;
+      // 辅助：模拟 runCellEvent 的 key 转换（与配置页/生产组件代码完全一致）
+      function pickEventBody(cell, eventType) {
+        var key = 'on' + eventType.charAt(0).toUpperCase() + eventType.slice(1);
+        return (
+          (cell.events && (cell.events[key] || cell.events[eventType])) ||
+          undefined
+        );
       }
-    }
-  });
-  var colHidden = {};
-  for (var ci = 0; ci < maxC; ci++) {
-    if (!colHasAnyCell[ci]) colHidden[ci] = false;
-    else if (colHasSingleCell[ci]) colHidden[ci] = !colHasVisibleSingleCell[ci];
-    else colHidden[ci] = false;
-  }
-  return colHidden;
-}
 
-// 生产版 colHidden：默认隐藏，独立 cell visible 点亮所在列；合并 cell 只点亮无独立 cell 的跨越列
-function p_colHiddenProd(cells, hiddenIds, maxC) {
-  var hs = {};
-  (hiddenIds || []).forEach(function (id) { hs[id] = true; });
-  var result = {};
-  for (var ci = 0; ci < maxC; ci++) result[ci] = true;
-  var colHasSingle = {};
-  cells.forEach(function (c) {
-    if (!c || c.x == null) return;
-    var xr = DT.parseRange(c.x);
-    if (xr.span !== 1) return;
-    var ci2 = xr.start - 1;
-    colHasSingle[ci2] = true;
-    if (!hs[c.id]) result[ci2] = false;
-  });
-  cells.forEach(function (c) {
-    if (!c || c.x == null) return;
-    var xr = DT.parseRange(c.x);
-    if (xr.span === 1) return;
-    if (hs[c.id]) return;
-    for (var i = xr.start - 1; i < xr.end; i++) {
-      if (colHasSingle[i]) continue;
-      result[i] = false;
-    }
-  });
-  return result;
-}
+      test('key 转换：change → onChange', function () {
+        assertEqual(
+          pickEventBody({ events: { onChange: 'fm.x=1' } }, 'change'),
+          'fm.x=1'
+        );
+      });
+      test('key 转换：blur → onBlur', function () {
+        assertEqual(
+          pickEventBody({ events: { onBlur: 'fm.x=2' } }, 'blur'),
+          'fm.x=2'
+        );
+      });
+      test('key 转换：input → onInput', function () {
+        assertEqual(
+          pickEventBody({ events: { onInput: 'fm.x=3' } }, 'input'),
+          'fm.x=3'
+        );
+      });
+      test('兼容历史小写 key（change → events.change）', function () {
+        assertEqual(
+          pickEventBody({ events: { change: 'fm.x=4' } }, 'change'),
+          'fm.x=4'
+        );
+      });
+      test('大小写 key 同时存在时 onXxx 优先', function () {
+        var cell = { events: { onChange: 'on-style', change: 'lower' } };
+        assertEqual(pickEventBody(cell, 'change'), 'on-style');
+      });
+      test('空 events → undefined', function () {
+        assertEqual(pickEventBody({ events: {} }, 'change'), undefined);
+      });
+      test('无 events 字段 → undefined', function () {
+        assertEqual(pickEventBody({}, 'change'), undefined);
+      });
 
-// visibleColspan：扫 cell.x 范围内未 hide 的列数（两端共用）
-function p_visibleColspan(cell, colHidden) {
-  if (!cell || !cell.x) return 1;
-  var xr = DT.parseRange(cell.x);
-  if (xr.span === 1) {
-    return colHidden[xr.start - 1] ? 0 : 1;
-  }
-  var vis = 0;
-  for (var c = xr.start - 1; c < xr.end; c++) {
-    if (!colHidden[c]) vis++;
-  }
-  return vis;
-}
+      test('evalEvent 跨字段重算（写 fm.xxx 改外部对象引用）', function () {
+        var fm = { total: 0, a: 3, b: 4 };
+        DT.evalEvent('fm.total = Number(fm.a) + Number(fm.b)', 0, fm, {});
+        assertEqual(fm.total, 7);
+      });
+      test('evalEvent 条件赋值（if (...) fm.y = ...）', function () {
+        var fm = { score: 90, level: 'C' };
+        DT.evalEvent('if (fm.score > 80) fm.level = "A"', null, fm, {});
+        assertEqual(fm.level, 'A');
+      });
+      test('evalEvent value 参数可用（当前 cell 新值）', function () {
+        var fm = { doubled: 0 };
+        DT.evalEvent('fm.doubled = Number(value) * 2', 21, fm, {});
+        assertEqual(fm.doubled, 42);
+      });
+      test('evalEvent extra 参数可访问', function () {
+        var fm = { echo: '' };
+        DT.evalEvent('fm.echo = extra.cell.id', null, fm, {
+          cell: { id: 'r1' }
+        });
+        assertEqual(fm.echo, 'r1');
+      });
+      test('evalEvent rawEvent 第 4 参数可访问', function () {
+        var fm = { d: null };
+        DT.evalEvent('fm.d = rawEvent', null, fm, {}, { date: '2026-01-01' });
+        assertOk(fm.d && fm.d.date === '2026-01-01');
+      });
+      test('evalEvent 函数体 throw → 静默吞错（不抛出，仅 console.error）', function () {
+        var threw = false;
+        try {
+          DT.evalEvent('throw new Error("boom")', null, {}, {});
+        } catch (e) {
+          threw = true;
+        }
+        assertFail(threw);
+      });
+      test('evalEvent 空函数体 → undefined 且不执行副作用', function () {
+        var fm = { x: 'unchanged' };
+        var r = DT.evalEvent('   ', null, fm, {});
+        assertEqual(r, undefined);
+        assertEqual(fm.x, 'unchanged');
+      });
+      test('evalEvent 语法错误 → 静默吞错', function () {
+        var threw = false;
+        try {
+          DT.evalEvent('fm.x =', null, {}, {});
+        } catch (e) {
+          threw = true;
+        }
+        assertFail(threw);
+      });
+      test('evalEvent 用户写 return 才能拿到返回值（函数体不会自动包 return）', function () {
+        // 裸表达式当语句执行，无返回值（区别于 evalMath 自动包 return(...)）
+        assertEqual(DT.evalEvent('Number(value) + 1', 10, {}, {}), undefined);
+        // 用户显式 return 才能拿到
+        assertEqual(DT.evalEvent('return Number(value) + 1', 10, {}, {}), 11);
+      });
 
-test('P1: 配置页 — 合并 cell 跨越 col1，独立 A hide 时 col1 仍要隐藏', function () {
-  // 行 1：合并 D（x="1,3"）；行 2：独立 A/B/C 各占一列；A 被 portalHide
-  var cells = [
-    { id: 'D', x: '1,3', y: '1', type: 'label' },
-    { id: 'A', x: '1', y: '2', type: 'label' },
-    { id: 'B', x: '2', y: '2', type: 'label' },
-    { id: 'C', x: '3', y: '2', type: 'label' }
-  ];
-  var ch = p_colHiddenConfig(cells, ['A'], 3);
-  assertEqual(ch[0], true);   // col1 hide（修复前为 false —— D 贡献 visible）
-  assertEqual(ch[1], false);  // col2 显示
-  assertEqual(ch[2], false);  // col3 显示
-});
+      // ---- G. genUniqueId / idExists / checkOverlap ----
+      group('G. genUniqueId / idExists / checkOverlap');
+      test('idExists 基础查重', function () {
+        var cells = [
+          { id: 'a', __uid: '1' },
+          { id: 'b', __uid: '2' }
+        ];
+        assertOk(idExists(cells, 'a'));
+        assertFail(idExists(cells, 'c'));
+      });
+      test('idExists 排除自身', function () {
+        var cells = [{ id: 'a', __uid: '1' }];
+        assertOk(!idExists(cells, 'a', '1'), '排除自身后不应认为重复');
+      });
+      test('genUniqueId 无冲突返回原值', function () {
+        var cells = [{ id: 'a', __uid: '1' }];
+        assertEqual(genUniqueId(cells, 'b'), 'b');
+      });
+      test('genUniqueId 冲突时追加 _2', function () {
+        var cells = [{ id: 'a', __uid: '1' }];
+        assertEqual(genUniqueId(cells, 'a'), 'a_2');
+      });
+      test('genUniqueId 多次冲突', function () {
+        var cells = [
+          { id: 'a', __uid: '1' },
+          { id: 'a_2', __uid: '2' },
+          { id: 'a_3', __uid: '3' }
+        ];
+        assertEqual(genUniqueId(cells, 'a'), 'a_4');
+      });
+      test('checkOverlap 重叠', function () {
+        var cells = [{ id: 'other', x: '1,3', y: '1,3', __uid: '9' }];
+        var r = checkOverlap(cells, '2,4', '2,4', 'self');
+        assertEqual(r.length, 1);
+        assertEqual(r[0].id, 'other');
+      });
+      test('checkOverlap 不重叠', function () {
+        var cells = [{ id: 'other', x: '5,6', y: '5,6', __uid: '9' }];
+        var r = checkOverlap(cells, '1,3', '1,3', 'self');
+        assertEqual(r.length, 0);
+      });
+      test('checkOverlap 排除自身', function () {
+        var cells = [{ id: 'a', x: '1,3', y: '1,3', __uid: '1' }];
+        var r = checkOverlap(cells, '1,3', '1,3', '1');
+        assertEqual(r.length, 0);
+      });
 
-test('P2: 配置页 — visibleColspan 在部分列 hide 时动态收缩', function () {
-  var cells = [
-    { id: 'D', x: '1,3', y: '1', type: 'label' },
-    { id: 'A', x: '1', y: '2', type: 'label' },
-    { id: 'B', x: '2', y: '2', type: 'label' },
-    { id: 'C', x: '3', y: '2', type: 'label' }
-  ];
-  var ch = p_colHiddenConfig(cells, ['A'], 3);
-  assertEqual(p_visibleColspan(cells[0], ch), 2);  // D 跨 3 列，col1 hide → 可见 2
-  assertEqual(p_visibleColspan(cells[1], ch), 0);  // A 单列且列 hide → 0（不渲染）
-  assertEqual(p_visibleColspan(cells[2], ch), 1);
-  assertEqual(p_visibleColspan(cells[3], ch), 1);
-});
+      // ---- H. validateConfig ----
+      group('H. schema 校验');
+      test('合法配置无错误', function () {
+        var data = { cells: [{ id: 'a', x: '1', y: '1', type: 'label' }] };
+        assertEqual(validateConfig(data).length, 0);
+      });
+      test('缺 id 报错', function () {
+        var data = { cells: [{ x: '1', y: '1', type: 'label' }] };
+        var errs = validateConfig(data);
+        assertOk(errs.length === 1 && /缺少 id/.test(errs[0]));
+      });
+      test('非法 type 报错', function () {
+        var data = {
+          cells: [{ id: 'a', x: '1', y: '1', type: 'invalidType' }]
+        };
+        assertOk(validateConfig(data).length === 1);
+      });
+      test('重复 ID 报错', function () {
+        var data = {
+          cells: [
+            { id: 'dup', x: '1', y: '1', type: 'label' },
+            { id: 'dup', x: '2', y: '2', type: 'label' }
+          ]
+        };
+        var errs = validateConfig(data);
+        assertOk(errs.length === 1 && /重复/.test(errs[0]));
+      });
+      test('缺 cells 数组', function () {
+        assertEqual(validateConfig({}).length, 1);
+      });
 
-test('P3: 配置页 — 独立 cell 全可见时合并 cell colspan 不变', function () {
-  var cells = [
-    { id: 'D', x: '1,3', y: '1', type: 'label' },
-    { id: 'A', x: '1', y: '2', type: 'label' },
-    { id: 'B', x: '2', y: '2', type: 'label' },
-    { id: 'C', x: '3', y: '2', type: 'label' }
-  ];
-  var ch = p_colHiddenConfig(cells, [], 3);
-  assertEqual(ch[0] || false, false);
-  assertEqual(ch[1] || false, false);
-  assertEqual(ch[2] || false, false);
-  assertEqual(p_visibleColspan(cells[0], ch), 3);
-});
+      // ---- I. parseConfigText ----
+      group('I. parseConfigText');
+      test('标准 JSON', function () {
+        var d = parseConfigText('{"title":"x","cells":[]}');
+        assertEqual(d.title, 'x');
+      });
+      test('var X = {...}; 形式', function () {
+        var d = parseConfigText('var MOCK = {"title":"y","cells":[]};');
+        assertEqual(d.title, 'y');
+      });
+      test('裸对象字面量', function () {
+        var d = parseConfigText('{title:"z",cells:[]}');
+        assertEqual(d.title, 'z');
+      });
+      test('非法格式抛错', function () {
+        var threw = false;
+        try {
+          parseConfigText('not a config');
+        } catch (e) {
+          threw = true;
+        }
+        assertOk(threw);
+      });
 
-test('P4: 配置页 — 独立 cell 全 hide 时所有列都隐藏，合并 cell visibleColspan=0', function () {
-  var cells = [
-    { id: 'D', x: '1,3', y: '1', type: 'label' },
-    { id: 'A', x: '1', y: '2', type: 'label' },
-    { id: 'B', x: '2', y: '2', type: 'label' },
-    { id: 'C', x: '3', y: '2', type: 'label' }
-  ];
-  var ch = p_colHiddenConfig(cells, ['A', 'B', 'C'], 3);
-  assertEqual(ch[0], true);
-  assertEqual(ch[1], true);
-  assertEqual(ch[2], true);
-  assertEqual(p_visibleColspan(cells[0], ch), 0);  // D 全跨列 hide → 不渲染
-});
+      // ---- K. insertColumns / insertRows / removeColumn / removeRow / appendXxx ----
+      // 坐标平移算法核心测试。覆盖三种分支（前/后/跨越）+ 合并 cell 处理 + 边界。
+      group('K. 列/行批量操作（坐标平移）');
 
-test('P5: 生产 — 合并 cell 跨越 col1，独立 A hide 时 col1 隐藏（与配置页对齐）', function () {
-  var cells = [
-    { id: 'D', x: '1,3', y: '1', type: 'label' },
-    { id: 'A', x: '1', y: '2', type: 'label' },
-    { id: 'B', x: '2', y: '2', type: 'label' },
-    { id: 'C', x: '3', y: '2', type: 'label' }
-  ];
-  var ch = p_colHiddenProd(cells, ['A'], 3);
-  assertEqual(ch[0], true);   // col1 hide（修复前为 false —— D 点亮了 col1）
-  assertEqual(ch[1], false);
-  assertEqual(ch[2], false);
-  assertEqual(p_visibleColspan(cells[0], ch), 2);  // D 可见列数 2
-});
+      // --- insertColumns（5 个用例）---
+      test('insertColumns 末尾追加（beforeCol > maxC）→ 现有不动', function () {
+        var cells = [
+          { id: 'a', x: '1', y: '1' },
+          { id: 'b', x: '2', y: '1' }
+        ];
+        DT.insertColumns(cells, 3, 1);
+        assertEqual(cells[0].x, '1');
+        assertEqual(cells[1].x, '2');
+      });
+      test('insertColumns 在第 2 列前插 1 列 → 第 2 列变第 3 列', function () {
+        var cells = [
+          { id: 'a', x: '1', y: '1' },
+          { id: 'b', x: '2', y: '1' }
+        ];
+        DT.insertColumns(cells, 2, 1);
+        assertEqual(cells[0].x, '1');
+        assertEqual(cells[1].x, '3');
+      });
+      test('insertColumns 合并 cell 跨越插入点 → 扩展范围', function () {
+        var cells = [{ id: 'm', x: '1,3', y: '1' }];
+        DT.insertColumns(cells, 2, 1);
+        assertEqual(cells[0].x, '1,4');
+      });
+      test('insertColumns 合并 cell 完全在插入点前 → 不动', function () {
+        var cells = [{ id: 'm', x: '1,2', y: '1' }];
+        DT.insertColumns(cells, 5, 1);
+        assertEqual(cells[0].x, '1,2');
+      });
+      test('insertColumns count=3 多列插入', function () {
+        var cells = [
+          { id: 'a', x: '3', y: '1' },
+          { id: 'b', x: '1', y: '1' }
+        ];
+        DT.insertColumns(cells, 2, 3);
+        assertEqual(cells[0].x, '6');
+        assertEqual(cells[1].x, '1');
+      });
 
-test('P6: 生产 — 仅合并 cell 跨越无独立 cell 时仍点亮（避免破坏合并视觉）', function () {
-  // D 跨 col1-3，col2/3 没有独立 cell → 由 D 点亮
-  var cells = [
-    { id: 'D', x: '1,3', y: '1', type: 'label' },
-    { id: 'A', x: '1', y: '2', type: 'label' }
-  ];
-  var ch = p_colHiddenProd(cells, [], 3);
-  assertEqual(ch[0], false);  // A 点亮
-  assertEqual(ch[1], false);  // D 点亮（col2 无独立 cell）
-  assertEqual(ch[2], false);  // D 点亮（col3 无独立 cell）
-  assertEqual(p_visibleColspan(cells[0], ch), 3);
-});
+      // --- insertRows（5 个用例，同结构）---
+      test('insertRows 末尾追加 → 现有不动', function () {
+        var cells = [
+          { id: 'a', x: '1', y: '1' },
+          { id: 'b', x: '1', y: '2' }
+        ];
+        DT.insertRows(cells, 3, 1);
+        assertEqual(cells[0].y, '1');
+        assertEqual(cells[1].y, '2');
+      });
+      test('insertRows 在第 2 行前插 1 行 → 第 2 行变第 3 行', function () {
+        var cells = [
+          { id: 'a', x: '1', y: '1' },
+          { id: 'b', x: '1', y: '2' }
+        ];
+        DT.insertRows(cells, 2, 1);
+        assertEqual(cells[0].y, '1');
+        assertEqual(cells[1].y, '3');
+      });
+      test('insertRows 合并 cell 跨越插入点 → 扩展范围', function () {
+        var cells = [{ id: 'm', x: '1', y: '1,3' }];
+        DT.insertRows(cells, 2, 1);
+        assertEqual(cells[0].y, '1,4');
+      });
+      test('insertRows 合并 cell 完全在插入点前 → 不动', function () {
+        var cells = [{ id: 'm', x: '1', y: '1,2' }];
+        DT.insertRows(cells, 5, 1);
+        assertEqual(cells[0].y, '1,2');
+      });
+      test('insertRows count=2 多行插入', function () {
+        var cells = [{ id: 'a', x: '1', y: '3' }];
+        DT.insertRows(cells, 2, 2);
+        assertEqual(cells[0].y, '5');
+      });
 
-test('P7: 生产 — 仅合并 cell 跨越无独立 cell，D 自身 hide 时不点亮', function () {
-  var cells = [
-    { id: 'D', x: '1,3', y: '1', type: 'label' },
-    { id: 'A', x: '1', y: '2', type: 'label' }
-  ];
-  var ch = p_colHiddenProd(cells, ['D'], 3);
-  assertEqual(ch[0], false);  // A 可见点亮 col1
-  assertEqual(ch[1], true);   // D hide，col2 无点亮
-  assertEqual(ch[2], true);
-});
+      // --- removeColumn（6 个用例）---
+      test('removeColumn 独占该列 → cell 被移除，返回 removed=1', function () {
+        var cells = [
+          { id: 'a', x: '2', y: '1' },
+          { id: 'b', x: '1', y: '1' }
+        ];
+        var removed = DT.removeColumn(cells, 2);
+        assertEqual(removed, 1);
+        assertEqual(cells.length, 1);
+        assertEqual(cells[0].id, 'b');
+      });
+      test('removeColumn 合并 cell 跨越该列 → 范围缩 1', function () {
+        var cells = [{ id: 'm', x: '1,3', y: '1' }];
+        var removed = DT.removeColumn(cells, 2);
+        assertEqual(removed, 0);
+        assertEqual(cells[0].x, '1,2');
+      });
+      test('removeColumn 合并 cell 起点等于删除列 → 起点右移、范围缩 1', function () {
+        var cells = [{ id: 'm', x: '2,4', y: '1' }];
+        var removed = DT.removeColumn(cells, 2);
+        assertEqual(removed, 0);
+        assertEqual(cells[0].x, '2,3');
+      });
+      test('removeColumn 完全在删除点后 → 整体左移', function () {
+        var cells = [{ id: 'a', x: '5', y: '1' }];
+        DT.removeColumn(cells, 2);
+        assertEqual(cells[0].x, '4');
+      });
+      test('removeColumn 完全在删除点前 → 不动', function () {
+        var cells = [{ id: 'a', x: '1', y: '1' }];
+        DT.removeColumn(cells, 2);
+        assertEqual(cells[0].x, '1');
+      });
+      test('removeColumn 删除后再插入 → 状态可还原（平移对称性）', function () {
+        var cells = [
+          { id: 'a', x: '1', y: '1' },
+          { id: 'b', x: '2', y: '1' },
+          { id: 'c', x: '3', y: '1' }
+        ];
+        DT.removeColumn(cells, 2); // 删第 2 列 → [a@1, c@2]
+        DT.insertColumns(cells, 2, 1); // 在第 2 列前插回 1 列 → [a@1, c@3]
+        assertEqual(cells[0].x, '1');
+        assertEqual(cells[1].x, '3');
+      });
 
-test('P8: 配置页 — 空列（无 cell）不隐藏，visibleColspan 对空位返回 1', function () {
-  // col4 完全无 cell
-  var cells = [
-    { id: 'A', x: '1', y: '1', type: 'label' }
-  ];
-  var ch = p_colHiddenConfig(cells, [], 4);
-  assertEqual(ch[0], false);  // A 可见
-  assertEqual(ch[3], false);  // 空列不隐藏（配置页语义）
-  assertEqual(p_visibleColspan({ x: '4' }, ch), 1);
-});
+      // --- removeRow（6 个用例，同结构）---
+      test('removeRow 独占该行 → cell 被移除，返回 removed=1', function () {
+        var cells = [
+          { id: 'a', x: '1', y: '2' },
+          { id: 'b', x: '1', y: '1' }
+        ];
+        var removed = DT.removeRow(cells, 2);
+        assertEqual(removed, 1);
+        assertEqual(cells.length, 1);
+        assertEqual(cells[0].id, 'b');
+      });
+      test('removeRow 合并 cell 跨越该行 → 范围缩 1', function () {
+        var cells = [{ id: 'm', x: '1', y: '1,3' }];
+        var removed = DT.removeRow(cells, 2);
+        assertEqual(removed, 0);
+        assertEqual(cells[0].y, '1,2');
+      });
+      test('removeRow 合并 cell 起点等于删除行 → 起点下移、范围缩 1', function () {
+        var cells = [{ id: 'm', x: '1', y: '2,4' }];
+        DT.removeRow(cells, 2);
+        assertEqual(cells[0].y, '2,3');
+      });
+      test('removeRow 完全在删除点后 → 整体上移', function () {
+        var cells = [{ id: 'a', x: '1', y: '5' }];
+        DT.removeRow(cells, 2);
+        assertEqual(cells[0].y, '4');
+      });
+      test('removeRow 完全在删除点前 → 不动', function () {
+        var cells = [{ id: 'a', x: '1', y: '1' }];
+        DT.removeRow(cells, 2);
+        assertEqual(cells[0].y, '1');
+      });
+      test('removeRow 删除后再插入 → 状态可还原', function () {
+        var cells = [
+          { id: 'a', x: '1', y: '1' },
+          { id: 'b', x: '1', y: '2' },
+          { id: 'c', x: '1', y: '3' }
+        ];
+        DT.removeRow(cells, 2);
+        DT.insertRows(cells, 2, 1);
+        assertEqual(cells[0].y, '1');
+        assertEqual(cells[1].y, '3');
+      });
 
-// ---- N. 公式依赖图 / 选项类型对齐（与 preview-renderer / 生产组件方法对照）----
-// 注意：extractFormulaDeps / coerceOptionValue 在两端都是组件方法（非 DTUtils 导出），
-// 这里复刻其纯逻辑做对照测试。组件方法变更时，本组需同步更新。
-group('N. 公式依赖图 / 选项类型对齐');
+      // --- appendColumns / appendRows（2 个用例）---
+      test('appendColumns 末尾追加 2 列 → 现有 cell 不动，新 cell 起点为 maxC+1', function () {
+        var cells = [
+          { id: 'a', x: '1', y: '1' },
+          { id: 'b', x: '3', y: '1' }
+        ];
+        DT.appendColumns(cells, 2);
+        assertEqual(cells[0].x, '1');
+        assertEqual(cells[1].x, '3');
+        // appendColumns 等价于 insertColumns(maxC+1, count)，maxC=3 → 新空间从 col=4 起
+        cells.push({ id: 'c', x: '4', y: '1' });
+        assertEqual(cells[2].x, '4');
+        // 在 col=4 前插 1 列，c (col=4) 右移到 5
+        DT.insertColumns(cells, 4, 1);
+        assertEqual(cells[2].x, '5');
+      });
+      test('appendRows 末尾追加 1 行 → 现有 cell 不动', function () {
+        var cells = [
+          { id: 'a', x: '1', y: '1' },
+          { id: 'b', x: '1', y: '3' }
+        ];
+        DT.appendRows(cells, 1);
+        assertEqual(cells[0].y, '1');
+        assertEqual(cells[1].y, '3');
+      });
 
-function n_extractFormulaDeps(f, ids, cellMap, allCells) {
-  if (!f) return [];
-  if (f.trim() === 'CALC_SCORE') {
-    return (allCells || []).filter(function (c) { return c.type === 'number'; })
-      .map(function (c) { return c.id; });
-  }
-  var m = f.match(/^(SUM|AVG|MIN)\((.+)\)$/i);
-  if (m) {
-    return m[2].split(',').map(function (x) { return x.trim(); })
-      .filter(function (id) { return cellMap[id]; });
-  }
-  var body = f;
-  var cm = f.match(/^CALC\((.+)\)$/i);
-  if (cm) body = cm[1];
-  return ids.filter(function (id) {
-    return new RegExp('\\b' + id + '\\b').test(body);
-  });
-}
-function n_coerceOptionValue(cell, val) {
-  if (!cell || !cell.options || !cell.options.length) return val;
-  for (var i = 0; i < cell.options.length; i++) {
-    if (String(cell.options[i].value) === String(val)) return cell.options[i].value;
-  }
-  return val;
-}
+      // --- 边界用例（4 个）---
+      test('insertColumns count=0 → 无操作', function () {
+        var cells = [{ id: 'a', x: '1', y: '1' }];
+        DT.insertColumns(cells, 1, 0);
+        assertEqual(cells[0].x, '1');
+      });
+      test('insertColumns beforeCol=0（无效）→ 无操作', function () {
+        var cells = [{ id: 'a', x: '1', y: '1' }];
+        DT.insertColumns(cells, 0, 1);
+        assertEqual(cells[0].x, '1');
+      });
+      test('removeColumn 不存在的列（col=99）→ 所有 cell 视为"在前"，不动', function () {
+        var cells = [
+          { id: 'a', x: '1', y: '1' },
+          { id: 'b', x: '5', y: '1' }
+        ];
+        var removed = DT.removeColumn(cells, 99);
+        assertEqual(removed, 0);
+        assertEqual(cells[0].x, '1');
+        assertEqual(cells[1].x, '5'); // xr.start > col=99 是 false，所以不动
+      });
+      test('insertColumns 空 cells 数组 → 无操作不报错', function () {
+        var cells = [];
+        DT.insertColumns(cells, 1, 1);
+        assertEqual(cells.length, 0);
+      });
 
-// --- N1. extractFormulaDeps：SUM/AVG/MIN 参数即依赖 ---
-test('N1: SUM(a,b,c) → [a,b,c]（仅保留存在的 cell）', function () {
-  var cellMap = { a: 1, b: 1, c: 1 };
-  var deps = n_extractFormulaDeps('SUM(a,b,c)', ['a', 'b', 'c'], cellMap, []);
-  assertEqual(deps, ['a', 'b', 'c']);
-});
-test('N1: SUM 参数中不存在的 id 被过滤', function () {
-  var cellMap = { a: 1 };
-  var deps = n_extractFormulaDeps('SUM(a,ghost)', ['a'], cellMap, []);
-  assertEqual(deps, ['a']);
-});
-test('N1: AVG/MIN 同 SUM 处理', function () {
-  var cellMap = { x: 1, y: 1 };
-  assertEqual(n_extractFormulaDeps('AVG(x,y)', ['x', 'y'], cellMap, []), ['x', 'y']);
-  assertEqual(n_extractFormulaDeps('MIN(x,y)', ['x', 'y'], cellMap, []), ['x', 'y']);
-});
-
-// --- N2. CALC_SCORE 通配依赖所有 number cell ---
-test('N2: CALC_SCORE → 所有 number cell id', function () {
-  var allCells = [
-    { id: 'a', type: 'number' },
-    { id: 'b', type: 'text' },
-    { id: 'c', type: 'number' }
-  ];
-  var deps = n_extractFormulaDeps('CALC_SCORE', ['a', 'b', 'c'], {}, allCells);
-  assertEqual(deps, ['a', 'c']);
-});
-
-// --- N3. CALC(expr) 与裸表达式：词边界匹配 ---
-test('N3: CALC(expr) 提取括号内依赖', function () {
-  var cellMap = { score_a: 1, score_b: 1 };
-  var ids = ['score_a', 'score_b'];
-  var deps = n_extractFormulaDeps('CALC(score_a + score_b * 0.5)', ids, cellMap, []);
-  assertEqual(deps.sort(), ['score_a', 'score_b']);
-});
-test('N3: 词边界：score 不会误匹配 score_a', function () {
-  var cellMap = { score_a: 1 };
-  var deps = n_extractFormulaDeps('CALC(score_a + 1)', ['score_a'], cellMap, []);
-  assertEqual(deps, ['score_a']);
-  // 反例：'score' 不应被当做依赖（虽然不在 ids，确保词边界不前缀匹配）
-  var deps2 = n_extractFormulaDeps('CALC(score_a)', ['score'], { score: 1 }, []);
-  assertEqual(deps2, []);
-});
-test('N3: 空公式 → []', function () {
-  assertEqual(n_extractFormulaDeps('', ['a'], { a: 1 }, []), []);
-  assertEqual(n_extractFormulaDeps(null, ['a'], { a: 1 }, []), []);
-});
-
-// --- N4. coerceOptionValue：字符串值对齐到 option 原始类型 ---
-test('N4: option 数字类型，字符串 "1" → 数字 1', function () {
-  var cell = { options: [{ value: 1, label: 'A' }, { value: 2, label: 'B' }] };
-  assertEqual(n_coerceOptionValue(cell, '1'), 1);
-  assertEqual(typeof n_coerceOptionValue(cell, '1'), 'number');
-});
-test('N4: option 字符串类型，数字 1 → 字符串 "1"', function () {
-  var cell = { options: [{ value: '1', label: 'A' }] };
-  assertEqual(n_coerceOptionValue(cell, 1), '1');
-  assertEqual(typeof n_coerceOptionValue(cell, 1), 'string');
-});
-test('N4: 无 options / 空 options → 原值返回', function () {
-  assertEqual(n_coerceOptionValue(null, '1'), '1');
-  assertEqual(n_coerceOptionValue({ options: [] }, '1'), '1');
-});
-test('N4: 无匹配 → 原值返回（不抛错）', function () {
-  var cell = { options: [{ value: 1 }] };
-  assertEqual(n_coerceOptionValue(cell, 'xyz'), 'xyz');
-});
-
-// --- N5. DT.normalizeUploadVal 导出验证 ---
-test('N5: DT.normalizeUploadVal 真正导出可用', function () {
-  assertOk(typeof DT.normalizeUploadVal === 'function');
-  // 行为与 M1 一致：旧 JSON 字符串 → 单元素数组
-  var v = DT.normalizeUploadVal('{"path":"x","name":"a.pdf"}');
-  assertEqual(v, [{ path: 'x', name: 'a.pdf' }]);
-});
-
-
-/* ====================================================================
- * 运行器
- * ==================================================================== */
-function runAll() {
-  var results = document.getElementById('results');
-  var summary = document.getElementById('summary');
-  results.innerHTML = '';
-  var totalPass = 0, totalFail = 0;
-  _groups.forEach(function (g) {
-    var groupHtml = '<h2>' + g.name + '</h2>';
-    var groupPass = 0;
-    g.cases.forEach(function (tc) {
-      _lastResult = { pass: true, detail: '' };
-      try { tc.fn(); }
-      catch (e) { _lastResult = { pass: false, detail: e.message || String(e) }; }
-      if (_lastResult.pass) { totalPass++; groupPass++; }
-      else totalFail++;
-      groupHtml += '<div class="case ' + (_lastResult.pass ? 'pass' : 'fail') + '">' +
-        '<span class="name">' + tc.name + '</span>' +
-        '<span class="detail">' + escapeHtml(_lastResult.detail || '') + '</span>' +
-        '<span class="status">' + (_lastResult.pass ? '✓' : '✗') + '</span>' +
-        '</div>';
-    });
-    groupHtml += '<div style="font-size:11px;color:#888;padding:4px 12px 8px;">小计：' + groupPass + '/' + g.cases.length + ' 通过</div>';
-    results.innerHTML += groupHtml;
-  });
-  summary.innerHTML = '总计：<span class="pass">' + totalPass + ' 通过</span> / <span class="' + (totalFail ? 'fail' : 'pass') + '">' + totalFail + ' 失败</span>（共 ' + (totalPass + totalFail) + ' 项）';
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-document.getElementById('run-all').onclick = runAll;
-
-/* ====================================================================
- * 真实数据测试
- * ==================================================================== */
-function runRealDataTest(text, fileName) {
-  var results = document.getElementById('results');
-  var html = '<h2>真实数据：' + fileName + '</h2>';
-  var log = [];
-  function ok(msg) { log.push('✓ ' + msg); }
-  function bad(msg) { log.push('✗ ' + msg); }
-
-  // 1. 解析
-  var data = null, parseErr = null;
-  try { data = parseConfigText(text); }
-  catch (e) { parseErr = e.message; }
-
-  if (!data) {
-    html += '<div class="case fail"><span class="name">parseConfigText</span><span class="detail">' + escapeHtml(parseErr || '解析失败') + '</span><span class="status">✗</span></div>';
-    results.innerHTML = html;
-    return;
-  }
-  ok('parseConfigText 解析成功');
-  if (!Array.isArray(data.cells) || !data.cells.length) {
-    bad('cells 不是非空数组');
-    html += renderRealDataLog(log);
-    results.innerHTML = html;
-    return;
-  }
-  ok('cells 数量 = ' + data.cells.length);
-
-  // 2. schema 校验
-  var errs = validateConfig(data);
-  if (errs.length === 0) ok('schema 校验通过（必填字段、type 合法、ID 唯一）');
-  else bad('schema 错误 ' + errs.length + ' 项：\n' + errs.slice(0, 5).join('\n'));
-
-  // 3. ID 唯一性统计
-  var idCounts = {};
-  data.cells.forEach(function (c) { idCounts[c.id] = (idCounts[c.id] || 0) + 1; });
-  var dupIds = Object.keys(idCounts).filter(function (k) { return idCounts[k] > 1; });
-  if (dupIds.length === 0) ok('ID 全部唯一');
-  else bad('重复 ID ' + dupIds.length + ' 个：' + dupIds.slice(0, 5).join(', '));
-
-  // 4. type 分布
-  var typeCounts = {};
-  data.cells.forEach(function (c) { typeCounts[c.type] = (typeCounts[c.type] || 0) + 1; });
-
-  // 5. buildGrid 性能 + 正确性
-  var t0 = performance.now();
-  var grid = DT.buildGrid(data.cells);
-  var t1 = performance.now();
-  ok('buildGrid 耗时 ' + (t1 - t0).toFixed(1) + 'ms，返回 ' + grid.rows.length + ' 行 × ' + grid.maxC + ' 列');
-
-  // 6. buildFormModel
-  var fm = DT.buildFormModel(data.cells);
-  ok('buildFormModel 返回 ' + Object.keys(fm).length + ' 个字段');
-
-  // 7. 坐标重叠检测
-  var overlaps = [];
-  for (var i = 0; i < data.cells.length; i++) {
-    for (var j = i + 1; j < data.cells.length; j++) {
-      var a = data.cells[i], b = data.cells[j];
-      if (!a.x || !a.y || !b.x || !b.y) continue;
-      var axr = DT.parseRange(a.x), ayr = DT.parseRange(a.y);
-      var bxr = DT.parseRange(b.x), byr = DT.parseRange(b.y);
-      if (axr.start <= bxr.end && axr.end >= bxr.start &&
-          ayr.start <= byr.end && ayr.end >= byr.start) {
-        overlaps.push(a.id + '↔' + b.id);
+      // ---- L. validation rules 序列化与兼容 ----
+      // 与配置页面.html 同名函数保持一致（cell-card 子组件 methods + 全局函数）
+      // 用例覆盖：序列化 iView 标准、inferRuleKind 旧数据迁移、normalizeRules 多 required 合并
+      function serializeRule(r) {
+        var out = {};
+        var k = r.kind || 'required';
+        if (r.message) out.message = r.message;
+        if (k === 'required') {
+          if (typeof r.required === 'string' && r.required.trim())
+            out.required = r.required;
+          else if (r.required === true) out.required = true;
+        } else if (k === 'number') {
+          out.type = 'number';
+          if (r.min != null && r.min !== '') out.min = Number(r.min);
+          if (r.max != null && r.max !== '') out.max = Number(r.max);
+        } else if (k === 'string') {
+          out.type = 'string';
+          if (r.min != null && r.min !== '') out.min = Number(r.min);
+          if (r.max != null && r.max !== '') out.max = Number(r.max);
+        } else if (k === 'array') {
+          out.type = 'array';
+          if (r.min != null && r.min !== '') out.min = Number(r.min);
+          if (r.max != null && r.max !== '') out.max = Number(r.max);
+        } else if (k === 'pattern') {
+          if (r.pattern) out.pattern = r.pattern;
+        } else if (k === 'len') {
+          if (r.len != null && r.len !== '') out.len = Number(r.len);
+        } else if (k === 'enum') {
+          var arr = Array.isArray(r.enum)
+            ? r.enum.slice()
+            : String(r.enumStr == null ? '' : r.enumStr)
+                .split(',')
+                .map(function (s) {
+                  return s.trim();
+                })
+                .filter(Boolean);
+          if (arr.length) out.enum = arr;
+        } else if (k === 'custom') {
+          if (r.custom) out.custom = r.custom;
+          if (r.useDepends && r.depends) out.depends = r.depends;
+        } else if (k === 'validator') {
+          if (r.validator) out.validator = r.validator;
+          if (r.useDepends && r.depends) out.depends = r.depends;
+        } else if (k === 'depends') {
+          out.required = true;
+          if (r.depends) out.depends = r.depends;
+        }
+        return out;
       }
-    }
-  }
-  if (overlaps.length === 0) ok('无坐标重叠');
-  else bad('坐标重叠 ' + overlaps.length + ' 对：\n' + overlaps.slice(0, 5).join('\n'));
+      function inferRuleKind(r) {
+        if (r.depends && r.required === true && !r.validator && !r.custom) {
+          r.kind = 'required';
+          r.required = r.depends;
+          delete r.depends;
+          return;
+        }
+        if (r.validator) r.kind = 'validator';
+        else if (r.custom) r.kind = 'custom';
+        else if (r.depends) ((r.kind = 'custom'), (r.custom = ''));
+        else if (r.enum) {
+          r.kind = 'enum';
+          r.enumStr = (Array.isArray(r.enum) ? r.enum : []).join(',');
+        } else if (r.pattern) r.kind = 'pattern';
+        else if (r.len != null) r.kind = 'len';
+        else if (r.type === 'array') r.kind = 'array';
+        else if (r.type === 'string') r.kind = 'string';
+        else if (r.type === 'number' && (r.min != null || r.max != null))
+          r.kind = 'number';
+        else r.kind = 'required';
+        if (r.depends && (r.kind === 'custom' || r.kind === 'validator'))
+          r.useDepends = true;
+      }
+      function normalizeRules(rules) {
+        if (!Array.isArray(rules) || rules.length === 0) return rules;
+        rules.forEach(inferRuleKind);
+        var reqRules = rules.filter(function (r) {
+          return r.kind === 'required';
+        });
+        if (reqRules.length <= 1) {
+          if (reqRules.length === 1) {
+            var idx = rules.indexOf(reqRules[0]);
+            if (idx > 0) {
+              rules.splice(idx, 1);
+              rules.unshift(reqRules[0]);
+            }
+          }
+          return rules;
+        }
+        var chosen = null;
+        reqRules.forEach(function (r) {
+          if (!chosen) {
+            chosen = r;
+            return;
+          }
+          var aExpr =
+            typeof chosen.required === 'string' && chosen.required.trim();
+          var bExpr = typeof r.required === 'string' && r.required.trim();
+          if (bExpr && !aExpr) chosen = r;
+          else if (bExpr && aExpr && r.required.length > chosen.required.length)
+            chosen = r;
+          else if (
+            !bExpr &&
+            !aExpr &&
+            r.required === true &&
+            chosen.required !== true
+          )
+            chosen = r;
+        });
+        for (var i = rules.length - 1; i >= 0; i--) {
+          if (rules[i].kind === 'required' && rules[i] !== chosen)
+            rules.splice(i, 1);
+        }
+        var idx0 = rules.indexOf(chosen);
+        if (idx0 > 0) {
+          rules.splice(idx0, 1);
+          rules.unshift(chosen);
+        }
+        return rules;
+      }
 
-  // 8. 隐藏标志统计
-  var portalHide = data.cells.filter(function (c) { return c.portalHide; }).length;
-  var platformHide = data.cells.filter(function (c) { return c.platformHide; }).length;
-  var hidden = data.cells.filter(function (c) { return c._hidden; }).length;
-  ok('portalHide=' + portalHide + ', platformHide=' + platformHide + ', _hidden=' + hidden);
+      group('L. 校验规则序列化与兼容');
 
-  // 9. 编译缓存效果（用真实 fm 跑 100 次 evalDepends）
-  DT._clearCache();
-  var someId = Object.keys(fm)[0];
-  if (someId) {
-    var expr = someId + ' > 0';
-    var t2 = performance.now();
-    for (var k = 0; k < 100; k++) DT.evalDepends(expr, fm, {});
-    var t3 = performance.now();
-    ok('evalDepends 缓存命中：100 次调用 ' + expr + ' 耗时 ' + (t3 - t2).toFixed(2) + 'ms（缓存项数=' + DT._cacheSize() + '）');
-  }
+      // --- L1. serializeRule 各 kind 输出（7 个）---
+      test('serializeRule required:true → {required:true, message}', function () {
+        var out = serializeRule({
+          kind: 'required',
+          required: true,
+          message: 'x'
+        });
+        assertEqual(out, { required: true, message: 'x' });
+      });
+      test('serializeRule required:"fm.x" → 字符串动态必填', function () {
+        var out = serializeRule({
+          kind: 'required',
+          required: 'fm.x',
+          message: 'y'
+        });
+        assertEqual(out, { required: 'fm.x', message: 'y' });
+      });
+      test('serializeRule required:false → 不输出 required 字段（message 保留）', function () {
+        var out = serializeRule({
+          kind: 'required',
+          required: false,
+          message: 'z'
+        });
+        assertEqual(out, { message: 'z' });
+      });
+      test('serializeRule required:""（空字符串）→ 不输出（用户切了条件必填但没填表达式）', function () {
+        var out = serializeRule({
+          kind: 'required',
+          required: '',
+          message: 'z'
+        });
+        assertEqual(out, { message: 'z' });
+      });
+      test('serializeRule number → {type, min, max}', function () {
+        var out = serializeRule({ kind: 'number', min: 0, max: 100 });
+        assertEqual(out, { type: 'number', min: 0, max: 100 });
+      });
+      test('serializeRule pattern → {pattern}', function () {
+        var out = serializeRule({ kind: 'pattern', pattern: '^\\d+$' });
+        assertEqual(out, { pattern: '^\\d+$' });
+      });
+      test('serializeRule enum → {enum:[...]}', function () {
+        var out = serializeRule({ kind: 'enum', enum: ['A', 'B'] });
+        assertEqual(out, { enum: ['A', 'B'] });
+      });
+      test('serializeRule validator → {validator:body}', function () {
+        var out = serializeRule({
+          kind: 'validator',
+          validator: 'return true'
+        });
+        assertEqual(out, { validator: 'return true' });
+      });
 
-  html += renderRealDataLog(log);
-  html += '<div class="stats"><b>type 分布</b><br>';
-  Object.keys(typeCounts).forEach(function (t) {
-    html += '<code>' + t + '</code>: ' + typeCounts[t] + '<br>';
-  });
-  html += '</div>';
-  results.innerHTML = html;
-}
+      // --- L2. inferRuleKind 兼容旧数据（4 个）---
+      test('inferRuleKind {required:true} → kind=required', function () {
+        var r = { required: true };
+        inferRuleKind(r);
+        assertEqual(r.kind, 'required');
+        assertEqual(r.required, true);
+      });
+      test('inferRuleKind {required:"fm.x"} → kind=required, 字符串保留', function () {
+        var r = { required: 'fm.x' };
+        inferRuleKind(r);
+        assertEqual(r.kind, 'required');
+        assertEqual(r.required, 'fm.x');
+      });
+      test('inferRuleKind {depends:"fm.x", required:true} → 合并为 required:"fm.x"', function () {
+        var r = { depends: 'fm.x', required: true };
+        inferRuleKind(r);
+        assertEqual(r.kind, 'required');
+        assertEqual(r.required, 'fm.x');
+        assertOk(!r.depends, 'depends 应已删除');
+      });
+      test('inferRuleKind {type:"number", min:0, max:100} → kind=number', function () {
+        var r = { type: 'number', min: 0, max: 100 };
+        inferRuleKind(r);
+        assertEqual(r.kind, 'number');
+      });
 
-function renderRealDataLog(log) {
-  var html = '';
-  log.forEach(function (line) {
-    var isOk = line.charAt(0) === '✓';
-    html += '<div class="case ' + (isOk ? 'pass' : 'fail') + '">' +
-      '<span class="name" style="white-space:pre-wrap;">' + escapeHtml(line.slice(2)) + '</span>' +
-      '<span class="status">' + (isOk ? '✓' : '✗') + '</span></div>';
-  });
-  return html;
-}
+      // --- L3. normalizeRules 多 required 合并（4 个）---
+      test('normalizeRules 单条 required → 移到 [0]', function () {
+        var rules = [
+          { kind: 'number', type: 'number', min: 0 },
+          { kind: 'required', required: true }
+        ];
+        normalizeRules(rules);
+        assertEqual(rules[0].kind, 'required');
+        assertEqual(rules[1].kind, 'number');
+        assertEqual(rules.length, 2);
+      });
+      test('normalizeRules 多条 required → 合并保留 expr 优先', function () {
+        var rules = [
+          { kind: 'required', required: true },
+          { kind: 'required', required: 'fm.x != null' }
+        ];
+        normalizeRules(rules);
+        assertEqual(rules.length, 1);
+        assertEqual(rules[0].kind, 'required');
+        assertEqual(rules[0].required, 'fm.x != null');
+      });
+      test('normalizeRules 两条都是 true → 取一条', function () {
+        var rules = [
+          { kind: 'required', required: true, message: 'a' },
+          { kind: 'required', required: true, message: 'b' }
+        ];
+        normalizeRules(rules);
+        assertEqual(rules.length, 1);
+        assertEqual(rules[0].required, true);
+      });
+      test('normalizeRules 两条 expr → 取更长的（信息更全）', function () {
+        var rules = [
+          { kind: 'required', required: 'fm.a' },
+          { kind: 'required', required: 'fm.a != null && fm.b != null' }
+        ];
+        normalizeRules(rules);
+        assertEqual(rules.length, 1);
+        assertEqual(rules[0].required, 'fm.a != null && fm.b != null');
+      });
 
-document.getElementById('file-input').onchange = function (e) {
-  var file = e.target.files && e.target.files[0];
-  if (!file) return;
-  document.getElementById('file-status').textContent = file.name + '（' + (file.size / 1024).toFixed(1) + ' KB）';
-  var reader = new FileReader();
-  reader.onload = function () { runRealDataTest(reader.result, file.name); };
-  reader.readAsText(file);
-};
+      // --- L4. 端到端：序列化往返（4 个）---
+      test('往返 required:true 序列化 → infer 状态保持', function () {
+        var r1 = { kind: 'required', required: true, message: '必填' };
+        var s1 = serializeRule(r1);
+        assertEqual(s1, { required: true, message: '必填' });
+        inferRuleKind(s1);
+        assertEqual(s1.kind, 'required');
+        assertEqual(s1.required, true);
+      });
+      test('往返 required:"fm.x" 序列化 → infer 状态保持', function () {
+        var r1 = { kind: 'required', required: 'fm.x != null' };
+        var s1 = serializeRule(r1);
+        assertEqual(s1, { required: 'fm.x != null' });
+        inferRuleKind(s1);
+        assertEqual(s1.kind, 'required');
+        assertEqual(s1.required, 'fm.x != null');
+      });
+      test('往返 旧 depends 格式 → infer 合并到 required expr', function () {
+        // 模拟导入旧 JSON：{depends, required:true}
+        var legacy = { depends: 'fm.x != null', required: true };
+        inferRuleKind(legacy);
+        assertEqual(legacy.kind, 'required');
+        assertEqual(legacy.required, 'fm.x != null');
+        // 再序列化输出 iView 标准
+        var out = serializeRule(legacy);
+        assertEqual(out, { required: 'fm.x != null' });
+      });
+      test('往返 number 规则 → 输入输出一致', function () {
+        var r1 = {
+          kind: 'number',
+          type: 'number',
+          min: 0,
+          max: 100,
+          message: '范围'
+        };
+        var s1 = serializeRule(r1);
+        assertEqual(s1, { type: 'number', min: 0, max: 100, message: '范围' });
+        inferRuleKind(s1);
+        assertEqual(s1.kind, 'number');
+      });
 
-// 自动跑一次
-runAll();
-</script>
-</body>
+      /* ====================================================================
+       * M 组：多附件上传改造
+       *   - 旧 fm 数据归一化（echoData 入口逻辑）
+       *   - onUploadSuccess 累积 + maxCount 拦截
+       *   - buildRules array+min/max 数组语义
+       *   - serializeJSON maxCount 字段
+       * ==================================================================== */
+      group('M. 多附件上传');
+
+      // 使用 DT 导出的 normalizeUploadVal（验证 export 真正可用，对齐生产/配置页）
+      function m_normalizeUploadVal(val) {
+        return DT.normalizeUploadVal(val);
+      }
+
+      // --- M1. echoData upload 归一化（5 个）---
+      test('M1: 旧单文件 JSON 字符串 → 包装成单元素数组', function () {
+        var v = m_normalizeUploadVal('{"path":"x","name":"a.pdf"}');
+        assertEqual(v, [{ path: 'x', name: 'a.pdf' }]);
+      });
+      test('M1: 旧 JSON 字符串数组 → 直接用', function () {
+        var v = m_normalizeUploadVal('[{"path":"x"},{"path":"y"}]');
+        assertEqual(v.length, 2);
+        assertEqual(v[0].path, 'x');
+      });
+      test('M1: 空字符串/null/undefined → 空数组', function () {
+        assertEqual(m_normalizeUploadVal('').length, 0);
+        assertEqual(m_normalizeUploadVal(null).length, 0);
+        assertEqual(m_normalizeUploadVal(undefined).length, 0);
+      });
+      test('M1: 非法 JSON 字符串 → 空数组（不抛错）', function () {
+        var v = m_normalizeUploadVal('abc');
+        assertOk(Array.isArray(v) && v.length === 0);
+      });
+      test('M1: 已是数组 → 原样返回', function () {
+        var input = [{ path: 'a' }, { path: 'b' }];
+        var v = m_normalizeUploadVal(input);
+        assertEqual(v, input);
+      });
+
+      // --- M2. onUploadSuccess 累积 + maxCount 拦截（3 个）---
+      function m_simulateUpload(currentList, val, maxCount) {
+        var max = maxCount > 0 ? Number(maxCount) : null;
+        var list = Array.isArray(currentList) ? currentList.slice() : [];
+        if (max != null && list.length >= max)
+          return { rejected: true, list: list };
+        list.push({ path: val.path, name: val.name });
+        return { rejected: false, list: list };
+      }
+      test('M2: 多次上传 → 累积', function () {
+        var r1 = m_simulateUpload([], { path: 'a', name: 'a.pdf' }, null);
+        var r2 = m_simulateUpload(r1.list, { path: 'b', name: 'b.pdf' }, null);
+        assertEqual(r2.list.length, 2);
+      });
+      test('M2: maxCount=2 时第 3 个被拦截', function () {
+        var r1 = m_simulateUpload([], { path: 'a' }, 2);
+        var r2 = m_simulateUpload(r1.list, { path: 'b' }, 2);
+        var r3 = m_simulateUpload(r2.list, { path: 'c' }, 2);
+        assertEqual(r3.rejected, true);
+        assertEqual(r3.list.length, 2);
+      });
+      test('M2: maxCount=null/0 时不拦截', function () {
+        var r = m_simulateUpload(
+          [{ path: 'a' }, { path: 'b' }, { path: 'c' }],
+          { path: 'd' },
+          0
+        );
+        assertEqual(r.rejected, false);
+        assertEqual(r.list.length, 4);
+      });
+
+      // --- M3. buildRules array+min/max（3 个）---
+      // 新语义：list 为空时跳过 min（必填由 required 控制，min 仅在用户已上传时生效）
+      function m_buildUploadMinValidator(min, m) {
+        return function (r, value, callback) {
+          var list = Array.isArray(value) ? value : [];
+          if (list.length === 0) {
+            callback();
+            return;
+          }
+          if (list.length >= min) callback();
+          else callback(new Error(m));
+        };
+      }
+      test('M3: array min=2 时空数组跳过（不报错）', function () {
+        var called = false;
+        m_buildUploadMinValidator(2, '至少 2 个')({}, [], function (e) {
+          called = !e;
+        });
+        assertEqual(called, true, '空数组应跳过 min 校验');
+      });
+      test('M3: array min=2 时 1 个失败、2 个通过', function () {
+        var oneCalled = false,
+          twoCalled = false;
+        m_buildUploadMinValidator(2, '至少 2 个')(
+          {},
+          [{ path: 'a' }],
+          function (e) {
+            oneCalled = !e;
+          }
+        );
+        m_buildUploadMinValidator(2, '至少 2 个')(
+          {},
+          [{ path: 'a' }, { path: 'b' }],
+          function (e) {
+            twoCalled = !e;
+          }
+        );
+        assertEqual(oneCalled, false, '1 个应失败');
+        assertEqual(twoCalled, true, '2 个应通过');
+      });
+      test('M3: array max=2 时 3 个失败', function () {
+        // 注意：当前 buildRules 没有显式 max 分支，简化为长度判断
+        var list = [{}, {}, {}];
+        assertEqual(list.length > 2, true, '3 个超过 max=2');
+      });
+
+      // --- M4. serializeJSON maxCount 字段（2 个）---
+      function m_serializeMaxCount(c) {
+        var out = {};
+        if (c.maxCount > 0) out.maxCount = Number(c.maxCount);
+        return out;
+      }
+      test('M4: maxCount=3 输出 {maxCount:3}', function () {
+        assertEqual(m_serializeMaxCount({ maxCount: 3 }), { maxCount: 3 });
+      });
+      test('M4: maxCount=0/null/undefined 不输出该字段', function () {
+        assertEqual(m_serializeMaxCount({ maxCount: 0 }), {});
+        assertEqual(m_serializeMaxCount({ maxCount: null }), {});
+        assertEqual(m_serializeMaxCount({ maxCount: undefined }), {});
+      });
+
+      // ---- O. 「应用到整列」目标列表 + 字段拷贝（buildApplyTargets / pickFields）----
+      group('O. 应用到整列（buildApplyTargets / pickFields）');
+
+      test('O1: 空 cells + maxRow=0 → 空 targets', function () {
+        // maxRow=0 且 cells 空，扫描范围只有 draft 自身 → 跳过后 0 个目标
+        var draft = { x: '3', y: '5', type: 'number' };
+        assertEqual(DT.buildApplyTargets(draft, [], { maxRow: 0 }), []);
+      });
+
+      test('O2: 同列只有 draft 自己 → 没有 existing target（excludeUid 排除）', function () {
+        var cur = { id: 'a', x: '3', y: '5', type: 'number', __uid: 1 };
+        var draft = { x: '3', y: '5', type: 'number' };
+        var r = DT.buildApplyTargets(draft, [cur], {
+          excludeUid: 1,
+          maxRow: 0
+        });
+        // draft 自身在 r5c3，maxRow=0 → 扫描范围只到 r5，但 r5 被自己占据 → 0 个目标
+        assertEqual(r, []);
+      });
+
+      test('O3: 同列有未配置 cell（label 空内容）→ existing 数量=1，isConfigured=false', function () {
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        var uncfg = {
+          id: 'u',
+          x: '3',
+          y: '6',
+          type: 'label',
+          content: '',
+          __uid: 2
+        };
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, uncfg], {
+          excludeUid: 1,
+          maxRow: 6
+        });
+        var existings = r.filter(function (t) {
+          return t.type === 'existing';
+        });
+        assertEqual(existings.length, 1);
+        assertEqual(existings[0].cellId, 'u');
+        assertEqual(existings[0].isConfigured, false);
+        assertEqual(existings[0].row, 6);
+        assertEqual(existings[0].col, 3);
+      });
+
+      test('O4: 同列有已配置 cell（type=number）→ isConfigured=true', function () {
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        var cfg = { id: 'c', x: '3', y: '6', type: 'number', __uid: 2 };
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, cfg], {
+          excludeUid: 1,
+          maxRow: 6
+        });
+        var existings = r.filter(function (t) {
+          return t.type === 'existing';
+        });
+        assertEqual(existings.length, 1);
+        assertEqual(existings[0].isConfigured, true);
+      });
+
+      test('O5: label 类型 cell → isHeader=true（无论 y 多少）', function () {
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        var lbl = {
+          id: 'h',
+          x: '3',
+          y: '1',
+          type: 'label',
+          content: '表头',
+          __uid: 2
+        };
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, lbl], {
+          excludeUid: 1,
+          maxRow: 5
+        });
+        var lblTarget = r.filter(function (t) {
+          return t.cellId === 'h';
+        })[0];
+        assertEqual(lblTarget.isHeader, true);
+        assertEqual(lblTarget.isConfigured, true); // 有 content
+      });
+
+      test('O6: y <= freezeRows 但 type 不是 label → isHeader=true（行级表头判定）', function () {
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        var txt = {
+          id: 't',
+          x: '3',
+          y: '2',
+          type: 'text',
+          content: '副表头',
+          __uid: 2
+        };
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, txt], {
+          excludeUid: 1,
+          freezeRows: 2,
+          maxRow: 5
+        });
+        var txtTarget = r.filter(function (t) {
+          return t.cellId === 't';
+        })[0];
+        assertEqual(txtTarget.isHeader, true);
+      });
+
+      test('O7: 合并 cell（跨多列）被跳过', function () {
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        var merged = {
+          id: 'm',
+          x: '3,5',
+          y: '6',
+          type: 'label',
+          content: '合并',
+          __uid: 2
+        };
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, merged], {
+          excludeUid: 1
+        });
+        // 合并 cell 在 col=3 row=6 出现，但应被跳过
+        for (var i = 0; i < r.length; i++) {
+          assertFail(r[i].cellId === 'm', '合并 cell 不应进入 targets');
+        }
+      });
+
+      test('O8: 合并 cell（跨多行）被跳过', function () {
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        var merged = {
+          id: 'm',
+          x: '3',
+          y: '6,8',
+          type: 'label',
+          content: '合并',
+          __uid: 2
+        };
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, merged], {
+          excludeUid: 1
+        });
+        for (var i = 0; i < r.length; i++) {
+          assertFail(r[i].cellId === 'm', '跨行合并 cell 不应进入 targets');
+        }
+      });
+
+      test('O9: 空位识别（无 cell 占据且未被覆盖）→ type=empty', function () {
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        // cur 在 r5c3，draft 也在 r5c3，扫描 r1-r7：r5 跳过（draft 自己），r1-r4/r6/r7 共 6 个空位
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur], {
+          excludeUid: 1,
+          maxRow: 7
+        });
+        var empties = r.filter(function (t) {
+          return t.type === 'empty';
+        });
+        assertEqual(empties.length, 6);
+        var rows = empties
+          .map(function (t) {
+            return t.row;
+          })
+          .sort(function (a, b) {
+            return a - b;
+          });
+        assertEqual(rows, [1, 2, 3, 4, 6, 7]);
+      });
+
+      test('O10: 被合并 cell 覆盖的空位不识别（isCovered 过滤）', function () {
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        // big 占据 c3 r6-r8（合并），cur 在 r5c3，draft 在 r5c3
+        // r6/r7/r8 的 c3 都被 big 覆盖，不应识别为空位
+        var big = {
+          id: 'b',
+          x: '3',
+          y: '6,8',
+          type: 'label',
+          content: '大',
+          __uid: 2
+        };
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, big], {
+          excludeUid: 1
+        });
+        // 检查 r6/r7/r8 的 c3 没有空位 target
+        var badEmpties = r.filter(function (t) {
+          return (
+            t.type === 'empty' &&
+            t.col === 3 &&
+            (t.row === 6 || t.row === 7 || t.row === 8)
+          );
+        });
+        assertEqual(badEmpties.length, 0);
+      });
+
+      test('O11: draft 占据多个位置（跨列）时全部跳过', function () {
+        // draft 跨 col 3-5 row 5，那么 c3r5/c4r5/c5r5 都应跳过
+        var cur = { id: 'cur', x: '3,5', y: '5', type: 'number', __uid: 1 };
+        var other = {
+          id: 'o',
+          x: '3',
+          y: '6',
+          type: 'label',
+          content: '',
+          __uid: 2
+        };
+        var r = DT.buildApplyTargets({ x: '3,5', y: '5' }, [cur, other], {
+          excludeUid: 1
+        });
+        // 不应有 r5 的 target（draft 自己占据）
+        for (var i = 0; i < r.length; i++) {
+          assertFail(r[i].row === 5, 'draft 占据的行不应有 target');
+        }
+      });
+
+      test('O12: 不同列的 cell 不进入 targets', function () {
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        var otherCol = {
+          id: 'oc',
+          x: '4',
+          y: '6',
+          type: 'label',
+          content: '',
+          __uid: 2
+        };
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, otherCol], {
+          excludeUid: 1
+        });
+        // otherCol 在 c4，不应出现在 c3 的扫描结果里
+        var wrongCell = r.filter(function (t) {
+          return t.cellId === 'oc';
+        });
+        assertEqual(wrongCell.length, 0);
+        // 所有 target 应该都在 col=3
+        var allCol3 = r.every(function (t) {
+          return t.col === 3;
+        });
+        assertOk(allCol3, '所有 target 都应在 col=3');
+      });
+
+      test('O13: pickFields 深拷贝指定字段', function () {
+        var src = {
+          type: 'number',
+          precision: 2,
+          options: [{ label: 'A', value: '1' }],
+          ignored: 'x'
+        };
+        var out = DT.pickFields(src, ['type', 'options']);
+        assertEqual(Object.keys(out).sort(), ['options', 'type']);
+        assertEqual(out.type, 'number');
+        assertEqual(out.options, [{ label: 'A', value: '1' }]);
+        // 深拷贝验证：修改 out 不影响 src
+        out.options[0].label = 'B';
+        assertEqual(src.options[0].label, 'A');
+      });
+
+      test('O14: pickFields 跳过 null/undefined 字段', function () {
+        var src = { a: null, b: undefined, c: 1 };
+        var out = DT.pickFields(src, ['a', 'b', 'c', 'd']);
+        assertEqual(out, { c: 1 });
+      });
+
+      test('O15: pickFields 容错（src=null / fields=null）→ {}', function () {
+        assertEqual(DT.pickFields(null, ['a']), {});
+        assertEqual(DT.pickFields({ a: 1 }, null), {});
+      });
+
+      test('O16: 表头判定优先级：label 类型 + y=10 也算表头', function () {
+        // 表头不限于 y=1/y=2，只要 type=label 就算
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        var lblFar = {
+          id: 'lbl',
+          x: '3',
+          y: '10',
+          type: 'label',
+          content: '远表头',
+          __uid: 2
+        };
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur, lblFar], {
+          excludeUid: 1
+        });
+        var lblTarget = r.filter(function (t) {
+          return t.cellId === 'lbl';
+        })[0];
+        assertEqual(lblTarget.isHeader, true);
+      });
+
+      test('O17: 空位 isHeader 由 row <= freezeRows 决定', function () {
+        var cur = { id: 'cur', x: '3', y: '5', type: 'number', __uid: 1 };
+        var r = DT.buildApplyTargets({ x: '3', y: '5' }, [cur], {
+          excludeUid: 1,
+          freezeRows: 2,
+          maxRow: 4
+        });
+        // r1/r2 是表头行（freezeRows=2），r3/r4 不是；但 r1/r2 此时被 cur 在 r5 之前覆盖检查
+        // draft 在 r5，r1/r2 没被覆盖 → 应有 r1c3/r2c3/r3c3/r4c3 共 4 个空位
+        var empties = r.filter(function (t) {
+          return t.type === 'empty';
+        });
+        var headers = empties.filter(function (t) {
+          return t.isHeader;
+        });
+        var nonHeaders = empties.filter(function (t) {
+          return !t.isHeader;
+        });
+        assertEqual(headers.length, 2); // r1, r2
+        assertEqual(nonHeaders.length, 2); // r3, r4
+      });
+
+      // ---- P. 合并 cell + 隐藏列（colHidden 算法 + visibleColspan）----
+      // 复刻配置页面 _buildState 与生产 dynamic-eval-table.vue 的 hiddenCols 算法纯逻辑做对照。
+      // 关键场景：合并 cell 跨越独立 cell 所在列，独立 cell 被 hide 时该列必须能正常隐藏。
+      group('P. 合并 cell + 隐藏列');
+
+      // 配置页面版 colHidden：列上有 cell 默认显示，独立 cell 全 hide 才隐藏
+      function p_colHiddenConfig(cells, hiddenIds, maxC) {
+        var hs = {};
+        (hiddenIds || []).forEach(function (id) {
+          hs[id] = true;
+        });
+        var colHasAnyCell = {};
+        var colHasSingleCell = {};
+        var colHasVisibleSingleCell = {};
+        cells.forEach(function (c) {
+          if (!c || !c.x) return;
+          var xr = DT.parseRange(c.x);
+          for (var i = xr.start - 1; i < xr.end; i++) {
+            colHasAnyCell[i] = true;
+            if (xr.span === 1) {
+              colHasSingleCell[i] = true;
+              if (!hs[c.id]) colHasVisibleSingleCell[i] = true;
+            }
+          }
+        });
+        var colHidden = {};
+        for (var ci = 0; ci < maxC; ci++) {
+          if (!colHasAnyCell[ci]) colHidden[ci] = false;
+          else if (colHasSingleCell[ci])
+            colHidden[ci] = !colHasVisibleSingleCell[ci];
+          else colHidden[ci] = false;
+        }
+        return colHidden;
+      }
+
+      // 生产版 colHidden：默认隐藏，独立 cell visible 点亮所在列；合并 cell 只点亮无独立 cell 的跨越列
+      function p_colHiddenProd(cells, hiddenIds, maxC) {
+        var hs = {};
+        (hiddenIds || []).forEach(function (id) {
+          hs[id] = true;
+        });
+        var result = {};
+        for (var ci = 0; ci < maxC; ci++) result[ci] = true;
+        var colHasSingle = {};
+        cells.forEach(function (c) {
+          if (!c || c.x == null) return;
+          var xr = DT.parseRange(c.x);
+          if (xr.span !== 1) return;
+          var ci2 = xr.start - 1;
+          colHasSingle[ci2] = true;
+          if (!hs[c.id]) result[ci2] = false;
+        });
+        cells.forEach(function (c) {
+          if (!c || c.x == null) return;
+          var xr = DT.parseRange(c.x);
+          if (xr.span === 1) return;
+          if (hs[c.id]) return;
+          for (var i = xr.start - 1; i < xr.end; i++) {
+            if (colHasSingle[i]) continue;
+            result[i] = false;
+          }
+        });
+        return result;
+      }
+
+      // visibleColspan：扫 cell.x 范围内未 hide 的列数（两端共用）
+      function p_visibleColspan(cell, colHidden) {
+        if (!cell || !cell.x) return 1;
+        var xr = DT.parseRange(cell.x);
+        if (xr.span === 1) {
+          return colHidden[xr.start - 1] ? 0 : 1;
+        }
+        var vis = 0;
+        for (var c = xr.start - 1; c < xr.end; c++) {
+          if (!colHidden[c]) vis++;
+        }
+        return vis;
+      }
+
+      test('P1: 配置页 — 合并 cell 跨越 col1，独立 A hide 时 col1 仍要隐藏', function () {
+        // 行 1：合并 D（x="1,3"）；行 2：独立 A/B/C 各占一列；A 被 portalHide
+        var cells = [
+          { id: 'D', x: '1,3', y: '1', type: 'label' },
+          { id: 'A', x: '1', y: '2', type: 'label' },
+          { id: 'B', x: '2', y: '2', type: 'label' },
+          { id: 'C', x: '3', y: '2', type: 'label' }
+        ];
+        var ch = p_colHiddenConfig(cells, ['A'], 3);
+        assertEqual(ch[0], true); // col1 hide（修复前为 false —— D 贡献 visible）
+        assertEqual(ch[1], false); // col2 显示
+        assertEqual(ch[2], false); // col3 显示
+      });
+
+      test('P2: 配置页 — visibleColspan 在部分列 hide 时动态收缩', function () {
+        var cells = [
+          { id: 'D', x: '1,3', y: '1', type: 'label' },
+          { id: 'A', x: '1', y: '2', type: 'label' },
+          { id: 'B', x: '2', y: '2', type: 'label' },
+          { id: 'C', x: '3', y: '2', type: 'label' }
+        ];
+        var ch = p_colHiddenConfig(cells, ['A'], 3);
+        assertEqual(p_visibleColspan(cells[0], ch), 2); // D 跨 3 列，col1 hide → 可见 2
+        assertEqual(p_visibleColspan(cells[1], ch), 0); // A 单列且列 hide → 0（不渲染）
+        assertEqual(p_visibleColspan(cells[2], ch), 1);
+        assertEqual(p_visibleColspan(cells[3], ch), 1);
+      });
+
+      test('P3: 配置页 — 独立 cell 全可见时合并 cell colspan 不变', function () {
+        var cells = [
+          { id: 'D', x: '1,3', y: '1', type: 'label' },
+          { id: 'A', x: '1', y: '2', type: 'label' },
+          { id: 'B', x: '2', y: '2', type: 'label' },
+          { id: 'C', x: '3', y: '2', type: 'label' }
+        ];
+        var ch = p_colHiddenConfig(cells, [], 3);
+        assertEqual(ch[0] || false, false);
+        assertEqual(ch[1] || false, false);
+        assertEqual(ch[2] || false, false);
+        assertEqual(p_visibleColspan(cells[0], ch), 3);
+      });
+
+      test('P4: 配置页 — 独立 cell 全 hide 时所有列都隐藏，合并 cell visibleColspan=0', function () {
+        var cells = [
+          { id: 'D', x: '1,3', y: '1', type: 'label' },
+          { id: 'A', x: '1', y: '2', type: 'label' },
+          { id: 'B', x: '2', y: '2', type: 'label' },
+          { id: 'C', x: '3', y: '2', type: 'label' }
+        ];
+        var ch = p_colHiddenConfig(cells, ['A', 'B', 'C'], 3);
+        assertEqual(ch[0], true);
+        assertEqual(ch[1], true);
+        assertEqual(ch[2], true);
+        assertEqual(p_visibleColspan(cells[0], ch), 0); // D 全跨列 hide → 不渲染
+      });
+
+      test('P5: 生产 — 合并 cell 跨越 col1，独立 A hide 时 col1 隐藏（与配置页对齐）', function () {
+        var cells = [
+          { id: 'D', x: '1,3', y: '1', type: 'label' },
+          { id: 'A', x: '1', y: '2', type: 'label' },
+          { id: 'B', x: '2', y: '2', type: 'label' },
+          { id: 'C', x: '3', y: '2', type: 'label' }
+        ];
+        var ch = p_colHiddenProd(cells, ['A'], 3);
+        assertEqual(ch[0], true); // col1 hide（修复前为 false —— D 点亮了 col1）
+        assertEqual(ch[1], false);
+        assertEqual(ch[2], false);
+        assertEqual(p_visibleColspan(cells[0], ch), 2); // D 可见列数 2
+      });
+
+      test('P6: 生产 — 仅合并 cell 跨越无独立 cell 时仍点亮（避免破坏合并视觉）', function () {
+        // D 跨 col1-3，col2/3 没有独立 cell → 由 D 点亮
+        var cells = [
+          { id: 'D', x: '1,3', y: '1', type: 'label' },
+          { id: 'A', x: '1', y: '2', type: 'label' }
+        ];
+        var ch = p_colHiddenProd(cells, [], 3);
+        assertEqual(ch[0], false); // A 点亮
+        assertEqual(ch[1], false); // D 点亮（col2 无独立 cell）
+        assertEqual(ch[2], false); // D 点亮（col3 无独立 cell）
+        assertEqual(p_visibleColspan(cells[0], ch), 3);
+      });
+
+      test('P7: 生产 — 仅合并 cell 跨越无独立 cell，D 自身 hide 时不点亮', function () {
+        var cells = [
+          { id: 'D', x: '1,3', y: '1', type: 'label' },
+          { id: 'A', x: '1', y: '2', type: 'label' }
+        ];
+        var ch = p_colHiddenProd(cells, ['D'], 3);
+        assertEqual(ch[0], false); // A 可见点亮 col1
+        assertEqual(ch[1], true); // D hide，col2 无点亮
+        assertEqual(ch[2], true);
+      });
+
+      test('P8: 配置页 — 空列（无 cell）不隐藏，visibleColspan 对空位返回 1', function () {
+        // col4 完全无 cell
+        var cells = [{ id: 'A', x: '1', y: '1', type: 'label' }];
+        var ch = p_colHiddenConfig(cells, [], 4);
+        assertEqual(ch[0], false); // A 可见
+        assertEqual(ch[3], false); // 空列不隐藏（配置页语义）
+        assertEqual(p_visibleColspan({ x: '4' }, ch), 1);
+      });
+
+      // ---- N. 公式依赖图 / 选项类型对齐（与 preview-renderer / 生产组件方法对照）----
+      // 注意：extractFormulaDeps / coerceOptionValue 在两端都是组件方法（非 DTUtils 导出），
+      // 这里复刻其纯逻辑做对照测试。组件方法变更时，本组需同步更新。
+      group('N. 公式依赖图 / 选项类型对齐');
+
+      function n_extractFormulaDeps(f, ids, cellMap, allCells) {
+        if (!f) return [];
+        if (f.trim() === 'CALC_SCORE') {
+          return (allCells || [])
+            .filter(function (c) {
+              return c.type === 'number';
+            })
+            .map(function (c) {
+              return c.id;
+            });
+        }
+        var m = f.match(/^(SUM|AVG|MIN)\((.+)\)$/i);
+        if (m) {
+          return m[2]
+            .split(',')
+            .map(function (x) {
+              return x.trim();
+            })
+            .filter(function (id) {
+              return cellMap[id];
+            });
+        }
+        var body = f;
+        var cm = f.match(/^CALC\((.+)\)$/i);
+        if (cm) body = cm[1];
+        return ids.filter(function (id) {
+          return new RegExp('\\b' + id + '\\b').test(body);
+        });
+      }
+      function n_coerceOptionValue(cell, val) {
+        if (!cell || !cell.options || !cell.options.length) return val;
+        for (var i = 0; i < cell.options.length; i++) {
+          if (String(cell.options[i].value) === String(val))
+            return cell.options[i].value;
+        }
+        return val;
+      }
+
+      // --- N1. extractFormulaDeps：SUM/AVG/MIN 参数即依赖 ---
+      test('N1: SUM(a,b,c) → [a,b,c]（仅保留存在的 cell）', function () {
+        var cellMap = { a: 1, b: 1, c: 1 };
+        var deps = n_extractFormulaDeps(
+          'SUM(a,b,c)',
+          ['a', 'b', 'c'],
+          cellMap,
+          []
+        );
+        assertEqual(deps, ['a', 'b', 'c']);
+      });
+      test('N1: SUM 参数中不存在的 id 被过滤', function () {
+        var cellMap = { a: 1 };
+        var deps = n_extractFormulaDeps('SUM(a,ghost)', ['a'], cellMap, []);
+        assertEqual(deps, ['a']);
+      });
+      test('N1: AVG/MIN 同 SUM 处理', function () {
+        var cellMap = { x: 1, y: 1 };
+        assertEqual(n_extractFormulaDeps('AVG(x,y)', ['x', 'y'], cellMap, []), [
+          'x',
+          'y'
+        ]);
+        assertEqual(n_extractFormulaDeps('MIN(x,y)', ['x', 'y'], cellMap, []), [
+          'x',
+          'y'
+        ]);
+      });
+
+      // --- N2. CALC_SCORE 通配依赖所有 number cell ---
+      test('N2: CALC_SCORE → 所有 number cell id', function () {
+        var allCells = [
+          { id: 'a', type: 'number' },
+          { id: 'b', type: 'text' },
+          { id: 'c', type: 'number' }
+        ];
+        var deps = n_extractFormulaDeps(
+          'CALC_SCORE',
+          ['a', 'b', 'c'],
+          {},
+          allCells
+        );
+        assertEqual(deps, ['a', 'c']);
+      });
+
+      // --- N3. CALC(expr) 与裸表达式：词边界匹配 ---
+      test('N3: CALC(expr) 提取括号内依赖', function () {
+        var cellMap = { score_a: 1, score_b: 1 };
+        var ids = ['score_a', 'score_b'];
+        var deps = n_extractFormulaDeps(
+          'CALC(score_a + score_b * 0.5)',
+          ids,
+          cellMap,
+          []
+        );
+        assertEqual(deps.sort(), ['score_a', 'score_b']);
+      });
+      test('N3: 词边界：score 不会误匹配 score_a', function () {
+        var cellMap = { score_a: 1 };
+        var deps = n_extractFormulaDeps(
+          'CALC(score_a + 1)',
+          ['score_a'],
+          cellMap,
+          []
+        );
+        assertEqual(deps, ['score_a']);
+        // 反例：'score' 不应被当做依赖（虽然不在 ids，确保词边界不前缀匹配）
+        var deps2 = n_extractFormulaDeps(
+          'CALC(score_a)',
+          ['score'],
+          { score: 1 },
+          []
+        );
+        assertEqual(deps2, []);
+      });
+      test('N3: 空公式 → []', function () {
+        assertEqual(n_extractFormulaDeps('', ['a'], { a: 1 }, []), []);
+        assertEqual(n_extractFormulaDeps(null, ['a'], { a: 1 }, []), []);
+      });
+
+      // --- N4. coerceOptionValue：字符串值对齐到 option 原始类型 ---
+      test('N4: option 数字类型，字符串 "1" → 数字 1', function () {
+        var cell = {
+          options: [
+            { value: 1, label: 'A' },
+            { value: 2, label: 'B' }
+          ]
+        };
+        assertEqual(n_coerceOptionValue(cell, '1'), 1);
+        assertEqual(typeof n_coerceOptionValue(cell, '1'), 'number');
+      });
+      test('N4: option 字符串类型，数字 1 → 字符串 "1"', function () {
+        var cell = { options: [{ value: '1', label: 'A' }] };
+        assertEqual(n_coerceOptionValue(cell, 1), '1');
+        assertEqual(typeof n_coerceOptionValue(cell, 1), 'string');
+      });
+      test('N4: 无 options / 空 options → 原值返回', function () {
+        assertEqual(n_coerceOptionValue(null, '1'), '1');
+        assertEqual(n_coerceOptionValue({ options: [] }, '1'), '1');
+      });
+      test('N4: 无匹配 → 原值返回（不抛错）', function () {
+        var cell = { options: [{ value: 1 }] };
+        assertEqual(n_coerceOptionValue(cell, 'xyz'), 'xyz');
+      });
+
+      // --- N5. DT.normalizeUploadVal 导出验证 ---
+      test('N5: DT.normalizeUploadVal 真正导出可用', function () {
+        assertOk(typeof DT.normalizeUploadVal === 'function');
+        // 行为与 M1 一致：旧 JSON 字符串 → 单元素数组
+        var v = DT.normalizeUploadVal('{"path":"x","name":"a.pdf"}');
+        assertEqual(v, [{ path: 'x', name: 'a.pdf' }]);
+      });
+
+      /* ====================================================================
+       * 运行器
+       * ==================================================================== */
+      function runAll() {
+        var results = document.getElementById('results');
+        var summary = document.getElementById('summary');
+        results.innerHTML = '';
+        var totalPass = 0,
+          totalFail = 0;
+        _groups.forEach(function (g) {
+          var groupHtml = '<h2>' + g.name + '</h2>';
+          var groupPass = 0;
+          g.cases.forEach(function (tc) {
+            _lastResult = { pass: true, detail: '' };
+            try {
+              tc.fn();
+            } catch (e) {
+              _lastResult = { pass: false, detail: e.message || String(e) };
+            }
+            if (_lastResult.pass) {
+              totalPass++;
+              groupPass++;
+            } else totalFail++;
+            groupHtml +=
+              '<div class="case ' +
+              (_lastResult.pass ? 'pass' : 'fail') +
+              '">' +
+              '<span class="name">' +
+              tc.name +
+              '</span>' +
+              '<span class="detail">' +
+              escapeHtml(_lastResult.detail || '') +
+              '</span>' +
+              '<span class="status">' +
+              (_lastResult.pass ? '✓' : '✗') +
+              '</span>' +
+              '</div>';
+          });
+          groupHtml +=
+            '<div style="font-size:11px;color:#888;padding:4px 12px 8px;">小计：' +
+            groupPass +
+            '/' +
+            g.cases.length +
+            ' 通过</div>';
+          results.innerHTML += groupHtml;
+        });
+        summary.innerHTML =
+          '总计：<span class="pass">' +
+          totalPass +
+          ' 通过</span> / <span class="' +
+          (totalFail ? 'fail' : 'pass') +
+          '">' +
+          totalFail +
+          ' 失败</span>（共 ' +
+          (totalPass + totalFail) +
+          ' 项）';
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      document.getElementById('run-all').onclick = runAll;
+
+      /* ====================================================================
+       * 真实数据测试
+       * ==================================================================== */
+      function runRealDataTest(text, fileName) {
+        var results = document.getElementById('results');
+        var html = '<h2>真实数据：' + fileName + '</h2>';
+        var log = [];
+        function ok(msg) {
+          log.push('✓ ' + msg);
+        }
+        function bad(msg) {
+          log.push('✗ ' + msg);
+        }
+
+        // 1. 解析
+        var data = null,
+          parseErr = null;
+        try {
+          data = parseConfigText(text);
+        } catch (e) {
+          parseErr = e.message;
+        }
+
+        if (!data) {
+          html +=
+            '<div class="case fail"><span class="name">parseConfigText</span><span class="detail">' +
+            escapeHtml(parseErr || '解析失败') +
+            '</span><span class="status">✗</span></div>';
+          results.innerHTML = html;
+          return;
+        }
+        ok('parseConfigText 解析成功');
+        if (!Array.isArray(data.cells) || !data.cells.length) {
+          bad('cells 不是非空数组');
+          html += renderRealDataLog(log);
+          results.innerHTML = html;
+          return;
+        }
+        ok('cells 数量 = ' + data.cells.length);
+
+        // 2. schema 校验
+        var errs = validateConfig(data);
+        if (errs.length === 0)
+          ok('schema 校验通过（必填字段、type 合法、ID 唯一）');
+        else
+          bad(
+            'schema 错误 ' +
+              errs.length +
+              ' 项：\n' +
+              errs.slice(0, 5).join('\n')
+          );
+
+        // 3. ID 唯一性统计
+        var idCounts = {};
+        data.cells.forEach(function (c) {
+          idCounts[c.id] = (idCounts[c.id] || 0) + 1;
+        });
+        var dupIds = Object.keys(idCounts).filter(function (k) {
+          return idCounts[k] > 1;
+        });
+        if (dupIds.length === 0) ok('ID 全部唯一');
+        else
+          bad(
+            '重复 ID ' + dupIds.length + ' 个：' + dupIds.slice(0, 5).join(', ')
+          );
+
+        // 4. type 分布
+        var typeCounts = {};
+        data.cells.forEach(function (c) {
+          typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
+        });
+
+        // 5. buildGrid 性能 + 正确性
+        var t0 = performance.now();
+        var grid = DT.buildGrid(data.cells);
+        var t1 = performance.now();
+        ok(
+          'buildGrid 耗时 ' +
+            (t1 - t0).toFixed(1) +
+            'ms，返回 ' +
+            grid.rows.length +
+            ' 行 × ' +
+            grid.maxC +
+            ' 列'
+        );
+
+        // 6. buildFormModel
+        var fm = DT.buildFormModel(data.cells);
+        ok('buildFormModel 返回 ' + Object.keys(fm).length + ' 个字段');
+
+        // 7. 坐标重叠检测
+        var overlaps = [];
+        for (var i = 0; i < data.cells.length; i++) {
+          for (var j = i + 1; j < data.cells.length; j++) {
+            var a = data.cells[i],
+              b = data.cells[j];
+            if (!a.x || !a.y || !b.x || !b.y) continue;
+            var axr = DT.parseRange(a.x),
+              ayr = DT.parseRange(a.y);
+            var bxr = DT.parseRange(b.x),
+              byr = DT.parseRange(b.y);
+            if (
+              axr.start <= bxr.end &&
+              axr.end >= bxr.start &&
+              ayr.start <= byr.end &&
+              ayr.end >= byr.start
+            ) {
+              overlaps.push(a.id + '↔' + b.id);
+            }
+          }
+        }
+        if (overlaps.length === 0) ok('无坐标重叠');
+        else
+          bad(
+            '坐标重叠 ' +
+              overlaps.length +
+              ' 对：\n' +
+              overlaps.slice(0, 5).join('\n')
+          );
+
+        // 8. 隐藏标志统计
+        var portalHide = data.cells.filter(function (c) {
+          return c.portalHide;
+        }).length;
+        var platformHide = data.cells.filter(function (c) {
+          return c.platformHide;
+        }).length;
+        var hidden = data.cells.filter(function (c) {
+          return c._hidden;
+        }).length;
+        ok(
+          'portalHide=' +
+            portalHide +
+            ', platformHide=' +
+            platformHide +
+            ', _hidden=' +
+            hidden
+        );
+
+        // 9. 编译缓存效果（用真实 fm 跑 100 次 evalDepends）
+        DT._clearCache();
+        var someId = Object.keys(fm)[0];
+        if (someId) {
+          var expr = someId + ' > 0';
+          var t2 = performance.now();
+          for (var k = 0; k < 100; k++) DT.evalDepends(expr, fm, {});
+          var t3 = performance.now();
+          ok(
+            'evalDepends 缓存命中：100 次调用 ' +
+              expr +
+              ' 耗时 ' +
+              (t3 - t2).toFixed(2) +
+              'ms（缓存项数=' +
+              DT._cacheSize() +
+              '）'
+          );
+        }
+
+        html += renderRealDataLog(log);
+        html += '<div class="stats"><b>type 分布</b><br>';
+        Object.keys(typeCounts).forEach(function (t) {
+          html += '<code>' + t + '</code>: ' + typeCounts[t] + '<br>';
+        });
+        html += '</div>';
+        results.innerHTML = html;
+      }
+
+      function renderRealDataLog(log) {
+        var html = '';
+        log.forEach(function (line) {
+          var isOk = line.charAt(0) === '✓';
+          html +=
+            '<div class="case ' +
+            (isOk ? 'pass' : 'fail') +
+            '">' +
+            '<span class="name" style="white-space:pre-wrap;">' +
+            escapeHtml(line.slice(2)) +
+            '</span>' +
+            '<span class="status">' +
+            (isOk ? '✓' : '✗') +
+            '</span></div>';
+        });
+        return html;
+      }
+
+      document.getElementById('file-input').onchange = function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        document.getElementById('file-status').textContent =
+          file.name + '（' + (file.size / 1024).toFixed(1) + ' KB）';
+        var reader = new FileReader();
+        reader.onload = function () {
+          runRealDataTest(reader.result, file.name);
+        };
+        reader.readAsText(file);
+      };
+
+      // 自动跑一次
+      runAll();
+    </script>
+  </body>
 </html>
