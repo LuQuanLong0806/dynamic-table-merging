@@ -1,0 +1,2472 @@
+{
+  "title": "46-江苏省级化学纤维-丙纶（短纤维）行业绿色工评价要求（2026版）",
+  "freezeRows": 1,
+  "cells": [
+    {
+      "id": "h_l1",
+      "x": "1",
+      "y": "1",
+      "type": "label",
+      "content": "一级指标",
+      "width": 4
+    },
+    {
+      "id": "h_seq",
+      "x": "2",
+      "y": "1",
+      "type": "label",
+      "content": "序号",
+      "width": 2
+    },
+    {
+      "id": "h_l2",
+      "x": "3",
+      "y": "1",
+      "type": "label",
+      "content": "二级指标",
+      "width": 4
+    },
+    {
+      "id": "h_l3",
+      "x": "4,5",
+      "y": "1",
+      "type": "label",
+      "content": "三级指标",
+      "width": 13
+    },
+    {
+      "id": "h_type",
+      "x": "6",
+      "y": "1",
+      "type": "label",
+      "content": "指标类型",
+      "width": 4
+    },
+    {
+      "id": "h_unit",
+      "x": "7",
+      "y": "1",
+      "type": "label",
+      "content": "单位",
+      "width": 4
+    },
+    {
+      "id": "h_indval",
+      "x": "8",
+      "y": "1",
+      "type": "label",
+      "content": "2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "width": 10
+    },
+    {
+      "id": "cell_r1_c9",
+      "x": "9",
+      "y": "1",
+      "type": "label",
+      "content": "审核备注",
+      "portalHide": true,
+      "width": 10
+    },
+    {
+      "id": "cell_r1_c10",
+      "x": "10",
+      "y": "1",
+      "type": "label",
+      "content": "是否适用",
+      "value": "1",
+      "portalHide": true,
+      "width": 4
+    },
+    {
+      "id": "h_upload",
+      "x": "11",
+      "y": "1",
+      "type": "label",
+      "content": "证明材料（限pdf/图片格式）"
+    },
+    {
+      "id": "h_desc",
+      "x": "12",
+      "y": "1",
+      "type": "label",
+      "content": "指明材料要求\n（包括但不限于以下内容）",
+      "width": 12
+    },
+    {
+      "id": "cell_r1_c11",
+      "x": "13",
+      "y": "1",
+      "type": "label",
+      "content": "得分",
+      "portalHide": true
+    },
+    {
+      "id": "l1_r2",
+      "x": "1",
+      "y": "2,5",
+      "type": "text",
+      "content": "能源低碳化"
+    },
+    {
+      "id": "seq_r2",
+      "x": "2",
+      "y": "2",
+      "type": "text",
+      "content": "1"
+    },
+    {
+      "id": "l2_r2",
+      "x": "3",
+      "y": "2",
+      "type": "text",
+      "content": "能源消耗强度"
+    },
+    {
+      "id": "l3_r2",
+      "x": "4,5",
+      "y": "2",
+      "type": "text",
+      "content": "单位丙纶（短纤维）产品综合能耗"
+    },
+    {
+      "id": "type_r2",
+      "x": "6",
+      "y": "2",
+      "type": "text",
+      "content": "逆向定量"
+    },
+    {
+      "id": "unit_r2",
+      "x": "7",
+      "y": "2",
+      "type": "text",
+      "content": "kgce/t"
+    },
+    {
+      "id": "indval_r2",
+      "x": "8",
+      "y": "2",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r2_c10 === \"0\" || fm.cell_r2_c10 === 0)) {\n  fm.cell_r2_c11 = 12.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r2_c11 = \"\";\n  return;\n}\nconst baseVal =130;    // 基准值\nconst realVal = Number(value) || 0; \nconst standardVal = 110; // 标杆值\nconst scoreWeight = 12; // 分值\nlet rate;\nif (baseVal - standardVal === 0 || realVal  <0) {\n  rate = 0;\n} else {\n  rate = (baseVal - realVal) / (baseVal - standardVal);\n}\nconst coeff = Math.max(Math.min(rate, 1), 0);\n\n// 原始得分\nlet rawScore = coeff * scoreWeight;\n// 四舍五入保留2位小数\nfm.cell_r2_c11= Math.round(rawScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r2_c9",
+      "x": "9",
+      "y": "2",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r2_c10",
+      "x": "10",
+      "y": "2",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r2_c11 = 12.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r2;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r2_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst baseVal =130;    // 基准值\nconst realVal = Number(fm.indval_r2) || 0; \nconst standardVal = 110; // 标杆值\nconst scoreWeight = 12; // 分值\nlet rate;\nif (baseVal - standardVal === 0 || realVal  <0) {\n  rate = 0;\n} else {\n  rate = (baseVal - realVal) / (baseVal - standardVal);\n}\nconst coeff = Math.max(Math.min(rate, 1), 0);\n\n// 原始得分\nlet rawScore = coeff * scoreWeight;\n// 四舍五入保留2位小数\nfm.cell_r2_c11= Math.round(rawScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r2",
+      "x": "11",
+      "y": "2",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r2!=null&&fm.indval_r2!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r2",
+      "x": "12",
+      "y": "2",
+      "type": "text",
+      "content": "1、指标计算过程表及其附件；\n2、报统计部门《工业产销总值及主要产品产量》(B204-1)、《能源购进、消费与库存》(205-1表)\n3、《能源加工转换与回收利用》(205-2表)(如有)、《主要耗能工业企业单位产品能源消费情况》(205-3表)（如有）、《能源生产、销售与库存》(205-6表)(如有)；\n4、《重点用能单位能源利用状况报告》(如有)。"
+    },
+    {
+      "id": "cell_r2_c11",
+      "x": "13",
+      "y": "2",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "seq_r3",
+      "x": "2",
+      "y": "3",
+      "type": "text",
+      "content": "2"
+    },
+    {
+      "id": "l2_r3",
+      "x": "3",
+      "y": "3",
+      "type": "text",
+      "content": "碳排放强度"
+    },
+    {
+      "id": "l3_r3",
+      "x": "4,5",
+      "y": "3",
+      "type": "text",
+      "content": "单位丙纶（短纤维）产品碳排放量"
+    },
+    {
+      "id": "type_r3",
+      "x": "6",
+      "y": "3",
+      "type": "text",
+      "content": "逆向定量"
+    },
+    {
+      "id": "unit_r3",
+      "x": "7",
+      "y": "3",
+      "type": "text",
+      "content": "tCO2/t"
+    },
+    {
+      "id": "indval_r3",
+      "x": "8",
+      "y": "3",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r3_c10 === \"0\" || fm.cell_r3_c10 === 0)) {\n  fm.cell_r3_c11 = 8.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r3_c11 = \"\";\n  return;\n}\nconst baseVal =0.5;    // 基准值\nconst realVal = Number(value) || 0; \nconst standardVal = 0.42; // 标杆值\nconst scoreWeight = 8; // 分值\nlet rate;\nif (baseVal - standardVal === 0 || realVal  <0) {\n  rate = 0;\n} else {\n  rate = (baseVal - realVal) / (baseVal - standardVal);\n}\nconst coeff = Math.max(Math.min(rate, 1), 0);\n\n// 原始得分\nlet rawScore = coeff * scoreWeight;\n// 四舍五入保留2位小数\nfm.cell_r3_c11= Math.round(rawScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r3_c9",
+      "x": "9",
+      "y": "3",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r3_c10",
+      "x": "10",
+      "y": "3",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r3_c11 = 8.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r3;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r3_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst baseVal =0.5;    // 基准值\nconst realVal = Number(fm.indval_r3) || 0; \nconst standardVal = 0.42; // 标杆值\nconst scoreWeight = 8; // 分值\nlet rate;\nif (baseVal - standardVal === 0 || realVal  <0) {\n  rate = 0;\n} else {\n  rate = (baseVal - realVal) / (baseVal - standardVal);\n}\nconst coeff = Math.max(Math.min(rate, 1), 0);\n\n// 原始得分\nlet rawScore = coeff * scoreWeight;\n// 四舍五入保留2位小数\nfm.cell_r3_c11= Math.round(rawScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r3",
+      "x": "11",
+      "y": "3",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r3!=null&&fm.indval_r3!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r3",
+      "x": "12",
+      "y": "3",
+      "type": "text",
+      "content": "1.指标计算过程表及其附件；\n2.温室气体排放报告（依据相关核算标准给出的报告模板）；\n3.报统计部门《工业产销总值及主要产品产量》（B204-1）。"
+    },
+    {
+      "id": "cell_r3_c11",
+      "x": "13",
+      "y": "3",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "seq_r4",
+      "x": "2",
+      "y": "4",
+      "type": "text",
+      "content": "3"
+    },
+    {
+      "id": "l2_r4",
+      "x": "3",
+      "y": "4",
+      "type": "text",
+      "content": "可再生能源利用率"
+    },
+    {
+      "id": "l3_r4",
+      "x": "4,5",
+      "y": "4",
+      "type": "text",
+      "content": "可再生能源利用率"
+    },
+    {
+      "id": "type_r4",
+      "x": "6",
+      "y": "4",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r4",
+      "x": "7",
+      "y": "4",
+      "type": "text",
+      "content": "%"
+    },
+    {
+      "id": "indval_r4",
+      "x": "8",
+      "y": "4",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r4_c10 === \"0\" || fm.cell_r4_c10 === 0)) {\n  fm.cell_r4_c11 = 6.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r4_c11 = \"\";\n  return;\n}\nconst real =Number(value) || 0;     // 实际值\nconst base =0;     // 基准值\nconst target = 3; // 标杆值\nconst fullScore = 6 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r4_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r4_c9",
+      "x": "9",
+      "y": "4",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r4_c10",
+      "x": "10",
+      "y": "4",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r4_c11 = 6.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r4;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r4_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst real =Number(fm.indval_r4) || 0;     // 实际值\nconst base =0;     // 基准值\nconst target = 3; // 标杆值\nconst fullScore = 6 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r4_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r4",
+      "x": "11",
+      "y": "4",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r4!=null&&fm.indval_r4!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r4",
+      "x": "12",
+      "y": "4",
+      "type": "text",
+      "content": "1.指标计算过程表及其附件；\n2.报统计部门《能源购进、消费与库存》（205-1表）、《能源加工转换与回收利用》（205-2表）（如有）、《能源生产、销售与库存》（205-6表）（如有）；\n3.《可再生能源电力消费核算清单》；\n4.可再生能源消费凭证，例如绿色电力市场化交易合同、交易结算凭证、绿证（GEC）等可再生能源电力消费凭证，非电力形式可再生能源利用相关合同、协议等。\n注：《可再生能源电力消费核算清单》可由电力交易机构出具或企业自行整理填报（模板于系统下载）；如提供了电力交易机构出具的带签章、编号的核算清单，其内容覆盖的绿色电力市场化交易合同、交易结算凭证、绿证（GEC）等可再生能源电力消费凭证可免予提供；如企业自行整理填报，则需将相关凭证顺次整理并随附。"
+    },
+    {
+      "id": "cell_r4_c11",
+      "x": "13",
+      "y": "4",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "seq_r5",
+      "x": "2",
+      "y": "5",
+      "type": "text",
+      "content": "4"
+    },
+    {
+      "id": "l2_r5",
+      "x": "3",
+      "y": "5",
+      "type": "text",
+      "content": "能碳管理系统平台功能数量"
+    },
+    {
+      "id": "l3_r5",
+      "x": "4,5",
+      "y": "5",
+      "type": "text",
+      "content": "能碳管理系统平台功能符合数量"
+    },
+    {
+      "id": "type_r5",
+      "x": "6",
+      "y": "5",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r5",
+      "x": "7",
+      "y": "5",
+      "type": "text",
+      "content": "项"
+    },
+    {
+      "id": "indval_r5",
+      "x": "8",
+      "y": "5",
+      "type": "checkbox",
+      "options": [
+        {
+          "label": "能耗查询",
+          "value": "1"
+        },
+        {
+          "label": "能源消费量和强度计算",
+          "value": "2"
+        },
+        {
+          "label": "能源消费分析与用能策略推荐",
+          "value": "3"
+        },
+        {
+          "label": "能效对标",
+          "value": "4"
+        },
+        {
+          "label": "能流分析",
+          "value": "5"
+        },
+        {
+          "label": "能效平衡与优化",
+          "value": "6"
+        },
+        {
+          "label": "用能与碳排放预算管理:",
+          "value": "7"
+        },
+        {
+          "label": "碳排放核算",
+          "value": "8"
+        },
+        {
+          "label": "碳足迹核算",
+          "value": "9"
+        },
+        {
+          "label": "供应链碳管理",
+          "value": "10"
+        },
+        {
+          "label": "碳核查支撑",
+          "value": "11"
+        },
+        {
+          "label": "碳资产管理",
+          "value": "12"
+        }
+      ],
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r5_c10 === \"0\" || fm.cell_r5_c10 === 0)) {\n  fm.cell_r5_c11 = 4.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {\n  fm.cell_r5_c11 = \"\";\n  return;\n}\nconst real = Array.isArray(value) ? value.length : 0;    // 实际值\nconst base = 0;     // 基准值\nconst target = 8; // 标杆值\nconst fullScore = 4; // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r5_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r5_c9",
+      "x": "9",
+      "y": "5",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r5_c10",
+      "x": "10",
+      "y": "5",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r5_c11 = 4.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r5;\nif (!indicatorVal || (Array.isArray(indicatorVal) && indicatorVal.length === 0)) {\n  fm.cell_r5_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst real = Array.isArray(fm.indval_r5) ? fm.indval_r5.length : 0;    // 实际值\nconst base = 0;     // 基准值\nconst target = 8; // 标杆值\nconst fullScore = 4; // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r5_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r5",
+      "x": "11",
+      "y": "5",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r5!=null&&fm.indval_r5!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r5",
+      "x": "12",
+      "y": "5",
+      "type": "text",
+      "content": "1.平台系统架构设计文档，说明与相关业务功能的对应关系；\n2.平台开发采购合同、部署验收报告（如有）；\n3.平台功能实现或效果验证材料，例如用户操作手册、功能截图（大屏看板、APP能耗实时展示等功能界面）等。"
+    },
+    {
+      "id": "cell_r5_c11",
+      "x": "13",
+      "y": "5",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "l1_r6",
+      "x": "1",
+      "y": "6,9",
+      "type": "text",
+      "content": "资源高效化"
+    },
+    {
+      "id": "seq_r6",
+      "x": "2",
+      "y": "6",
+      "type": "text",
+      "content": "5"
+    },
+    {
+      "id": "l2_r6",
+      "x": "3",
+      "y": "6",
+      "type": "text",
+      "content": "原材料消耗强度"
+    },
+    {
+      "id": "l3_r6",
+      "x": "4,5",
+      "y": "6",
+      "type": "text",
+      "content": "单位纺丝（短纤维）产品主要原材料消耗"
+    },
+    {
+      "id": "type_r6",
+      "x": "6",
+      "y": "6",
+      "type": "text",
+      "content": "逆向定量"
+    },
+    {
+      "id": "unit_r6",
+      "x": "7",
+      "y": "6",
+      "type": "text",
+      "content": "kg/t"
+    },
+    {
+      "id": "indval_r6",
+      "x": "8",
+      "y": "6",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r6_c10 === \"0\" || fm.cell_r6_c10 === 0)) {\n  fm.cell_r6_c11 = 10.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r6_c11 = \"\";\n  return;\n}\nconst baseVal =970;    // 基准值\nconst realVal = Number(value) || 0; \nconst standardVal = 966; // 标杆值\nconst scoreWeight = 10; // 分值\nlet rate;\nif (baseVal - standardVal === 0 || realVal  <0) {\n  rate = 0;\n} else {\n  rate = (baseVal - realVal) / (baseVal - standardVal);\n}\nconst coeff = Math.max(Math.min(rate, 1), 0);\n\n// 原始得分\nlet rawScore = coeff * scoreWeight;\n// 四舍五入保留2位小数\nfm.cell_r6_c11= Math.round(rawScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r6_c9",
+      "x": "9",
+      "y": "6",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r6_c10",
+      "x": "10",
+      "y": "6",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r6_c11 = 10.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r6;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r6_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst baseVal =970;    // 基准值\nconst realVal = Number(fm.indval_r6) || 0; \nconst standardVal = 966; // 标杆值\nconst scoreWeight = 10; // 分值\nlet rate;\nif (baseVal - standardVal === 0 || realVal  <0) {\n  rate = 0;\n} else {\n  rate = (baseVal - realVal) / (baseVal - standardVal);\n}\nconst coeff = Math.max(Math.min(rate, 1), 0);\n\n// 原始得分\nlet rawScore = coeff * scoreWeight;\n// 四舍五入保留2位小数\nfm.cell_r6_c11= Math.round(rawScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r6",
+      "x": "11",
+      "y": "6",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r6!=null&&fm.indval_r6!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r6",
+      "x": "12",
+      "y": "6",
+      "type": "text",
+      "content": "1、指标计算过程表及其附件；\n2、原材料消耗统计表；\n3、报统计部门《工业产销总值及主要产品产量》(B204-1)。"
+    },
+    {
+      "id": "cell_r6_c11",
+      "x": "13",
+      "y": "6",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "seq_r7",
+      "x": "2",
+      "y": "7",
+      "type": "text",
+      "content": "6"
+    },
+    {
+      "id": "l2_r7",
+      "x": "3",
+      "y": "7",
+      "type": "text",
+      "content": "取水强度"
+    },
+    {
+      "id": "l3_r7",
+      "x": "4,5",
+      "y": "7",
+      "type": "text",
+      "content": "单位纺丝（短纤维）产品取水量"
+    },
+    {
+      "id": "type_r7",
+      "x": "6",
+      "y": "7",
+      "type": "text",
+      "content": "逆向定量"
+    },
+    {
+      "id": "unit_r7",
+      "x": "7",
+      "y": "7",
+      "type": "text",
+      "content": "m3/t"
+    },
+    {
+      "id": "indval_r7",
+      "x": "8",
+      "y": "7",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r7_c10 === \"0\" || fm.cell_r7_c10 === 0)) {\n  fm.cell_r7_c11 = 9.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r7_c11 = \"\";\n  return;\n}\nconst baseVal =0.8;    // 基准值\nconst realVal = Number(value) || 0; \nconst standardVal = 0.7; // 标杆值\nconst scoreWeight = 9; // 分值\nlet rate;\nif (baseVal - standardVal === 0 || realVal  <0) {\n  rate = 0;\n} else {\n  rate = (baseVal - realVal) / (baseVal - standardVal);\n}\nconst coeff = Math.max(Math.min(rate, 1), 0);\n\n// 原始得分\nlet rawScore = coeff * scoreWeight;\n// 四舍五入保留2位小数\nfm.cell_r7_c11= Math.round(rawScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r7_c9",
+      "x": "9",
+      "y": "7",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r7_c10",
+      "x": "10",
+      "y": "7",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r7_c11 = 9.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r7;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r7_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst baseVal =0.8;    // 基准值\nconst realVal = Number(fm.indval_r7) || 0; \nconst standardVal = 0.7; // 标杆值\nconst scoreWeight = 9; // 分值\nlet rate;\nif (baseVal - standardVal === 0 || realVal  <0) {\n  rate = 0;\n} else {\n  rate = (baseVal - realVal) / (baseVal - standardVal);\n}\nconst coeff = Math.max(Math.min(rate, 1), 0);\n\n// 原始得分\nlet rawScore = coeff * scoreWeight;\n// 四舍五入保留2位小数\nfm.cell_r7_c11= Math.round(rawScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r7",
+      "x": "11",
+      "y": "7",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r7!=null&&fm.indval_r7!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r7",
+      "x": "12",
+      "y": "7",
+      "type": "text",
+      "content": "1、指标计算过程表及其附件；\n2、报统计部门《工业产销总值及主要产品产量》(B204-1)、《工业企业用水情况》(205-4表)；\n3、工业用水统计台账。"
+    },
+    {
+      "id": "cell_r7_c11",
+      "x": "13",
+      "y": "7",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "seq_r8",
+      "x": "2",
+      "y": "8",
+      "type": "text",
+      "content": "7"
+    },
+    {
+      "id": "l2_r8",
+      "x": "3",
+      "y": "8",
+      "type": "text",
+      "content": "工业用水重复利用率"
+    },
+    {
+      "id": "l3_r8",
+      "x": "4,5",
+      "y": "8",
+      "type": "text",
+      "content": "工业用水重复利用率"
+    },
+    {
+      "id": "type_r8",
+      "x": "6",
+      "y": "8",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r8",
+      "x": "7",
+      "y": "8",
+      "type": "text",
+      "content": "%"
+    },
+    {
+      "id": "indval_r8",
+      "x": "8",
+      "y": "8",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r8_c10 === \"0\" || fm.cell_r8_c10 === 0)) {\n  fm.cell_r8_c11 = 8.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r8_c11 = \"\";\n  return;\n}\nconst real =Number(value) || 0;     // 实际值\nconst base =90;     // 基准值\nconst target = 95; // 标杆值\nconst fullScore = 8 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r8_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r8_c9",
+      "x": "9",
+      "y": "8",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r8_c10",
+      "x": "10",
+      "y": "8",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r8_c11 = 8.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r8;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r8_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst real =Number(fm.indval_r8) || 0;     // 实际值\nconst base =90;     // 基准值\nconst target = 95; // 标杆值\nconst fullScore = 8 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r8_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r8",
+      "x": "11",
+      "y": "8",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r8!=null&&fm.indval_r8!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r8",
+      "x": "12",
+      "y": "8",
+      "type": "text",
+      "content": "1、指标计算过程表及其附件；\n2、报统计部门《工业企业用水情况》(205-4表)；\n3、重复用水量证明，例如循环水量、串联水量、废水处理回用水量等计量或记录台账；\n4、重复用水设施、关键区域现场实景照片。"
+    },
+    {
+      "id": "cell_r8_c11",
+      "x": "13",
+      "y": "8",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "seq_r9",
+      "x": "2",
+      "y": "9",
+      "type": "text",
+      "content": "8"
+    },
+    {
+      "id": "l2_r9",
+      "x": "3",
+      "y": "9",
+      "type": "text",
+      "content": "一般工业固体废物综合利用率"
+    },
+    {
+      "id": "l3_r9",
+      "x": "4,5",
+      "y": "9",
+      "type": "text",
+      "content": "废丝综合利用率"
+    },
+    {
+      "id": "type_r9",
+      "x": "6",
+      "y": "9",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r9",
+      "x": "7",
+      "y": "9",
+      "type": "text",
+      "content": "%"
+    },
+    {
+      "id": "indval_r9",
+      "x": "8",
+      "y": "9",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r9_c10 === \"0\" || fm.cell_r9_c10 === 0)) {\n  fm.cell_r9_c11 = 6.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r9_c11 = \"\";\n  return;\n}\nconst real =Number(value) || 0;     // 实际值\nconst base =95;     // 基准值\nconst target = 100; // 标杆值\nconst fullScore =6 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r9_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r9_c9",
+      "x": "9",
+      "y": "9",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r9_c10",
+      "x": "10",
+      "y": "9",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r9_c11 = 6.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r9;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r9_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst real =Number(fm.indval_r9) || 0;     // 实际值\nconst base =95;     // 基准值\nconst target = 100; // 标杆值\nconst fullScore =6 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r9_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r9",
+      "x": "11",
+      "y": "9",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r9!=null&&fm.indval_r9!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r9",
+      "x": "12",
+      "y": "9",
+      "type": "text",
+      "content": "1、指标计算过程表及其附件\n2、废丝统计台账，包含年度产生量、综合利用量、综合利用往年贮存量等指标计算关键参数信息\n3、报生态环境部门《工业企业污染物和温室气体排放及治理情况》(基101表) (如有)\n4、综合利用证明，例如资源化技术方案、工艺流程图等自行利用说明、委外综合利用协议及综合利用单位资质证明、转移量确认单或相关凭证"
+    },
+    {
+      "id": "cell_r9_c11",
+      "x": "13",
+      "y": "9",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "l1_r10",
+      "x": "1",
+      "y": "10,15",
+      "type": "text",
+      "content": "生产洁净化"
+    },
+    {
+      "id": "seq_r10",
+      "x": "2",
+      "y": "10,11",
+      "type": "text",
+      "content": "9"
+    },
+    {
+      "id": "l2_r10",
+      "x": "3",
+      "y": "10,11",
+      "type": "text",
+      "content": "生产工艺和设备先进性"
+    },
+    {
+      "id": "l3_r10",
+      "x": "4,5",
+      "y": "10,11",
+      "type": "text",
+      "content": "采用以下工艺和设备数量：\n1、高速纺丝牵伸一步法\n2、静电纺\n3、在线添加装置\n4、再生纺丝\n5、远红外电磁加热智能温控节能控制系统\n6、大功率磁阻电机\n7、牵伸装置共用母线排发电利用技术\n8、高效节能电制冷\n9、压空梯级利用\n10、原液着色\n11、余热利用\n12、数字化转型等"
+    },
+    {
+      "id": "type_r10",
+      "x": "6",
+      "y": "10,11",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r10",
+      "x": "7",
+      "y": "10,11",
+      "type": "text",
+      "content": "项"
+    },
+    {
+      "id": "indval_r10",
+      "x": "8",
+      "y": "10,11",
+      "type": "checkbox",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "options": [
+        {
+          "label": "高速纺丝牵伸一步法",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "静电纺",
+          "value": "2",
+          "score": null
+        },
+        {
+          "label": "在线添加装置",
+          "value": "3",
+          "score": null
+        },
+        {
+          "label": "再生纺丝",
+          "value": "4",
+          "score": null
+        },
+        {
+          "label": "远红外电磁加热智能温控节能控制系统",
+          "value": "5",
+          "score": null
+        },
+        {
+          "label": "大功率磁阻电机",
+          "value": "6",
+          "score": null
+        },
+        {
+          "label": "牵伸装置共用母线排发电利用技术",
+          "value": "7",
+          "score": null
+        },
+        {
+          "label": "高效节能电制冷",
+          "value": "8",
+          "score": null
+        },
+        {
+          "label": "压空梯级利用",
+          "value": "9",
+          "score": null
+        },
+        {
+          "label": "原液着色",
+          "value": "10",
+          "score": null
+        },
+        {
+          "label": "余热利用",
+          "value": "11",
+          "score": null
+        },
+        {
+          "label": "数字化转型等",
+          "value": "12",
+          "score": null
+        }
+      ],
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r10_c10 === \"0\" || fm.cell_r10_c10 === 0)) {\n  fm.cell_r10_c11 = 6.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {\n  fm.cell_r10_c11 = \"\";\n  return;\n}\nconst real = Array.isArray(value) ? value.length : 0;    // 实际值\nconst base = 0;     // 基准值\nconst target = 3; // 标杆值\nconst fullScore = 6; // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r10_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r10_c9",
+      "x": "9",
+      "y": "10",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r10_c10",
+      "x": "10",
+      "y": "10,11",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r10_c11 = 6.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r10;\nif (!indicatorVal || (Array.isArray(indicatorVal) && indicatorVal.length === 0)) {\n  fm.cell_r10_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst real = Array.isArray(fm.indval_r10) ? fm.indval_r10.length : 0;    // 实际值\nconst base = 0;     // 基准值\nconst target = 3; // 标杆值\nconst fullScore = 6; // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r10_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r10",
+      "x": "11",
+      "y": "10,11",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r10!=null&&fm.indval_r10!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r10",
+      "x": "12",
+      "y": "10,11",
+      "type": "text",
+      "content": "1、采用相关生产工艺和设备的说明"
+    },
+    {
+      "id": "cell_r10_c11",
+      "x": "13",
+      "y": "10,11",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "cell_r11_c9",
+      "x": "9",
+      "y": "11",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "seq_r12",
+      "x": "2",
+      "y": "12,13",
+      "type": "text",
+      "content": "10"
+    },
+    {
+      "id": "l2_r12",
+      "x": "3",
+      "y": "12,13",
+      "type": "text",
+      "content": "绿色低碳改造升级"
+    },
+    {
+      "id": "l3_r12",
+      "x": "4,5",
+      "y": "12",
+      "type": "text",
+      "content": "近3年实施绿色低碳改造升级年平均项目数量"
+    },
+    {
+      "id": "type_r12",
+      "x": "6",
+      "y": "12",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r12",
+      "x": "7",
+      "y": "12",
+      "type": "text",
+      "content": "/"
+    },
+    {
+      "id": "indval_r12",
+      "x": "8",
+      "y": "12",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r12_c10 === \"0\" || fm.cell_r12_c10 === 0)) {\n  fm.cell_r12_c11 = 2.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r12_c11 = \"\";\n  return;\n}\nconst real =Number(value) || 0;     // 实际值\nconst base =1;     // 基准值\nconst target = 3; // 标杆值\nconst fullScore =2 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r12_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r12_c9",
+      "x": "9",
+      "y": "12",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r12_c10",
+      "x": "10",
+      "y": "12",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r12_c11 = 2.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r12;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r12_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst real =Number(fm.indval_r12) || 0;     // 实际值\nconst base =1;     // 基准值\nconst target = 3; // 标杆值\nconst fullScore =2 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r12_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r12",
+      "x": "11",
+      "y": "12",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r12!=null&&fm.indval_r12!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r12",
+      "x": "12",
+      "y": "12",
+      "type": "text",
+      "content": "1、近3年绿色低碳改造升级项目清单(按项目完成时间在近3年计)\n2、项目相关合同及立项、审批、验收材料(如有)\n3、项目结题报告(包含节能、降碳、减污、节材等效益计算说明)(如有)"
+    },
+    {
+      "id": "cell_r12_c11",
+      "x": "13",
+      "y": "12",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "l3_r13",
+      "x": "4,5",
+      "y": "13",
+      "type": "text",
+      "content": "近3年绿色低碳改造升级项目投资额占比"
+    },
+    {
+      "id": "type_r13",
+      "x": "6",
+      "y": "13",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r13",
+      "x": "7",
+      "y": "13",
+      "type": "text",
+      "content": "%"
+    },
+    {
+      "id": "indval_r13",
+      "x": "8",
+      "y": "13",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r13_c10 === \"0\" || fm.cell_r13_c10 === 0)) {\n  fm.cell_r13_c11 = 4.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r13_c11 = \"\";\n  return;\n}\nconst real =Number(value) || 0;     // 实际值\nconst base =0;     // 基准值\nconst target = 0.1; // 标杆值\nconst fullScore =4 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r13_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r13_c9",
+      "x": "9",
+      "y": "13",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r13_c10",
+      "x": "10",
+      "y": "13",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r13_c11 = 4.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r13;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r13_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst real =Number(fm.indval_r13) || 0;     // 实际值\nconst base =0;     // 基准值\nconst target = 0.1; // 标杆值\nconst fullScore =4 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r13_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r13",
+      "x": "11",
+      "y": "13",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r13!=null&&fm.indval_r13!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r13",
+      "x": "12",
+      "y": "13",
+      "type": "text",
+      "content": "1、指标计算过程表及其附件\n2、近3年绿色低碳改造升级项目清单(按项目完成时间在近3年计)\n3、项目投资证明，例如项目合同、验收材料、支付凭证、专项审计报告等\n4、报统计部门《工业产销总值及主要产品产量》(B204-1)"
+    },
+    {
+      "id": "cell_r13_c11",
+      "x": "13",
+      "y": "13",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "seq_r14",
+      "x": "2",
+      "y": "14,15",
+      "type": "text",
+      "content": "11"
+    },
+    {
+      "id": "l2_r14",
+      "x": "3",
+      "y": "14,15",
+      "type": "text",
+      "content": "主要污染物排放浓度"
+    },
+    {
+      "id": "l3_r14",
+      "x": "4",
+      "y": "14,15",
+      "type": "text",
+      "content": "主要污染物排放浓度优于许可排放浓度的比例"
+    },
+    {
+      "id": "l3e_r14",
+      "x": "5",
+      "y": "14",
+      "type": "text",
+      "content": "非甲烷总烃"
+    },
+    {
+      "id": "type_r14",
+      "x": "6",
+      "y": "14,15",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r14",
+      "x": "7",
+      "y": "14",
+      "type": "text",
+      "content": "%"
+    },
+    {
+      "id": "indval_r14",
+      "x": "8",
+      "y": "14",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r14_c10 === \"0\" || fm.cell_r14_c10 === 0)) {\n  fm.cell_r14_c11 = 6.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r14_c11 = \"\";\n  return;\n}\nfunction isFilled(v) {\n    return v !== '' && v !== null && v !== undefined;\n}\n\nfunction calcScore(totalScore, paramsList, calcType = 1) {\n    let sum = 0;\n    const list = paramsList.map(i => {\n        const rawActual = i.rawValue !== undefined ? i.rawValue : null;\n        const filled = i.filled !== undefined\n            ? i.filled\n            : (rawActual !== null ? isFilled(rawActual) : isFilled(i.actualValue));\n        const actualValue = filled\n            ? Number(rawActual !== null ? rawActual : i.actualValue)\n            : 0;\n\n        const hasThreeField = i.rawThreeValue !== undefined || i.threeValue !== undefined;\n        const rawThree = i.rawThreeValue !== undefined ? i.rawThreeValue : i.threeValue;\n        const threeFilled = hasThreeField\n            && (i.threeFilled !== undefined ? i.threeFilled : isFilled(rawThree));\n        const threeValue = threeFilled ? Number(rawThree) : null;\n\n        return {\n            actualValue: isNaN(actualValue) ? 0 : actualValue,\n            filled,\n            hasThreeField,\n            threeValue,\n            baseValue: Number(i.baseValue) || 0,\n            benchmarkValue: Number(i.benchmarkValue) || 0\n        };\n    });\n\n    const filledList = list.filter(item => item.filled);\n    if (filledList.length <= 0 || totalScore <= 0) return 0;\n\n    const useThreeWeight = list.some(item => item.hasThreeField);\n    const itemScoreList = new Array(list.length).fill(0);\n\n    let weightByThree = false;\n    if (useThreeWeight) {\n        const totalThree = filledList.reduce((s, item) => s + (item.threeValue ?? 0), 0);\n        if (totalThree > 0) weightByThree = true;\n    }\n\n    const totalWeight = filledList.reduce((s, item) => {\n        if (weightByThree) return s + (item.threeValue ?? 0);\n        return s + item.actualValue;\n    }, 0);\n\n    list.forEach((item, idx) => {\n        if (!item.filled) return;\n        if (totalWeight <= 0) {\n            itemScoreList[idx] = totalScore / filledList.length;\n        } else if (weightByThree) {\n            itemScoreList[idx] = ((item.threeValue ?? 0) / totalWeight) * totalScore;\n        } else {\n            itemScoreList[idx] = (item.actualValue / totalWeight) * totalScore;\n        }\n    });\n\n    list.forEach((item, idx) => {\n        if (!item.filled) return;\n\n        const { actualValue, baseValue, benchmarkValue } = item;\n        const singleScore = itemScoreList[idx];\n        if (benchmarkValue === baseValue) return;\n\n        let ratio;\n        if (calcType === 1) {\n            ratio = (baseValue - actualValue) / (baseValue - benchmarkValue);\n        } else {\n            ratio = (actualValue - baseValue) / (benchmarkValue - baseValue);\n        }\n\n        const rate = Math.max(Math.min(ratio, 1), 0);\n        sum += rate * singleScore;\n    });\n\n    // 额外加固：总分不能超过设定满分 totalScore\n    const finalScore = Math.max(Math.round(sum * 100) / 100, 0);\n    return Math.min(finalScore, totalScore);\n}\n\n// ===================== 业务调用示例 1：无三级指标输入框（按 indval 占比） =====================\nconst raw1 = fm.indval_r14;\nconst raw2 = fm.indval_r15;\n\nconst paramsList = [\n    { rawValue: raw1, actualValue: isFilled(raw1) ? Number(raw1) : 0, filled: isFilled(raw1), benchmarkValue: 20, baseValue: 10},\n    { rawValue: raw2, actualValue: isFilled(raw2) ? Number(raw2) : 0, filled: isFilled(raw2), benchmarkValue: 20, baseValue: 10}\n];\n\nlet zongfen = 6;\nlet result = calcScore(zongfen, paramsList, 2);\nfm.cell_r14_c11 = result;"
+      }
+    },
+    {
+      "id": "cell_r14_c9",
+      "x": "9",
+      "y": "14",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r14_c10",
+      "x": "10",
+      "y": "14,15",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r14_c11 = 6.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r14_c11 = \"\";\n  return;\n}\nfunction isFilled(v) {\n    return v !== '' && v !== null && v !== undefined;\n}\n\nfunction calcScore(totalScore, paramsList, calcType = 1) {\n    let sum = 0;\n    const list = paramsList.map(i => {\n        const rawActual = i.rawValue !== undefined ? i.rawValue : null;\n        const filled = i.filled !== undefined\n            ? i.filled\n            : (rawActual !== null ? isFilled(rawActual) : isFilled(i.actualValue));\n        const actualValue = filled\n            ? Number(rawActual !== null ? rawActual : i.actualValue)\n            : 0;\n\n        const hasThreeField = i.rawThreeValue !== undefined || i.threeValue !== undefined;\n        const rawThree = i.rawThreeValue !== undefined ? i.rawThreeValue : i.threeValue;\n        const threeFilled = hasThreeField\n            && (i.threeFilled !== undefined ? i.threeFilled : isFilled(rawThree));\n        const threeValue = threeFilled ? Number(rawThree) : null;\n\n        return {\n            actualValue: isNaN(actualValue) ? 0 : actualValue,\n            filled,\n            hasThreeField,\n            threeValue,\n            baseValue: Number(i.baseValue) || 0,\n            benchmarkValue: Number(i.benchmarkValue) || 0\n        };\n    });\n\n    const filledList = list.filter(item => item.filled);\n    if (filledList.length <= 0 || totalScore <= 0) return 0;\n\n    const useThreeWeight = list.some(item => item.hasThreeField);\n    const itemScoreList = new Array(list.length).fill(0);\n\n    let weightByThree = false;\n    if (useThreeWeight) {\n        const totalThree = filledList.reduce((s, item) => s + (item.threeValue ?? 0), 0);\n        if (totalThree > 0) weightByThree = true;\n    }\n\n    const totalWeight = filledList.reduce((s, item) => {\n        if (weightByThree) return s + (item.threeValue ?? 0);\n        return s + item.actualValue;\n    }, 0);\n\n    list.forEach((item, idx) => {\n        if (!item.filled) return;\n        if (totalWeight <= 0) {\n            itemScoreList[idx] = totalScore / filledList.length;\n        } else if (weightByThree) {\n            itemScoreList[idx] = ((item.threeValue ?? 0) / totalWeight) * totalScore;\n        } else {\n            itemScoreList[idx] = (item.actualValue / totalWeight) * totalScore;\n        }\n    });\n\n    list.forEach((item, idx) => {\n        if (!item.filled) return;\n\n        const { actualValue, baseValue, benchmarkValue } = item;\n        const singleScore = itemScoreList[idx];\n        if (benchmarkValue === baseValue) return;\n\n        let ratio;\n        if (calcType === 1) {\n            ratio = (baseValue - actualValue) / (baseValue - benchmarkValue);\n        } else {\n            ratio = (actualValue - baseValue) / (benchmarkValue - baseValue);\n        }\n\n        const rate = Math.max(Math.min(ratio, 1), 0);\n        sum += rate * singleScore;\n    });\n\n    // 额外加固：总分不能超过设定满分 totalScore\n    const finalScore = Math.max(Math.round(sum * 100) / 100, 0);\n    return Math.min(finalScore, totalScore);\n}\n\n// ===================== 业务调用示例 1：无三级指标输入框（按 indval 占比） =====================\nconst raw1 = fm.indval_r14;\nconst raw2 = fm.indval_r15;\n\nconst paramsList = [\n    { rawValue: raw1, actualValue: isFilled(raw1) ? Number(raw1) : 0, filled: isFilled(raw1), benchmarkValue: 20, baseValue: 10},\n    { rawValue: raw2, actualValue: isFilled(raw2) ? Number(raw2) : 0, filled: isFilled(raw2), benchmarkValue: 20, baseValue: 10}\n];\n\nlet zongfen = 6;\nlet result = calcScore(zongfen, paramsList, 2);\nfm.cell_r14_c11 = result;"
+      }
+    },
+    {
+      "id": "upload_r14",
+      "x": "11",
+      "y": "14,15",
+      "type": "upload"
+    },
+    {
+      "id": "desc_r14",
+      "x": "12",
+      "y": "14,15",
+      "type": "text",
+      "content": "1.指标计算过程表及其附件；\n2.排污许可相关文件，例如排污许可证正本、副本，排污登记表；\n3.排污许可证执行报告年报（如有）；\n4.报生态环境部门《工业企业污染物和温室气体排放及治理情况》（基101表）（如有）；\n5.污染物在线监测记录（包含年均排放浓度数据），如不能提供，请提交环境检测报告（原则上应保证全年监测频次不低于每季度1次，季节性生产单位应保证在生产期内监测次数不少于4次或不低于每月1次）"
+    },
+    {
+      "id": "cell_r14_c11",
+      "x": "13",
+      "y": "14,15",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "l3e_r15",
+      "x": "5",
+      "y": "15",
+      "type": "text",
+      "content": "化学需氧量"
+    },
+    {
+      "id": "unit_r15",
+      "x": "7",
+      "y": "15",
+      "type": "text",
+      "content": "%"
+    },
+    {
+      "id": "indval_r15",
+      "x": "8",
+      "y": "15",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r14_c10 === \"0\" || fm.cell_r14_c10 === 0)) {\n  fm.cell_r14_c11 = 6.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r14_c11 = \"\";\n  return;\n}\nfunction isFilled(v) {\n    return v !== '' && v !== null && v !== undefined;\n}\n\nfunction calcScore(totalScore, paramsList, calcType = 1) {\n    let sum = 0;\n    const list = paramsList.map(i => {\n        const rawActual = i.rawValue !== undefined ? i.rawValue : null;\n        const filled = i.filled !== undefined\n            ? i.filled\n            : (rawActual !== null ? isFilled(rawActual) : isFilled(i.actualValue));\n        const actualValue = filled\n            ? Number(rawActual !== null ? rawActual : i.actualValue)\n            : 0;\n\n        const hasThreeField = i.rawThreeValue !== undefined || i.threeValue !== undefined;\n        const rawThree = i.rawThreeValue !== undefined ? i.rawThreeValue : i.threeValue;\n        const threeFilled = hasThreeField\n            && (i.threeFilled !== undefined ? i.threeFilled : isFilled(rawThree));\n        const threeValue = threeFilled ? Number(rawThree) : null;\n\n        return {\n            actualValue: isNaN(actualValue) ? 0 : actualValue,\n            filled,\n            hasThreeField,\n            threeValue,\n            baseValue: Number(i.baseValue) || 0,\n            benchmarkValue: Number(i.benchmarkValue) || 0\n        };\n    });\n\n    const filledList = list.filter(item => item.filled);\n    if (filledList.length <= 0 || totalScore <= 0) return 0;\n\n    const useThreeWeight = list.some(item => item.hasThreeField);\n    const itemScoreList = new Array(list.length).fill(0);\n\n    let weightByThree = false;\n    if (useThreeWeight) {\n        const totalThree = filledList.reduce((s, item) => s + (item.threeValue ?? 0), 0);\n        if (totalThree > 0) weightByThree = true;\n    }\n\n    const totalWeight = filledList.reduce((s, item) => {\n        if (weightByThree) return s + (item.threeValue ?? 0);\n        return s + item.actualValue;\n    }, 0);\n\n    list.forEach((item, idx) => {\n        if (!item.filled) return;\n        if (totalWeight <= 0) {\n            itemScoreList[idx] = totalScore / filledList.length;\n        } else if (weightByThree) {\n            itemScoreList[idx] = ((item.threeValue ?? 0) / totalWeight) * totalScore;\n        } else {\n            itemScoreList[idx] = (item.actualValue / totalWeight) * totalScore;\n        }\n    });\n\n    list.forEach((item, idx) => {\n        if (!item.filled) return;\n\n        const { actualValue, baseValue, benchmarkValue } = item;\n        const singleScore = itemScoreList[idx];\n        if (benchmarkValue === baseValue) return;\n\n        let ratio;\n        if (calcType === 1) {\n            ratio = (baseValue - actualValue) / (baseValue - benchmarkValue);\n        } else {\n            ratio = (actualValue - baseValue) / (benchmarkValue - baseValue);\n        }\n\n        const rate = Math.max(Math.min(ratio, 1), 0);\n        sum += rate * singleScore;\n    });\n\n    // 额外加固：总分不能超过设定满分 totalScore\n    const finalScore = Math.max(Math.round(sum * 100) / 100, 0);\n    return Math.min(finalScore, totalScore);\n}\n\n// ===================== 业务调用示例 1：无三级指标输入框（按 indval 占比） =====================\nconst raw1 = fm.indval_r14;\nconst raw2 = fm.indval_r15;\n\nconst paramsList = [\n    { rawValue: raw1, actualValue: isFilled(raw1) ? Number(raw1) : 0, filled: isFilled(raw1), benchmarkValue: 20, baseValue: 10},\n    { rawValue: raw2, actualValue: isFilled(raw2) ? Number(raw2) : 0, filled: isFilled(raw2), benchmarkValue: 20, baseValue: 10}\n];\n\nlet zongfen = 6;\nlet result = calcScore(zongfen, paramsList, 2);\nfm.cell_r14_c11 = result;"
+      }
+    },
+    {
+      "id": "cell_r15_c9",
+      "x": "9",
+      "y": "15",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "l1_r16",
+      "x": "1",
+      "y": "16,18",
+      "type": "text",
+      "content": "产品绿色化"
+    },
+    {
+      "id": "seq_r16",
+      "x": "2",
+      "y": "16",
+      "type": "text",
+      "content": "12"
+    },
+    {
+      "id": "l2_r16",
+      "x": "3",
+      "y": "16",
+      "type": "text",
+      "content": "绿色设计"
+    },
+    {
+      "id": "l3_r16",
+      "x": "4,5",
+      "y": "16",
+      "type": "text",
+      "content": "绿色设计典型应用案例"
+    },
+    {
+      "id": "type_r16",
+      "x": "6",
+      "y": "16",
+      "type": "text",
+      "content": "正向定性"
+    },
+    {
+      "id": "unit_r16",
+      "x": "7",
+      "y": "16",
+      "type": "text",
+      "content": "/"
+    },
+    {
+      "id": "indval_r16",
+      "x": "8",
+      "y": "16",
+      "type": "radio",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "options": [
+        {
+          "label": "提供绿色设计典型应用案例",
+          "value": "4",
+          "score": null
+        },
+        {
+          "label": "未提供",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r16_c10 === \"0\" || fm.cell_r16_c10 === 0)) {\n  fm.cell_r16_c11 = 4.0;\n  return;\n}\n//其他情况 正常计算\n\nfm.cell_r16_c11 = value == null || value === '' ? '' : Number(value);"
+      }
+    },
+    {
+      "id": "cell_r16_c9",
+      "x": "9",
+      "y": "16",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r16_c10",
+      "x": "10",
+      "y": "16",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r16_c11 = 4.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r16;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r16_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算"
+      }
+    },
+    {
+      "id": "upload_r16",
+      "x": "11",
+      "y": "16",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r16!=null&&fm.indval_r16!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r16",
+      "x": "12",
+      "y": "16",
+      "type": "text",
+      "content": "1、绿色设计典型应用案例(围绕轻量化、无害化、长寿命、节能、易回收、可拆解、易再生等方面提供绿色设计典型应用案例，全面展示企业研发人员在设计环节运用绿色设计理念开展绿色设计)"
+    },
+    {
+      "id": "cell_r16_c11",
+      "x": "13",
+      "y": "16",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "seq_r17",
+      "x": "2",
+      "y": "17",
+      "type": "text",
+      "content": "13"
+    },
+    {
+      "id": "l2_r17",
+      "x": "3",
+      "y": "17",
+      "type": "text",
+      "content": "产品碳足迹"
+    },
+    {
+      "id": "l3_r17",
+      "x": "4,5",
+      "y": "17",
+      "type": "text",
+      "content": "开展产品碳足迹核算"
+    },
+    {
+      "id": "type_r17",
+      "x": "6",
+      "y": "17",
+      "type": "text",
+      "content": "正向定性"
+    },
+    {
+      "id": "unit_r17",
+      "x": "7",
+      "y": "17",
+      "type": "text",
+      "content": "/"
+    },
+    {
+      "id": "indval_r17",
+      "x": "8",
+      "y": "17",
+      "type": "radio",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "options": [
+        {
+          "label": "开展产品碳足迹核算并提供碳足迹核算报告",
+          "value": "4",
+          "score": null
+        },
+        {
+          "label": "未提供",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r17_c10 === \"0\" || fm.cell_r17_c10 === 0)) {\n  fm.cell_r17_c11 = 4.0;\n  return;\n}\n//其他情况 正常计算\n\nfm.cell_r17_c11 = value == null || value === '' ? '' : Number(value);"
+      }
+    },
+    {
+      "id": "cell_r17_c9",
+      "x": "9",
+      "y": "17",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r17_c10",
+      "x": "10",
+      "y": "17",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r17_c11 = 4.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r17;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r17_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算"
+      }
+    },
+    {
+      "id": "upload_r17",
+      "x": "11",
+      "y": "17",
+      "type": "upload"
+    },
+    {
+      "id": "desc_r17",
+      "x": "12",
+      "y": "17",
+      "type": "text",
+      "content": "1、提供评价年1款产品碳足迹报告(参考GB/T24067等相关依据标准给出的报告模板)"
+    },
+    {
+      "id": "cell_r17_c11",
+      "x": "13",
+      "y": "17",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "seq_r18",
+      "x": "2",
+      "y": "18",
+      "type": "text",
+      "content": "14"
+    },
+    {
+      "id": "l2_r18",
+      "x": "3",
+      "y": "18",
+      "type": "text",
+      "content": "绿色低碳标准引领"
+    },
+    {
+      "id": "l3_r18",
+      "x": "4,5",
+      "y": "18",
+      "type": "text",
+      "content": "近5年参与标准数量"
+    },
+    {
+      "id": "type_r18",
+      "x": "6",
+      "y": "18",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r18",
+      "x": "7",
+      "y": "18",
+      "type": "text",
+      "content": "项"
+    },
+    {
+      "id": "indval_r18",
+      "x": "8",
+      "y": "18",
+      "type": "radio",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "options": [
+        {
+          "label": "近5年参与3项绿色低碳领域国际、国家、行业和地方标准制定",
+          "value": "3",
+          "score": null
+        },
+        {
+          "label": "近5年参与2项绿色低碳领域国际、国家、行业和地方标准制定",
+          "value": "2",
+          "score": null
+        },
+        {
+          "label": "近5年参与1项绿色低碳领域国际、国家、行业和地方标准制定",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "未参与",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r18_c10 === \"0\" || fm.cell_r18_c10 === 0)) {\n  fm.cell_r18_c11 = 3.0;\n  return;\n}\n//其他情况 正常计算\n\nfm.cell_r18_c11 = value == null || value === '' ? '' : Number(value);"
+      }
+    },
+    {
+      "id": "cell_r18_c9",
+      "x": "9",
+      "y": "18",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r18_c10",
+      "x": "10",
+      "y": "18",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r18_c11 = 3.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r18;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r18_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算"
+      }
+    },
+    {
+      "id": "upload_r18",
+      "x": "11",
+      "y": "18",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r18!=null&&fm.indval_r18!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r18",
+      "x": "12",
+      "y": "18",
+      "type": "text",
+      "content": "1、提供近5年参与的绿色低碳领域国际、国家、行业、地方标准发布稿关键页或全国标准信息公开平台截图证明"
+    },
+    {
+      "id": "cell_r18_c11",
+      "x": "13",
+      "y": "18",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "l1_r19",
+      "x": "1",
+      "y": "19,21",
+      "type": "text",
+      "content": "用地集约化"
+    },
+    {
+      "id": "seq_r19",
+      "x": "2",
+      "y": "19,21",
+      "type": "text",
+      "content": "15"
+    },
+    {
+      "id": "l2_r19",
+      "x": "3",
+      "y": "19,21",
+      "type": "text",
+      "content": "土地产出率"
+    },
+    {
+      "id": "l3_r19",
+      "x": "4,5",
+      "y": "19",
+      "type": "text",
+      "content": "单位用地面积产值"
+    },
+    {
+      "id": "type_r19",
+      "x": "6",
+      "y": "19",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r19",
+      "x": "7",
+      "y": "19",
+      "type": "text",
+      "content": "万元/平方米"
+    },
+    {
+      "id": "indval_r19",
+      "x": "8",
+      "y": "19",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r19_c10 === \"0\" || fm.cell_r19_c10 === 0)) {\n  fm.cell_r19_c11 = 4.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r19_c11 = \"\";\n  return;\n}\nconst real =Number(value) || 0;     // 实际值\nconst base =0.2;     // 基准值\nconst target = 0.4; // 标杆值\nconst fullScore =4 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r19_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r19_c9",
+      "x": "9",
+      "y": "19",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r19_c10",
+      "x": "10",
+      "y": "19",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r19_c11 = 4.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r19;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r19_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst real =Number(fm.indval_r19) || 0;     // 实际值\nconst base =0.2;     // 基准值\nconst target = 0.4; // 标杆值\nconst fullScore =4 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r19_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r19",
+      "x": "11",
+      "y": "19",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r19!=null&&fm.indval_r19!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r19",
+      "x": "12",
+      "y": "19",
+      "type": "text",
+      "content": "1、指标计算过程表及其附件\n2、报统计部门《工业产销总值及主要产品产量》(B204-1)"
+    },
+    {
+      "id": "cell_r19_c11",
+      "x": "13",
+      "y": "19",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "l3_r20",
+      "x": "4,5",
+      "y": "20",
+      "type": "text",
+      "content": "建筑系数"
+    },
+    {
+      "id": "type_r20",
+      "x": "6",
+      "y": "20",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r20",
+      "x": "7",
+      "y": "20",
+      "type": "text",
+      "content": "%"
+    },
+    {
+      "id": "indval_r20",
+      "x": "8",
+      "y": "20",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r20_c10 === \"0\" || fm.cell_r20_c10 === 0)) {\n  fm.cell_r20_c11 = 2.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r20_c11 = \"\";\n  return;\n}\nconst real =Number(value) || 0;     // 实际值\nconst base =35;     // 基准值\nconst target = 40; // 标杆值\nconst fullScore =2 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r20_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r20_c9",
+      "x": "9",
+      "y": "20",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r20_c10",
+      "x": "10",
+      "y": "20",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r20_c11 = 2.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r20;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r20_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst real =Number(fm.indval_r20) || 0;     // 实际值\nconst base =35;     // 基准值\nconst target = 40; // 标杆值\nconst fullScore =2 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r20_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r20",
+      "x": "11",
+      "y": "20",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r20!=null&&fm.indval_r20!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r20",
+      "x": "12",
+      "y": "20",
+      "type": "text",
+      "content": "1、指标计算过程表及其附件"
+    },
+    {
+      "id": "cell_r20_c11",
+      "x": "13",
+      "y": "20",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "l3_r21",
+      "x": "4,5",
+      "y": "21",
+      "type": "text",
+      "content": "容积率"
+    },
+    {
+      "id": "type_r21",
+      "x": "6",
+      "y": "21",
+      "type": "text",
+      "content": "正向定量"
+    },
+    {
+      "id": "unit_r21",
+      "x": "7",
+      "y": "21",
+      "type": "text",
+      "content": "/"
+    },
+    {
+      "id": "indval_r21",
+      "x": "8",
+      "y": "21",
+      "type": "number",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r21_c10 === \"0\" || fm.cell_r21_c10 === 0)) {\n  fm.cell_r21_c11 = 2.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (value === '' || value === null || value === undefined) {\n  fm.cell_r21_c11 = \"\";\n  return;\n}\nconst real =Number(value) || 0;     // 实际值\nconst base =0.8;     // 基准值\nconst target = 1.2; // 标杆值\nconst fullScore =2 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r21_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "cell_r21_c9",
+      "x": "9",
+      "y": "21",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r21_c10",
+      "x": "10",
+      "y": "21",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r21_c11 = 2.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r21;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r21_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算\nconst real =Number(fm.indval_r21) || 0;     // 实际值\nconst base =0.8;     // 基准值\nconst target = 1.2; // 标杆值\nconst fullScore =2 // 分值\n\nconst denominator = target - base;\nlet ratio;\n\n// 分母等于0避免NaN/无穷\nif (denominator === 0) {\n  ratio = 0;\n} else {\n  ratio = (real - base) / denominator;\n}\n\n// 只限制最大值为1，负数直接保留\nconst factor = Math.max(Math.min(ratio, 1), 0);\n// 四舍五入保留2位小数\nfm.cell_r21_c11 = Math.round(factor * fullScore * 100) / 100;"
+      }
+    },
+    {
+      "id": "upload_r21",
+      "x": "11",
+      "y": "21",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r21!=null&&fm.indval_r21!=\"\""          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r21",
+      "x": "12",
+      "y": "21",
+      "type": "text",
+      "content": "1、指标计算过程表及其附件\n2、项目建设工程规划许可证及附图\n3、厂区总平面图"
+    },
+    {
+      "id": "cell_r21_c11",
+      "x": "13",
+      "y": "21",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "l1_r22",
+      "x": "1,2",
+      "y": "22,24",
+      "type": "text",
+      "content": "附加项"
+    },
+    {
+      "id": "l2_r22",
+      "x": "3,5",
+      "y": "22",
+      "type": "text",
+      "content": "纳入“筑峰强链”企业库"
+    },
+    {
+      "id": "type_r22",
+      "x": "6",
+      "y": "22",
+      "type": "text",
+      "content": "正向定性"
+    },
+    {
+      "id": "unit_r22",
+      "x": "7",
+      "y": "22",
+      "type": "text",
+      "content": "/"
+    },
+    {
+      "id": "enterpriseInfoKey",
+      "x": "8",
+      "y": "22",
+      "type": "input",
+      "disabled": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r22_c10 === \"0\" || fm.cell_r22_c10 === 0)) {\n  fm.cell_r22_c11 = 2.0;\n  return;\n}\n//其他情况 正常计算\n\n// 空白输入时不计算\nif (!qylxStr || qylxStr === \"\") {\n  fm.cell_r22_c11 = \"\";\n  fm.enterpriseInfoKey = \"\";\n  return;\n}\nif(fm.enterpriseInfoKey && Array.isArray(fm.enterpriseInfoKey) && fm.enterpriseInfoKey.length > 0){\nlet score = 0;\nconst qylxStr = fm?.enterpriseInfoKey?.[0]?.qylx;\nconst qylx = Number(qylxStr);\nswitch(qylx) {\n    case 1: score = 2; fm.enterpriseInfoKey = '准链主企业'; break;\n    case 2: score = 1.5; fm.enterpriseInfoKey = '骨干企业'; break;\n    case 3: score = 1; fm.enterpriseInfoKey = '重点企业'; break;\n    default: score = 0;\n\tfm.enterpriseInfoKey = ''; \n}\nfm.cell_r22_c11 = Number(score.toFixed(2));\n}"
+      }
+    },
+    {
+      "id": "cell_r22_c9",
+      "x": "9",
+      "y": "22",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r22_c10",
+      "x": "10",
+      "y": "22",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r22_c11 = 2;\n  return;\n}\n//其他情况 正常计算\nif(fm.enterpriseInfoKey && Array.isArray(fm.enterpriseInfoKey) && fm.enterpriseInfoKey.length > 0){\nlet score = 0;\nconst qylxStr = fm?.enterpriseInfoKey?.[0]?.qylx;\nconst qylx = Number(qylxStr);\nswitch(qylx) {\n    case 1: score = 2; fm.enterpriseInfoKey = '准链主企业'; break;\n    case 2: score = 1.5; fm.enterpriseInfoKey = '骨干企业'; break;\n    case 3: score = 1; fm.enterpriseInfoKey = '重点企业'; break;\n    default: score = 0;\n\tfm.enterpriseInfoKey = ''; \n}\nfm.cell_r40_c11 = Number(score.toFixed(2));\n}"
+      }
+    },
+    {
+      "id": "upload_r22",
+      "x": "11",
+      "y": "22",
+      "type": "text",
+      "disabled": true
+    },
+    {
+      "id": "desc_r22",
+      "x": "12",
+      "y": "22",
+      "type": "text",
+      "content": "/"
+    },
+    {
+      "id": "cell_r22_c11",
+      "x": "13",
+      "y": "22",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "l2_r23",
+      "x": "3,5",
+      "y": "23",
+      "type": "text",
+      "content": "使用江苏省产品碳足迹公共服务平台计算碳足迹"
+    },
+    {
+      "id": "type_r23",
+      "x": "6",
+      "y": "23",
+      "type": "text",
+      "content": "正向定性"
+    },
+    {
+      "id": "unit_r23",
+      "x": "7",
+      "y": "23",
+      "type": "text",
+      "content": "/"
+    },
+    {
+      "id": "indval_r23",
+      "x": "8",
+      "y": "23",
+      "type": "radio",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r23_c10 === \"0\" || fm.cell_r23_c10 === 0)) {\n  fm.cell_r23_c11 = 1.0;\n  return;\n}\n//其他情况 正常计算\n\nfm.cell_r23_c11 = value == null || value === '' ? '' : Number(value);"
+      }
+    },
+    {
+      "id": "cell_r23_c9",
+      "x": "9",
+      "y": "23",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r23_c10",
+      "x": "10",
+      "y": "23",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r23_c11 = 1;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r23;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r23_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算"
+      }
+    },
+    {
+      "id": "upload_r23",
+      "x": "11",
+      "y": "23",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r23==\"1\""
+          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r23",
+      "x": "12",
+      "y": "23",
+      "type": "text",
+      "content": "使用江苏省产品碳足迹公共服务平台计算碳足迹的证明材料。"
+    },
+    {
+      "id": "cell_r23_c11",
+      "x": "13",
+      "y": "23",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "l2_r24",
+      "x": "3,5",
+      "y": "24",
+      "type": "text",
+      "content": "建设零碳（近零碳）工厂。积极响应国家双碳战略，启动推进零碳（近零碳）工厂建设。"
+    },
+    {
+      "id": "type_r24",
+      "x": "6",
+      "y": "24",
+      "type": "text",
+      "content": "正向定性"
+    },
+    {
+      "id": "unit_r24",
+      "x": "7",
+      "y": "24",
+      "type": "text",
+      "content": "/"
+    },
+    {
+      "id": "indval_r24",
+      "x": "8",
+      "y": "24",
+      "type": "radio",
+      "placeholder": "输入2025年指标值（不适用指标留白即可，不需填写任何信息）",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (fm.cell_r24_c10 === \"0\" || fm.cell_r24_c10 === 0)) {\n  fm.cell_r24_c11 = 1.0;\n  return;\n}\n//其他情况 正常计算\n\nfm.cell_r24_c11 = value == null || value === '' ? '' : Number(value);"
+      }
+    },
+    {
+      "id": "cell_r24_c9",
+      "x": "9",
+      "y": "24",
+      "type": "input",
+      "content": "指标值有修订，请填写修订备注。\n如：该指标值由A修改为B，理由\n是……",
+      "portalHide": true
+    },
+    {
+      "id": "cell_r24_c10",
+      "x": "10",
+      "y": "24",
+      "type": "radio",
+      "value": "1",
+      "options": [
+        {
+          "label": "是",
+          "value": "1",
+          "score": null
+        },
+        {
+          "label": "否",
+          "value": "0",
+          "score": null
+        }
+      ],
+      "portalHide": true,
+      "events": {
+        "onChange": "// 是否适用 变化\n// 管理端+不适用 → 满分\nif (extra && extra.envFlag === \"platform\" && (value === \"0\" || value === 0)) {\n  fm.cell_r24_c11 = 2.0;\n  return;\n}\n// 先判断指标值是否为空\nconst indicatorVal = fm.indval_r24;\nif (indicatorVal === \"\" || indicatorVal === null || indicatorVal === undefined) {\n  fm.cell_r24_c11 = \"\";\n  return;\n}\n// 否时不计算\nif (value === \"0\" || value === 0) {\n  return;\n}\n// 正常计算"
+      }
+    },
+    {
+      "id": "upload_r24",
+      "x": "11",
+      "y": "24",
+      "type": "upload",
+      "validation": {
+        "rules": [
+          {
+            "message": "此项为必填",
+            "required": "fm.indval_r24==\"1\""
+          }
+        ]
+      }
+    },
+    {
+      "id": "desc_r24",
+      "x": "12",
+      "y": "24",
+      "type": "text",
+      "content": "零碳（近零碳）工厂建设方面开展的工作情况说明，包括：碳核算体系建设相关材料，自主减排项目案例，达成碳中和的相关证明材料。"
+    },
+    {
+      "id": "cell_r24_c11",
+      "x": "13",
+      "y": "24",
+      "type": "input",
+      "disabled": true,
+      "portalHide": true
+    },
+    {
+      "id": "cell_r25_c1",
+      "x": "1",
+      "y": "25",
+      "type": "text",
+      "content": "总分"
+    },
+    {
+      "id": "totalScore",
+      "x": "13",
+      "y": "25",
+      "type": "formula",
+      "calculationFormula": "SUM(cell_r2_c11, cell_r3_c11, cell_r4_c11, cell_r5_c11, cell_r6_c11, cell_r7_c11, cell_r8_c11, cell_r9_c11, cell_r10_c11, cell_r12_c11, cell_r13_c11, cell_r14_c11, cell_r16_c11, cell_r17_c11, cell_r18_c11, cell_r19_c11, cell_r20_c11, cell_r21_c11, cell_r22_c11, cell_r23_c11, cell_r24_c11)",
+      "disabled": true,
+      "portalHide": true
+    }
+  ]
+}

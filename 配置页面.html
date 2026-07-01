@@ -4409,6 +4409,7 @@ events: {
           },
           // ---- 批量操作（先压栈，再调 utils）----
           insertColumnAt: function (beforeCol, count) {
+            if (!this._commitDraftIfOpen()) return;
             if (!beforeCol || beforeCol < 1 || !count || count < 1) return;
             this._pushUndo();
             window.DTUtils.insertColumns(this.config.cells, beforeCol, count);
@@ -4418,6 +4419,7 @@ events: {
             this.$Message.success('已在第 ' + beforeCol + ' 列前插入 ' + count + ' 列');
           },
           insertRowAt: function (beforeRow, count) {
+            if (!this._commitDraftIfOpen()) return;
             if (!beforeRow || beforeRow < 1 || !count || count < 1) return;
             this._pushUndo();
             window.DTUtils.insertRows(this.config.cells, beforeRow, count);
@@ -4426,6 +4428,7 @@ events: {
             this.$Message.success('已在第 ' + beforeRow + ' 行前插入 ' + count + ' 行');
           },
           deleteColumn: function (col) {
+            if (!this._commitDraftIfOpen()) return;
             if (!col || col < 1) return;
             this._pushUndo();
             var removed = window.DTUtils.removeColumn(this.config.cells, col);
@@ -4435,6 +4438,7 @@ events: {
             this.$Message.success('已删除第 ' + col + ' 列' + (removed ? '（含 ' + removed + ' 个独占单元格）' : ''));
           },
           deleteRow: function (row) {
+            if (!this._commitDraftIfOpen()) return;
             if (!row || row < 1) return;
             this._pushUndo();
             var removed = window.DTUtils.removeRow(this.config.cells, row);
@@ -4443,6 +4447,7 @@ events: {
             this.$Message.success('已删除第 ' + row + ' 行' + (removed ? '（含 ' + removed + ' 个独占单元格）' : ''));
           },
           appendColumnsOp: function (count) {
+            if (!this._commitDraftIfOpen()) return;
             if (!count || count < 1) return;
             this._pushUndo();
             // gridPad.cols 是"目标最小列数"，基于当前实际 maxC 累加
@@ -4453,6 +4458,7 @@ events: {
             this.$Message.success('已末尾追加 ' + count + ' 列（点击空位的 + 添加单元格）');
           },
           appendRowsOp: function (count) {
+            if (!this._commitDraftIfOpen()) return;
             if (!count || count < 1) return;
             this._pushUndo();
             var currentMaxR = this.maxY;
@@ -4492,6 +4498,7 @@ events: {
             this.showColVisModal = true;
           },
           confirmColVis: function () {
+            if (!this._commitDraftIfOpen()) return;
             var self = this;
             var col = this.colVisCol;
             var action = this.colVisAction;
@@ -4685,6 +4692,9 @@ events: {
               if (overlaps.length) {
                 this.$Message.warning('坐标与 ' + overlaps.map(function (c) { return c.id; }).join(', ') + ' 相同（同坐标 cell 会进入 alts，渲染只显示首个）');
               }
+              // 入撤销栈：保存写回前的状态，让 Ctrl+Z 能撤销单 cell 编辑
+              // 放在 ID 冲突检测之后，避免冲突 return 时也入栈污染 undo 历史
+              this._pushUndo();
               // 把 draft 全量写回原 cell（同键覆盖、多余键删除、新键新增）
               Object.keys(cur).forEach(function (k) { if (!(k in draft)) delete cur[k]; });
               Object.keys(draft).forEach(function (k) { this.$set(cur, k, JSON.parse(JSON.stringify(draft[k]))); }, this);
@@ -4698,6 +4708,26 @@ events: {
           revertEditDrawer: function () {
             // 草稿直接丢弃即可（原 cell 从未被修改）
             this.closeEditDrawer();
+          },
+          // 草稿模式 + 行列操作组合保护：
+          // draft 是抽屉打开瞬间的 cell 快照，与 config.cells 完全脱钩。
+          // 若用户在抽屉开着时做行列操作（insertColumns 等）改了 config.cells，
+          // 之后点保存 → commitEditDrawer 把 draft 全量写回 cur，
+          // 会覆盖行列操作对 cur.x/cur.y 的修改（行列操作静默失效）。
+          // 本方法在行列操作前自动 commit：让 draft 先安全落盘，再做坐标平移。
+          // ID 冲突时阻断（让用户先修复抽屉），避免 commit 失败但行列操作继续导致状态混乱。
+          _commitDraftIfOpen: function () {
+            if (!this.editDrawerOpen || !this.editDrawerDraft) return true;
+            var i = this.editDrawerIndex;
+            if (i < 0) return true;
+            var cur = this.config.cells[i];
+            var uid = cur.__uid;
+            if (this.idExists(this.editDrawerDraft.id, uid)) {
+              this.$Message.warning('请先修复抽屉中的 ID 冲突，再执行行列操作');
+              return false;
+            }
+            this.commitEditDrawer();
+            return true;
           },
           // 「应用到整列」: 弹出窗格让用户勾选字段+目标单元格后批量应用
           //   - 字段：默认勾 type/placeholder/precision/options/validation/accept/maxCount/clampLines
